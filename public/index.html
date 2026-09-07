@@ -2138,7 +2138,11 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .ac-cd-editfields{display:flex;flex-direction:column;padding:8px 16px 24px;}
 .ac-cd-editfields .pf-field{margin-bottom:12px;}
 /* Drill-in pages (contact) get a solid, borderless top bar — no frosted seam/line. */
+/* The plain bar on an INSIDE page (contact, AI, a sub-screen) is deliberately bare:
+   no fill, no hairline, nothing. It gets no glass either — the pages behind it do not
+   scroll under it, so the tint would just be an unexplained shadow across their top. */
 .topbar.tb-plain{background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;box-shadow:none;will-change:auto;}
+.topbar.tb-plain .tb-glass{display:none;}
 .ac-cd-fields{display:flex;flex-direction:column;gap:13px;padding:6px 16px 16px;}
 .ac-field{display:flex;flex-direction:column;gap:5px;}
 .ac-field>span{font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--t3);}
@@ -2587,14 +2591,79 @@ body.feeds-immersive #statusScrim{display:none;} /* immersive shorts manage thei
      relative/fixed here (that's why the smear only ever showed on desktop + tablet);
      this makes the invariant hold at every width. */
   position:relative;z-index:6;
-  /* SOLID, never frosted — the same call mobile already made, now at every width.
-     A backdrop-filter over a compositor-scrolled list is a known Chromium hazard: the
-     bar samples a backdrop that the compositor scrolls independently, so during a real
-     mouse-wheel scroll the raw feed content paints straight through the bar (photos and
-     text smeared over the tabs). A programmatic scroll never shows it, which is why it
-     only ever turned up on a desktop mouse. An opaque bar has no backdrop to sample and
-     the content clips cleanly beneath it. Don't reintroduce the blur here. */
-  background:var(--bg);
+  /* GLASS, not a wall (founder). The bar paints no fill of its own — .tb-glass below
+     is the whole material, so content passes UNDER the bar and dissolves as it rises
+     instead of hitting a hard black edge.
+
+     THE OLD COMMENT HERE SAID "SOLID, NEVER FROSTED" and blamed a backdrop-filter for
+     the desktop smear (photos painting straight through the bar on a mouse-wheel
+     scroll). That diagnosis was wrong and is worth knowing: the real cause was the
+     MEDIA SHIELD — a switched-off cursor-glow effect whose JS was still cloning every
+     image near the pointer into a position:fixed copy appended to <body>, which the
+     feed's scroller could not clip, so a photo scrolling up under the bar kept painting
+     over it. That code is deleted. The blur here is measured, not assumed (see the
+     frame-pacing note on .tb-glass). */
+  background:transparent;
+}
+/* ── The world bars are GLASS ────────────────────────────────────────────────
+   Content passes under the bar and dissolves upward: blurriest and most tinted at
+   the very top, clearest at the bottom, with a tail below so it never ends on a
+   line. Same material as a conversation's own top edge, and the same two laws:
+
+   (a) IT IS NEVER OPAQUE. An opaque plateau does not read as glass — it reads as a
+       slab switching on at a fixed distance down the screen, which is exactly what
+       three earlier passes on the chat edge got wrong. The tint peaks at .88 and
+       eases straight down with no flat section anywhere.
+   (b) THE BLUR IS PROGRESSIVE, not one flat frost. A single backdrop-filter has a
+       hard bottom edge; stacked layers each masked to their own band compound into a
+       smooth 2->24px ramp out of four cheap passes, and each layer is only as tall as
+       its own mask reaches, because a backdrop-filter costs in proportion to its area
+       and the widest blur needs the least room.
+
+   IT IS COUNTER-TRANSLATED by --tb-hide. The bar itself slides up as the brand row
+   collapses (brand-collapse writes translateY on .topbar); the glass must stay pinned
+   to the top of the SCREEN at a constant height, or the band would shrink with the bar
+   and the dissolve would collapse into a hard edge exactly when it is most needed. */
+.tb-glass{position:absolute;left:0;right:0;top:0;height:calc(100% + var(--tb-tail));
+  transform:translateY(var(--tb-hide,0px));pointer-events:none;z-index:0;
+  background:linear-gradient(to bottom,
+    rgba(0,0,0,.88) 0%, rgba(0,0,0,.85) 9%, rgba(0,0,0,.80) 19%, rgba(0,0,0,.74) 29%,
+    rgba(0,0,0,.66) 38%, rgba(0,0,0,.57) 47%, rgba(0,0,0,.47) 56%, rgba(0,0,0,.37) 64%,
+    rgba(0,0,0,.28) 72%, rgba(0,0,0,.19) 80%, rgba(0,0,0,.12) 87%, rgba(0,0,0,.06) 93%,
+    rgba(0,0,0,.02) 97%, transparent 100%);}
+body.light .tb-glass{background:linear-gradient(to bottom,
+    rgba(255,255,255,.90) 0%, rgba(255,255,255,.87) 9%, rgba(255,255,255,.82) 19%, rgba(255,255,255,.76) 29%,
+    rgba(255,255,255,.68) 38%, rgba(255,255,255,.59) 47%, rgba(255,255,255,.49) 56%, rgba(255,255,255,.39) 64%,
+    rgba(255,255,255,.29) 72%, rgba(255,255,255,.20) 80%, rgba(255,255,255,.12) 87%, rgba(255,255,255,.06) 93%,
+    rgba(255,255,255,.02) 97%, transparent 100%);}
+.tb-glass i{position:absolute;top:0;left:0;right:0;display:block;}
+.tb-glass i:nth-child(1){height:100%;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+  -webkit-mask:linear-gradient(to bottom,#000 0%,#000 66%,rgba(0,0,0,.5) 85%,transparent 100%);
+          mask:linear-gradient(to bottom,#000 0%,#000 66%,rgba(0,0,0,.5) 85%,transparent 100%);}
+.tb-glass i:nth-child(2){height:80%;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  -webkit-mask:linear-gradient(to bottom,#000 0%,#000 60%,rgba(0,0,0,.5) 82%,transparent 100%);
+          mask:linear-gradient(to bottom,#000 0%,#000 60%,rgba(0,0,0,.5) 82%,transparent 100%);}
+.tb-glass i:nth-child(3){height:62%;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  -webkit-mask:linear-gradient(to bottom,#000 0%,#000 54%,rgba(0,0,0,.5) 79%,transparent 100%);
+          mask:linear-gradient(to bottom,#000 0%,#000 54%,rgba(0,0,0,.5) 79%,transparent 100%);}
+.tb-glass i:nth-child(4){height:44%;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  -webkit-mask:linear-gradient(to bottom,#000 0%,#000 44%,rgba(0,0,0,.5) 75%,transparent 100%);
+          mask:linear-gradient(to bottom,#000 0%,#000 44%,rgba(0,0,0,.5) 75%,transparent 100%);}
+/* The bar's own rows sit ABOVE the glass; without this they share its stacking level
+   and the frost paints over the wordmark. */
+.topbar > *:not(.tb-glass),#notifHead > *:not(.tb-glass){position:relative;z-index:1;}
+/* Someone who asked for less transparency gets a solid bar — the RIGHT query is
+   prefers-reduced-transparency, never prefers-reduced-motion: nothing here moves, and
+   borrowing the motion switch would take it from people who only wanted stiller
+   animation. It goes SOLID rather than away: with no fill of its own the bar would be
+   left fully see-through and unreadable. */
+@media (prefers-reduced-transparency:reduce){
+  /* Solid, and now behaving like a solid bar SHOULD: exactly the bar's own height (no
+     tail, or it would lay a black band 26px over the content) and moving WITH the bar
+     rather than staying pinned (a pinned opaque slab would never reveal what the
+     collapsing brand row uncovers). */
+  .tb-glass{background:var(--bg);height:100%;transform:none;}
+  .tb-glass i{display:none;}
 }
 /* Row 1: ≡ + page label + the single compose "+" action. Collapses on scroll
    (home/chat) so only the tabs row (row 2) stays stuck at the top. */
@@ -2957,10 +3026,10 @@ body.light .tb-home-dot{border-color:#fff;}
   /* Solid, opaque home bar with a clean grey hairline under the tabs — content
      scrolls up and disappears CLEANLY beneath it (no blur/darken fade), X-style.
      The hairline is INSET to the same gutter as the posts + nav below it. */
-  .topbar.tb-home{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;padding-inline-end:var(--feed-gutter);}
+  .topbar.tb-home{background:transparent;border-bottom:none;position:relative;padding-inline-end:var(--feed-gutter);}
   /* No hairline under the Home tabs (founder) — the tab row fades up on scroll
      into a clean black top bar instead. */
-  body.light .topbar.tb-home{background:var(--bg);}
+  body.light .topbar.tb-home{background:transparent;}
 
   /* Chat top bar mirrors home: word-only tabs (All · Chats · Calls · Contacts) with
      roomy spacing, a left-edge fade under the ≡, a ⋯ tools menu after the last tab,
@@ -2968,7 +3037,7 @@ body.light .tb-home-dot{border-color:#fff;}
   .topbar.tb-chat{padding-inline-start:var(--feed-gutter);padding-inline-end:var(--feed-gutter);
     background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;}
   /* No hairline under the Beam tabs (founder) — matches Home. */
-  body.light .topbar.tb-chat{background:var(--bg);}
+  body.light .topbar.tb-chat{background:transparent;}
   /* (Scroll-cover choreography CSS is GLOBAL — defined right after this media
      block — so desktop gets the same hairline/cover as mobile.) */
   .topbar.tb-chat .sb-toggle{justify-content:flex-start;width:auto;}
@@ -3087,8 +3156,19 @@ body.light .tb-home-dot{border-color:#fff;}
      smooth. Trade-off: because the menu is behind the content, the tabs aren't tappable
      from the very top in this mode — restoring that needs a separate, careful approach
      that does NOT reintroduce the layer-swap (the scroll-cancel) or the black bar. */
+  /* THE ONE MODE THAT STAYS SOLID. Here the bar sits BEHIND the feed (z:4 under z:5)
+     and the rising opaque content covers it — that is the whole mechanism. Glass would
+     have nothing to show through it, and #tbRevealBar (the floating copy that slides in
+     on scroll-up) has to stay opaque too or you would see two menus stacked. */
   body.feed-cover .topbar.tb-home, body.feed-cover .topbar.tb-chat{
     position:relative;z-index:4;border-bottom:none;background:var(--bg);}
+  /* ...but Home in a browser carries pgscroll TOO, and that makes the bar fixed and
+     ABOVE the content — so the cover is not what is in play there and the glass must
+     stay on. Without this the bar came out fixed, transparent AND unfrosted: content
+     scrolling under it raw. */
+  body.feed-cover:not(.pgscroll) .tb-glass{display:none;}
+  body.feed-cover:not(.pgscroll) .topbar.tb-home,
+  body.feed-cover:not(.pgscroll) .topbar.tb-chat{background:var(--bg);}
   /* The tabs get DARKER as you scroll (founder): --cov (0..1, set from scroll
      position in JS). We darken with a COMPOSITED black overlay that just changes
      opacity (GPU-cheap) instead of fading the tab TEXT's opacity — fading text
@@ -3144,7 +3224,7 @@ body.light .tb-home-dot{border-color:#fff;}
   body.brand-collapse .topbar.tb-home,
   body.brand-collapse .topbar.tb-chat,
   body.brand-collapse .topbar.tb-engine{position:absolute;top:0;left:0;right:0;z-index:6;
-    background:var(--bg);will-change:transform;margin-top:0;}
+    background:transparent;will-change:transform;margin-top:0;}
   body.brand-collapse #socialWrap{margin-top:0;}          /* no cover offset here */
   /* Clear the full topbar on Home's feed AND every Beam pane (Chats/Groups + Calls +
      Contacts list + its search head) AND the Engine scroller; solid bg. */
@@ -3176,7 +3256,7 @@ body.light .tb-home-dot{border-color:#fff;}
      scroll frame, stealing frames from the whole scroll (the jank vs Beam, whose bar isn't
      sticky). Fixed rides the compositor. Opaque bg → no live blur needed. Always visible
      (no transform-hide) so the scroll stays buttery. */
-  body.pgscroll .topbar.tb-home,body.pgscroll .topbar.tb-chat{position:fixed;top:0;left:0;right:0;z-index:6;background:var(--bg);
+  body.pgscroll .topbar.tb-home,body.pgscroll .topbar.tb-chat{position:fixed;top:0;left:0;right:0;z-index:6;background:transparent;
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
   /* THE smoothness fix: the nav-ball morph animates the nav's `left`/`height` (layout
      properties). With the feed now in the full document flow, each morph frame would
@@ -3195,7 +3275,7 @@ body.light .tb-home-dot{border-color:#fff;}
      (--pg-top, set in acShow), so it works whatever the search bar's height is. The
      shell-unfix rules above (.app/.main/#socialWrap/.ac-win) are generic and already
      apply; only the search screen + its scroller + its topbar need adding here. */
-  body.pgscroll-search .topbar{position:fixed;top:0;left:0;right:0;z-index:6;background:var(--bg);
+  body.pgscroll-search .topbar{position:fixed;top:0;left:0;right:0;z-index:6;background:transparent;
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
   body.pgscroll #acSearchScreen{display:block;height:auto;min-height:0;padding-top:var(--pg-top,56px);}
   body.pgscroll #acSearchScroll,body.pgscroll #acSearchPageResults{display:block;height:auto;overflow:visible;}
@@ -4717,6 +4797,9 @@ body.nav-mini .sb-divider{width:38px;margin-inline-start:auto;margin-inline-end:
    Black theme's --s3 and Light would never flip. body.light sets --s3 on body
    itself, so declaring here makes both themes resolve correctly. */
 body{
+  /* how far the bar's glass runs ON below its own bottom edge, so the dissolve never
+     ends on a line. Declared here beside the tab tokens for the same reason. */
+  --tb-tail: 26px;
   --tab-fill:    var(--s3);      /* at rest — the app's own secondary-button grey */
   --tab-ink:     var(--t2);
   --tab-fill-on: var(--primary); /* selected — white on Black, near-black on Light */
@@ -4752,7 +4835,7 @@ body.light{
   --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
 }
 body.light .sidebar{background:rgba(248,248,250,.97);border-inline-end-color:var(--b2);}
-body.light .topbar{background:var(--bg);}
+body.light .topbar{background:transparent;}
 body.light .bottom-nav{background:rgba(255,255,255,.82);border-color:var(--b3);box-shadow:0 10px 34px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.08);}
 body.light .bn-tab{color:var(--t2);}
 body.light .bn-tab.active{color:var(--t1);}
@@ -13481,6 +13564,18 @@ body.reduce-motion .notif-detail{transition:none;}
 .nd-action{display:block;width:100%;margin-top:14px;padding:14px;border-radius:14px;border:none;background:var(--primary);color:var(--on-primary);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:transform var(--t-fast) var(--ease);}
 .nd-action:active{transform:scale(.98);}
 .notif-head{display:flex;align-items:center;gap:4px;padding:max(14px,env(safe-area-inset-top)) 12px 12px;flex-shrink:0;}
+/* Notifications is a world, so its bar is glass like the other three: the list scrolls
+   UNDER the lockup and dissolves into it. That needs the header to OVERLAY the list
+   rather than sit above it in flow — it no longer retracts on scroll (build 1766 took
+   that out to fix a choppy scroll), so it was a permanent black slab with nothing able
+   to pass beneath it. The list is padded by the header's measured height so nothing
+   opens underneath it. */
+/* .tb-brandrow gives this header its own position/background at (0,1,1,0), so the
+   override has to carry the class too — a bare #notifHead loses to it. */
+#notifHead.tb-brandrow{position:absolute;top:0;left:0;right:0;z-index:6;background:transparent;}
+#notifList{padding-top:var(--notif-head-h,76px);}
+/* ...and the detail page has to clear the floating header, or the lockup paints over it. */
+.notif-detail{z-index:7;}
 .notif-back{width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:none;border:none;
   cursor:pointer;color:var(--t1);border-radius:50%;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
 .notif-back svg{width:23px;height:23px;stroke:currentColor;stroke-width:2.2;fill:none;}
@@ -15207,6 +15302,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 
     <!-- Topbar -->
     <div class="topbar">
+     <div class="tb-glass" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
      <div class="tb-mainrow">
       <div class="tb-left">
         <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()" aria-label="Menu">
@@ -20688,6 +20784,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
          your avatar on the right. Same classes as #tbBrandRow, so it inherits the
          sizing, the theme and the press behaviour rather than imitating them. -->
     <div class="notif-head tb-brandrow" id="notifHead">
+      <div class="tb-glass" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
       <button class="tb-brand" onclick="closeNotifToHome()" aria-label="Back to Home">
         <span class="tb-brand-mark" aria-hidden="true"></span>
         <span class="tb-brand-word-txt">Notifications</span>
@@ -21979,7 +22076,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1817'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1818'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -30993,6 +31090,10 @@ function acNotifHeadSync(arriving) {
   const head = document.getElementById('notifHead');
   const ov = document.getElementById('notifOverlay');
   if (!list || !head || !ov) return;
+  /* The header floats over the list now (glass), so the list has to be padded by its
+     REAL height — it changes with the safe-area inset and with the lockup's own size. */
+  const _hh = head.offsetHeight;
+  if (_hh) (document.getElementById('notifCard') || ov).style.setProperty('--notif-head-h', _hh + 'px');
   /* Everything from here to the bind-once guard runs on EVERY open, deliberately. */
   // Open at the top of the list. (The header no longer retracts, so there is no longer a
   // retracted state to reset — see the note at the end of this function.)
@@ -35347,7 +35448,7 @@ function acShow(screenId, tab) {
       if (_br && _br.offsetHeight) _brandH = _br.offsetHeight;
       // Reset the header to fully shown on entry (screens land at the top of their scroller).
       _bcHide = 0;
-      if (_tb) _tb.style.transform = 'translateY(0px)';
+      if (_tb) { _tb.style.transform = 'translateY(0px)'; _tb.style.setProperty('--tb-hide', '0px'); }
     };
     _mz(); requestAnimationFrame(_mz);
   } else { const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.transform = ''; }
@@ -35535,7 +35636,7 @@ function acSetFeed(scope) {
   // The feed reloads + scrolls to top, so restore the covered bar.
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
   // Collapsing header: the feed jumps to top on a tab switch, so reveal the brand row.
-  if (document.body.classList.contains('brand-collapse') && _tb) { _bcHide = 0; _tb.style.transform = 'translateY(0px)'; const _fd = document.getElementById('acFeed'); if (_fd) _fd._bcLast = 0; }
+  if (document.body.classList.contains('brand-collapse') && _tb) { _bcHide = 0; { _tb.style.transform = 'translateY(0px)'; _tb.style.setProperty('--tb-hide','0px'); }; const _fd = document.getElementById('acFeed'); if (_fd) _fd._bcLast = 0; }
   const _tr = document.getElementById('tbTabRow'); if (_tr) { _tr.style.opacity = ''; _tr.style.transform = ''; _tr.style.pointerEvents = ''; }
   _covSet(0);
   if (typeof _barHide !== 'undefined') { _barHide = 0; _barScroll = 0; }
@@ -37652,7 +37753,7 @@ function acChatTab(tab) { acSpinBrandMark(); acChatsTab(tab); }
 function acChatsTab(tab, dir) {
   if (!AC_CHATS_TABS.includes(tab) && !String(tab).startsWith('list:')) tab = 'chats';
   // Collapsing header: the pane jumps to top on a tab switch, so reveal the brand row.
-  if (document.body.classList.contains('brand-collapse')) { const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.transform = 'translateY(0px)'; _bcHide = 0; }
+  if (document.body.classList.contains('brand-collapse')) { const _tb = document.querySelector('.topbar'); if (_tb) { _tb.style.transform = 'translateY(0px)'; _tb.style.setProperty('--tb-hide','0px'); }; _bcHide = 0; }
   if (AC._chatSelMode) { AC._chatSelMode = false; acChatSel().clear(); document.getElementById('acListScreen')?.classList.remove('selecting'); } // leave bulk-select on tab change
   // A plain tap (no dir) still gets a horizontal page-slide, computed from the
   // previous tab — matching the home feed's tab-tap slide.
@@ -65954,6 +66055,9 @@ function _onListScroll(e) {
       if (st <= 0) _bcHide = 0;
       else _bcHide = Math.max(0, Math.min(_brandH, _bcHide + (st - prev)));
       _tbc.style.transform = 'translateY(' + (-_bcHide) + 'px)';
+      // ...and the glass counter-translates by the same amount, so the dissolve stays
+      // pinned to the top of the screen at a constant height while the bar slides up.
+      _tbc.style.setProperty('--tb-hide', _bcHide + 'px');
     }
   }
   // Scroll-morph (home feed + Beam): down → ball, up → full nav, top → always full.
