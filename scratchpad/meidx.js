@@ -29,14 +29,32 @@ let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}els
       const fn = String(x.run||'').match(/^([A-Za-z_$][\w$]*)\s*\(/);
       return !fn || typeof window[fn[1]] !== 'function';
     }).map(x=>x.label+' → '+x.run);
-    const declared = ME_SECTIONS.reduce((n,g)=>n+g.items.length,0) + ME_HUB_TAIL.length + ME_HUB_FOOT.length;
-    return { total: idx.length, acct: acct.length, declared, dead,
+    /* Comparing the two COUNTS was wrong and cried wolf for a long time: PLACES_EXTRA
+       deliberately carries Account-subtitled entries of its own (Add account moved there
+       when the hero switcher took it off the hub, and Settings sits there too), so the
+       index is legitimately LARGER than the tables declare. What actually matters is that
+       nothing declared went MISSING — so check the labels, and report any surplus by name
+       instead of failing on it. */
+    const lbl = (it) => String(typeof it.l === 'function' ? it.l() : it.l);
+    const declaredLabels = [].concat(
+      ...ME_SECTIONS.map(g => g.items.map(lbl)), ME_HUB_TAIL.map(lbl), ME_HUB_FOOT.map(lbl));
+    /* Findable ANYWHERE, not just under an "Account" subtitle: a destination is indexed
+       once, and where two tables name the same place the first subtitle wins. Collections
+       is declared on the Account page AND in PLACES_EXTRA subtitled "Home" (it IS a Home
+       feed tab; the Account row is a shortcut to it), so it is correctly indexed as Home.
+       Looking only at the Account slice reported it as missing on correct code. */
+    const anywhere = new Set(idx.map(x => String(x.label)));
+    const indexed = new Set(acct.map(x => String(x.label)));
+    const missing = declaredLabels.filter(l => !anywhere.has(l));
+    const surplus = [...indexed].filter(l => !declaredLabels.includes(l));
+    return { total: idx.length, acct: acct.length, declared: declaredLabels.length, dead,
+      missing, surplus,
       admin: acct.filter(x=>/admin dashboard/i.test(x.label)).map(x=>x.sub),
       dupes: acct.map(x=>x.label).filter((v,i,a)=>a.indexOf(v)!==i) };
   });
   console.log('  '+JSON.stringify(r).slice(0,500));
-  ok(r.acct===r.declared, 'every declared Account row is in the search index',
-     'index has '+r.acct+', the tables declare '+r.declared);
+  ok(r.missing.length===0, 'every declared Account row is in the search index',
+     'not indexed: '+JSON.stringify(r.missing));
   ok(r.dead.length===0, 'and every one of them runs a real function', JSON.stringify(r.dead));
   ok(r.dupes.length===0, 'no destination is listed twice', JSON.stringify(r.dupes));
   ok(r.admin.length===1 && r.admin[0]==='Account',

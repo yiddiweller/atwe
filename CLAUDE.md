@@ -1097,9 +1097,15 @@ below).
 > which asserts every destination the old flat list had is still reachable (95 on the
 > Account page, plus the five that moved to Settings — it runs the completeness pass
 > as a business ADMIN — the only account that can see every row), `scratchpad/meidx.js`,
-> which asserts the declared row count and the indexed count are **the same number** and
-> that every indexed `run` names a function that really exists (a search result that does
-> nothing is worse than no result), and `scratchpad/meacct.js` for the tail/status/
+> which asserts every declared Account row is FINDABLE and that every indexed `run` names a
+> function that really exists (a search result that does nothing is worse than no result).
+> **It used to compare the two COUNTS and cried wolf for months.** Two things make that
+> wrong: `PLACES_EXTRA` deliberately carries Account-subtitled entries of its own (`Your
+> profile`, `Add account`), so the index is legitimately LARGER than the tables declare;
+> and a destination named by two tables is indexed ONCE under the first subtitle — the
+> Account page's **Collections** row is indexed as `Home`, because Collections really is a
+> Home feed tab and the Account row is a shortcut to it. So the check is now a subset test
+> over the WHOLE index, with any surplus reported by name rather than failed on, and `scratchpad/meacct.js` for the tail/status/
 > clearance shapes.
 >
 > **Drilling in and out is the SAME push/pop the Settings sub-pages use** —
@@ -6409,12 +6415,53 @@ using the classes the cart already had (`.ac-feed-empty*`), so nothing new was i
 the screens cannot drift apart again. `_EMPTY_ICONS` holds the glyph set; `cta` is optional,
 because some screens genuinely have nowhere to send you ("Nothing to pay" is good news).
 
-Converted so far — the money and shop screens: **Orders · Sales · Saved items · Invoices ·
-Quotes · Splits · Pools · Scheduled payments**. Each headline says what is empty, each
-sentence says what the screen is for, and each way-out button goes somewhere real.
-`scratchpad/emptystates.js` checks all of that in both themes — including that **the
-button's function actually exists**, because a button that does nothing is worse than no
-button.
+**Every screen a person can land on and find blank now has it** — 38 of them, across the
+whole app: the money and shop screens (Orders · Sales · Saved · Invoices · Quotes · Splits ·
+Pools · Scheduled payments · Offers · Bookings · Affiliate · Gift cards · Addresses ·
+Subscriptions · Appointments · Customers · Coupons · Bundles · Sponsored ads · Ads manager ·
+Sell), the social ones (Notifications · Collections · Lists · Drafts · Scheduled posts ·
+Feeds · Showcase · Profile viewers), the worlds (Beam's locked/archived/labelled/unread
+views, Calls, New chat, shared photos/links/documents, chat labels, scheduled messages,
+Communities · Courses · Events · Newsletters · Business directory), and the settings leaves
+(Blocked · Muted accounts · Muted words · Hidden last seen · Devices · Saved searches ·
+Saved candidates · Jobs' five tabs). Each headline says what is empty, each sentence says
+what the screen is FOR, and each way-out button goes somewhere real.
+
+**The 430 remaining `class="ac-empty"` lines are NOT all empty states — do not sweep them.**
+Counted: **44 are loading placeholders** ("Loading…") and **173 are error messages**
+("Could not load."), both reusing the same class; of the genuine "nothing yet" lines, most
+are a small section INSIDE a card ("No one has added this business yet.", "This is your
+listing.") where a one-liner is right and a 60px glyph would be absurd. The rule is: the
+full treatment is for a screen a person NAVIGATED to and found blank; a section inside
+something else keeps its line.
+
+**A screen may not show TWO white pills that do the same job, and writing the empty states
+is what exposed it.** The colour law says white is *the ONE primary action per screen*; nine
+screens ended up with the header's create button AND an empty-state button running the same
+function — "＋ New listing" beside "Add a listing", "＋ Teach" beside "Teach a course" — and
+**one of them (Scheduled payments) had shipped that way before this pass**. The rule now: if
+the header already carries that exact action in white, the empty state states the case and
+does NOT repeat the button; a CTA that goes somewhere DIFFERENT ("Browse the marketplace"
+beside "＋ New listing") is not a duplicate and stays. A selected TAB is white too and is not
+an action — the check ignores anything with no `onclick`. 19 duplicate buttons were removed,
+and `emptystates.js` now asserts it mechanically on every screen, so it cannot come back.
+
+`scratchpad/emptystates.js` drives **38 screens in both themes** (178+ checks) and asserts
+each shows a glyph, a headline that is not a full sentence, an explanation, and — where one
+is offered — that **the button's function actually exists**, because a button that does
+nothing is worse than no button. Two things it had to learn: a probe run as the SEEDED
+account finds real rows on half of them and quietly proves nothing, so it runs as a
+purpose-made empty account; and it must close each screen with **`closeOverlay(id, true)`**,
+because `closeOverlay` walks history BACK for a route-owning panel and doing that thirty
+times in a row leaves the router somewhere unpredictable (four screens failed that way, on
+correct code).
+
+**`_EMPTY_ICONS` grew from 8 glyphs to 25** — bell, mute (the bell plus a slash, so the pair
+reads as one icon in two states), bookmark, star, pencil, list, book, globe, phone, block,
+eyeoff, word, search, store, broadcast, briefcase. All 24×24, `fill:none`, stroke 1.6, round
+caps — the same line set as the ⋯ menus. `eyeoff` is the app's OWN eye (the `rx 8.6 / ry 7.4`
+ellipse from Beam's read mark) plus a slash, not a second drawing: there is one eye in this
+app and `scratchpad/oneeye.js` enforces it.
 
 ### The marketplace filters are the app's own controls
 
@@ -8019,11 +8066,16 @@ all three widths and branches on `font-size === 0` to ask the right question at 
 **The `© Atwe Inc` line is gone**, along with its CSS and the two collapsed-rail rules that
 named it.
 
-**One thing left odd on DESKTOP only, flagged rather than guessed at:** `#sbProfile` still
-sits above the new pair labelled "Profile", and it opens the ACCOUNT MENU (Add account /
-Log out), not the profile — so a row called "Profile" now sits directly above one called
-"Account". It stays because it is desktop's only route to **Add account** (Log out is also
-on the Account page, but Add account is not).
+**`#sbProfile` is hidden on EVERY size, and the doc used to claim desktop kept it.** It
+carries `hidden style="display:none!important"` in the markup, so the reasoning recorded
+here — "it is desktop's only route to Add account / Log out" — has not been true for some
+time: **Log out sits at the bottom of the Account page and Add account is in that page's
+hero switcher panel**, both reached from the sidebar footer's own Account row. Verified in
+a real 1280px browser: two visible Log out rows and the switcher, with `#sbProfile` and
+`#tbBrandProf` both invisible. `menutrim.js` asserted the ELEMENT and therefore failed on
+correct, shipped code; it asserts the OUTCOME now (a desktop user can sign out, and can
+reach the switcher). If you ever want the row back, un-hide it deliberately — do not
+"restore" it because this paragraph once said it was load-bearing.
 
 **The bottom nav pill sliced through the open drawer, and z-index could not fix it.**
 `.sidebar` lives inside `#app`, which is `position:fixed; z-index:1` — a stacking context —

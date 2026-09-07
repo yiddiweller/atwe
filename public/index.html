@@ -7134,11 +7134,6 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 /* Who-viewed-your-profile screen. */
 .pv-teaser{font-size:14px;color:var(--t2);padding:2px 2px 12px;}
 .pv-teaser b{color:var(--t1);font-weight:800;}
-.pv-empty{text-align:center;padding:26px 16px 20px;}
-.pv-empty-ic{width:56px;height:56px;margin:0 auto 12px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;}
-.pv-empty-ic svg{width:26px;height:26px;color:var(--accent);}
-.pv-empty-t{font-size:17px;font-weight:700;color:var(--t1);margin-bottom:5px;}
-.pv-empty-s{font-size:13.5px;color:var(--t3);line-height:1.45;max-width:300px;margin:0 auto;}
 .pv-lock{position:relative;margin-top:2px;}
 .pv-lock-blur{filter:blur(5px);pointer-events:none;opacity:.6;}
 .pv-lock-cta{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:12px;}
@@ -21884,7 +21879,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1812'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1813'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -26840,7 +26835,7 @@ async function openBlockedAccounts() {
     const { blocked } = await API.req('GET', '/api/social/blocked');
     el.innerHTML = blocked.length
       ? blocked.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div><button class="ac-join-btn" onclick="unblockUser(${u.id},this)">Unblock</button></div>`).join('')
-      : '<div class="ac-empty" style="padding:34px 16px;">You haven’t blocked anyone.</div>';
+      : acEmpty('block', 'Nobody blocked', 'Blocking hides you from each other completely — they can’t message you, find you, or see anything you post.');
   } catch (e) { acErr(el, 'openBlockedAccounts()'); }
 }
 async function unblockUser(id, btn) {
@@ -26849,7 +26844,7 @@ async function unblockUser(id, btn) {
     await API.req('DELETE', '/api/social/block/' + id);
     const row = btn.closest('.ac-item'); if (row) row.remove();
     const el = document.getElementById('blockedList');
-    if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:34px 16px;">You haven’t blocked anyone.</div>';
+    if (el && !el.querySelector('.ac-item')) el.innerHTML = acEmpty('block', 'Nobody blocked', 'Blocking hides you from each other completely — they can’t message you, find you, or see anything you post.');
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not unblock.'); }
 }
 // Muted accounts (Privacy settings).
@@ -26863,7 +26858,7 @@ async function acOpenLastSeenHidden() {
     const { people } = await API.req('GET', '/api/atchat/presence-hidden');
     el.innerHTML = people.length
       ? people.map((u) => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar, '', acIsBiz(u))}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div><div class="ac-item-last">@${escHtml(u.username || '')}</div></div><button class="ac-join-btn" onclick="acUnhideLastSeen(${u.id},this)">Show</button></div>`).join('')
-      : '<div class="ac-empty" style="padding:34px 16px;">You haven’t hidden your last seen from anyone.</div>';
+      : acEmpty('eyeoff', 'Not hidden from anyone', 'You can hide when you were last online from one person, from inside your conversation with them. It works both ways — you stop seeing theirs too.');
   } catch (e) { acErr(el, 'acOpenLastSeenHidden()'); }
 }
 async function acUnhideLastSeen(id, btn) {
@@ -26873,7 +26868,7 @@ async function acUnhideLastSeen(id, btn) {
     if (AC.peer && AC.peer.id === id) AC.presenceHidden = false;   // the open chat's ⋯ tick
     const row = btn.closest('.ac-item'); if (row) row.remove();
     const el = document.getElementById('lastSeenHiddenList');
-    if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:34px 16px;">You haven’t hidden your last seen from anyone.</div>';
+    if (el && !el.querySelector('.ac-item')) el.innerHTML = acEmpty('eyeoff', 'Not hidden from anyone', 'You can hide when you were last online from one person, from inside your conversation with them. It works both ways — you stop seeing theirs too.');
   } catch (e) { btn.disabled = false; showNotif((e && e.message) || 'Could not update.'); }
 }
 async function acOpenMutedAccounts() {
@@ -26885,7 +26880,7 @@ async function acOpenMutedAccounts() {
     AC._mutedIds = AC._mutedIds || new Set(); muted.forEach(u => AC._mutedIds.add(u.id));
     el.innerHTML = muted.length
       ? muted.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div><div class="ac-item-last">@${escHtml(u.username)}${acMutedUntilLabel(u.expiresAt)}</div></div><button class="ac-join-btn" onclick="acUnmuteUser(${u.id},this)">Unmute</button></div>`).join('')
-      : '<div class="ac-empty" style="padding:34px 16px;">You haven’t muted anyone.</div>';
+      : acEmpty('mute', 'Nobody muted', 'Muting quietly keeps someone out of your feed. They are never told, and you stay connected.');
   } catch (e) { acErr(el, 'acOpenMutedAccounts()'); }
 }
 async function acUnmuteUser(id, btn) {
@@ -26895,7 +26890,7 @@ async function acUnmuteUser(id, btn) {
     AC._mutedIds && AC._mutedIds.delete(id);
     const row = btn.closest('.ac-item'); if (row) row.remove();
     const el = document.getElementById('mutedList');
-    if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:34px 16px;">You haven’t muted anyone.</div>';
+    if (el && !el.querySelector('.ac-item')) el.innerHTML = acEmpty('mute', 'Nobody muted', 'Muting quietly keeps someone out of your feed. They are never told, and you stay connected.');
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not unmute.'); }
 }
 // Muted words (Privacy settings).
@@ -26911,7 +26906,7 @@ async function acRenderMutedWords() {
     const { keywords } = await API.req('GET', '/api/social/muted-keywords');
     el.innerHTML = keywords.length
       ? keywords.map(k => `<div class="ac-item"><div class="ac-item-main"><div class="ac-item-name">${escHtml(k.word)}${k.expiresAt ? `<span style="color:var(--t3);font-weight:400;font-size:12.5px;">${acMutedUntilLabel(k.expiresAt)}</span>` : ''}</div></div><button class="ac-exp-del" onclick="acDeleteMutedWord(${k.id},this)" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`).join('')
-      : '<div class="ac-empty" style="padding:30px 16px;">No muted words yet.</div>';
+      : acEmpty('word', 'No muted words', 'Add a word or phrase and any post containing it stays out of your feed. Only you can see this list.');
   } catch (e) { acErr(el, 'acRenderMutedWords()'); }
 }
 function acAddMutedWord() {
@@ -26926,7 +26921,7 @@ async function acDeleteMutedWord(id, btn) {
     await API.req('DELETE', '/api/social/muted-keywords/' + id);
     const row = btn.closest('.ac-item'); if (row) row.remove();
     const el = document.getElementById('mutedWordsList');
-    if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:30px 16px;">No muted words yet.</div>';
+    if (el && !el.querySelector('.ac-item')) el.innerHTML = acEmpty('word', 'No muted words', 'Add a word or phrase and any post containing it stays out of your feed. Only you can see this list.');
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not remove.'); }
 }
 // ── Two-factor authentication (TOTP) ──
@@ -27486,7 +27481,7 @@ function deviceIcon(ua) {
 }
 function renderDevices(list) {
   const el = document.getElementById('devList');
-  if (!list.length) { el.innerHTML = '<div class="ac-empty" style="padding:34px 0;">No active sessions.</div>'; return; }
+  if (!list.length) { el.innerHTML = acEmpty('phone', 'Nothing signed in', 'Every phone or computer signed in to your account appears here, so you can sign any of them out.'); return; }
   el.innerHTML = list.map((s) => {
     const when = s.current ? 'Active now' : ('Last active ' + acTime(s.last_seen));
     const sub = [when, s.location || s.ip].filter(Boolean).join(' · ');
@@ -28821,7 +28816,7 @@ async function acOpenStarred() {
     const { items } = await API.req('GET', '/api/atchat/starred');
     AC._starred = items || [];
     if (!items || !items.length) {
-      body.innerHTML = '<div class="ac-empty" style="padding:30px;">No starred messages yet.<br/>Touch and hold any message, then tap Star to keep it here.</div>';
+      body.innerHTML = acEmpty('star', 'No starred messages', 'Touch and hold any message, then tap Star — it is kept here, from every conversation.');
       return;
     }
     body.innerHTML = items.map((m, i) => {
@@ -31309,7 +31304,7 @@ function acRenderCallPicker(users, isContacts) {
   const el = document.getElementById('callPickerResults');
   if (!users.length) {
     el.innerHTML = isContacts
-      ? '<div class="ac-empty">No recent chats.<br/>Search a @username to call.</div>'
+      ? acEmpty('people', 'Nobody to call yet', 'People you have messaged appear here. Search a @username to call anyone on Atwe.')
       : '<div class="ac-empty">No one found.</div>';
     return;
   }
@@ -31576,7 +31571,9 @@ async function acLoadCommunities() {
       ${acGroupAvatarHtml({ name: c.name, avatar: c.avatar }, 'ac-grp-ava')}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${c.isMember ? '<span class="ev-badge">Joined</span>' : ''}</div>
         <div class="ac-item-last">${c.members} member${c.members === 1 ? '' : 's'} · ${c.groups} group${c.groups === 1 ? '' : 's'}</div></div>
-    </div>`).join('') : `<div class="ac-empty" style="padding:26px;">${AC._commScope === 'mine' ? 'You haven’t joined any communities yet.' : 'No communities yet. Create the first one.'}</div>`;
+    </div>`).join('') : (AC._commScope === 'mine'
+      ? acEmpty('globe', 'No communities yet', 'A community holds several groups under one roof, with an announcements channel everyone gets.', 'Find a community', "acCommPaneTab('discover')")
+      : acEmpty('globe', 'Nothing to discover yet', 'Be the first — start a community and invite people in.'));
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // ── Communities as a Beam TAB (inline pane) — reuses the same rows + the full
@@ -31596,7 +31593,9 @@ async function acLoadCommunitiesPane() {
       ${acGroupAvatarHtml({ name: c.name, avatar: c.avatar }, 'ac-grp-ava')}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${c.isMember ? '<span class="ev-badge">Joined</span>' : ''}</div>
         <div class="ac-item-last">${c.members} member${c.members === 1 ? '' : 's'} · ${c.groups} group${c.groups === 1 ? '' : 's'}</div></div>
-    </div>`).join('') : `<div class="ac-empty" style="padding:30px 20px;">${AC._commScope === 'mine' ? 'You haven’t joined any communities yet.<br/>Tap ＋ New to start one, or switch to Discover.' : 'No communities yet. Create the first one.'}</div>`;
+    </div>`).join('') : (AC._commScope === 'mine'
+      ? acEmpty('globe', 'You haven’t joined any', 'A community holds several groups under one roof, with an announcements channel everyone gets.', 'Find a community', "acCommTab('discover')")
+      : acEmpty('globe', 'Nothing to discover yet', 'Be the first — start a community and invite people in.'));
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 function acCommCreateOpen() {
@@ -31784,7 +31783,9 @@ async function acLoadDirectory() {
     const { businesses } = await API.req('GET', url + ps.join('&'));
     if (!businesses.length) { body.innerHTML = (AC._dirQ && !AC._dirNear)
       ? acAskAiEmpty(AC._dirQ, 'No businesses match “' + escHtml(AC._dirQ) + '”.')
-      : `<div class="ac-empty" style="padding:26px;">${AC._dirNear ? 'No businesses near you have set a location yet.' : 'No businesses found.'}</div>`; return; }
+      : (AC._dirNear
+        ? acEmpty('store', 'Nothing near you yet', 'No business close by has added its location. Turn “Near me” off to see them all.')
+        : acEmpty('store', 'No businesses match', 'Try a different name, or clear the industry filter to see everyone.')); return; }
     body.innerHTML = businesses.map(bz => `<div class="ac-item" onclick="closeOverlay('bizDirectory');appTab('home');acGoProfile(${jsAttr(bz.username)})">
       ${acAvatarHtml(bz.name, bz.avatar, '', true)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(bz.name)}${bz.businessVerified ? vbadge(true) : ''}</span>${bz.featured ? '<span class="dir-featured">Featured</span>' : ''}${bz.distanceKm != null ? `<span class="dir-dist">${acDistLabel(bz.distanceKm)}</span>` : ''}</div>
@@ -31880,8 +31881,11 @@ async function acLoadNewsletters() {
   try {
     const { newsletters } = await API.req('GET', '/api/newsletters?scope=' + AC._nlScope);
     if (!newsletters.length) {
-      const msg = AC._nlScope === 'mine' ? 'You haven’t started a newsletter yet.' : AC._nlScope === 'subscribed' ? 'You’re not subscribed to any newsletters yet.' : 'No newsletters yet. Be the first to start one.';
-      body.innerHTML = '<div class="ac-empty" style="padding:26px;">' + msg + '</div>'; return;
+      body.innerHTML = AC._nlScope === 'mine'
+        ? acEmpty('word', 'No newsletter yet', 'Write to the people who follow you, on your own schedule. Every issue lands in their notifications.')
+        : AC._nlScope === 'subscribed'
+          ? acEmpty('word', 'Not subscribed to any', 'Newsletters you follow are kept here, with every issue.', 'Find one to read', "acNlTab('discover')")
+          : acEmpty('word', 'No newsletters yet', 'Be the first to write one — free or paid, it is yours.'); return;
     }
     body.innerHTML = newsletters.map(n => `<div class="ac-item" onclick="acOpenNewsletter(${n.id})">
       <div class="rr-ic" style="width:44px;height:44px;border-radius:10px;background:var(--s3);color:var(--accent);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;stroke-width:1.8;fill:none;"><path d="M4 4h16v16H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg></div>
@@ -32030,10 +32034,11 @@ async function acLoadEvents() {
     const { events } = await API.req('GET', '/api/events?scope=' + AC._evScope);
     AC._events = events || [];
     if (!events.length) {
-      const msg = AC._evScope === 'mine' ? 'You’re not hosting any events yet.<br/>Create one to bring people together.'
-        : AC._evScope === 'attending' ? 'You haven’t RSVP’d to any events yet.'
-        : 'No upcoming events yet.<br/>Be the first to host one.';
-      body.innerHTML = '<div class="ac-empty" style="padding:28px;">' + msg + '</div>';
+      body.innerHTML = AC._evScope === 'mine'
+        ? acEmpty('calendar', 'You’re not hosting anything', 'Run a meetup, a workshop or a class — people RSVP in one tap, and you can charge for a ticket.')
+        : AC._evScope === 'attending'
+          ? acEmpty('calendar', 'Nothing in your diary', 'Events you say yes to are kept here, and land in your agenda.', 'Find an event', "acEventsTab('upcoming')")
+          : acEmpty('calendar', 'Nothing coming up', 'No events have been posted yet. Be the first to host one.');
       return;
     }
     body.innerHTML = events.map((e, i) => {
@@ -32306,7 +32311,11 @@ async function acLoadCourses() {
   try {
     const { courses } = await API.req('GET', '/api/courses?scope=' + AC._crsScope);
     body.innerHTML = courses.length ? courses.map(acCourseCard).join('')
-      : `<div class="ac-empty" style="padding:26px;">${AC._crsScope === 'teaching' ? 'You’re not teaching any courses yet. Tap ＋ Teach.' : AC._crsScope === 'enrolled' ? 'You haven’t enrolled in any courses yet.' : 'No courses yet.'}</div>`;
+      : (AC._crsScope === 'teaching'
+        ? acEmpty('book', 'You’re not teaching yet', 'Build a course out of lessons — video, notes and a checklist — and let people enrol, free or paid.')
+        : AC._crsScope === 'enrolled'
+          ? acEmpty('book', 'Not enrolled in anything', 'Courses you join are kept here, with your progress through each lesson.', 'Find a course', "acCoursesTab('discover')")
+          : acEmpty('book', 'No courses yet', 'Anyone can teach on Atwe. Be the first — build a course and let people enrol.'));
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 function acCourseCard(c) {
@@ -32880,7 +32889,7 @@ async function acRefreshWorkerList() {
     AC._workers = workers || [];
     const cur = document.getElementById('acWorkersList'); if (!cur) return;
     cur.innerHTML = AC._workers.length ? AC._workers.map(acWorkerCard).join('')
-      : '<div class="ac-empty">No one is open to work here yet.<br/>Tap “I’m open to work” to be the first.</div>';
+      : acEmpty('people', 'Nobody is open to work yet', 'People who are looking for work list themselves here. Be the first and employers can find you.');
   } catch { const cur = document.getElementById('acWorkersList'); if (cur) cur.innerHTML = '<div class="ac-empty">Could not load workers.</div>'; }
 }
 // Post / update / remove my own "open to work" listing.
@@ -33024,7 +33033,7 @@ async function acOpenSavedSearches() {
     const { searches } = await API.req('GET', '/api/saved-searches');
     AC._savedSearches = searches || [];
     el.innerHTML = searches.length ? searches.map(acSavedSearchRow).join('')
-      : '<div class="ac-empty" style="padding:14px;">No saved searches yet.<br/>Set some job filters, then “Save current search”.</div>';
+      : acEmpty('search', 'No saved searches', 'Set the filters you care about, save them, and Atwe tells you the moment a matching job is posted.');
   } catch (e) { el.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 const _BELL_ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
@@ -33089,13 +33098,19 @@ async function acRefreshJobList() {
     if (types) _jobTypes = types;
     AC._jobs = jobs || [];
     const cur = document.getElementById('acJobsList'); if (!cur) return;
-    const empties = { forme: 'No jobs in your industries yet.<br/>Tap “All” to see every job.', saved: 'No saved jobs yet.<br/>Tap the bookmark on a job to save it.', applied: 'You haven’t applied to any jobs yet.', mine: 'You haven’t posted any jobs yet.', all: 'No jobs match those filters.' };
+    const empties = {
+      forme: acEmpty('briefcase', 'Nothing in your industries yet', 'These are roles matched to the industries on your profile. There is plenty more on All.', 'See every job', "acSetJobView('all')"),
+      saved: acEmpty('bookmark', 'No saved jobs', 'Tap the bookmark on any job and it waits for you here, so you can come back and apply properly.', 'Browse jobs', "acSetJobView('all')"),
+      applied: acEmpty('briefcase', 'You haven’t applied yet', 'Every job you apply to is tracked here, so you can see where each one stands.', 'Find a job', "acSetJobView('all')"),
+      mine: acEmpty('briefcase', 'You haven’t posted a job', 'Post a role and people can apply in one tap — you get a proper hiring list, not a pile of emails.'),
+      all: acEmpty('search', 'No jobs match', 'Nothing fits those filters right now. Try widening them, or save the search and be told when something lands.'),
+    };
     // A search that found nothing gets the assistant; a plain empty tab keeps its
     // own wording (there is no query to hand over).
     const jq = (params.get('q') || '').trim();
     cur.innerHTML = AC._jobs.length ? AC._jobs.map(acJobCard).join('')
       : (jq ? acAskAiEmpty(jq, 'No jobs match “' + escHtml(jq) + '”.')
-            : `<div class="ac-empty">${empties[view] || empties.all}</div>`);
+            : (empties[view] || empties.all));
   } catch { const cur = document.getElementById('acJobsList'); if (cur) cur.innerHTML = '<div class="ac-empty">Could not load jobs.</div>'; }
 }
 const _JOB_BMK = '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
@@ -33680,7 +33695,7 @@ async function acOpenSavedCandidates() {
   try {
     const { candidates } = await API.req('GET', '/api/candidates');
     el.innerHTML = candidates.length ? candidates.map(acCandidateCard).join('')
-      : '<div class="ac-empty" style="padding:16px;">No saved candidates yet.<br/>Tap the star on a worker or applicant to save them.</div>';
+      : acEmpty('people', 'No saved candidates', 'Tap the star on anyone you would like to keep in mind, and they are held here for when you are ready to hire.', 'Find workers', "acGoJobsBoard('workers')");
   } catch (e) { el.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 /* ── Recruiter projects: named candidate shortlists with a private pipeline ── */
@@ -34669,7 +34684,7 @@ const _NOTIF_TABS = [
 function acRenderNotifList() {
   const el = document.getElementById('notifList'); if (!el) return;
   const all = AC._notifs || [];
-  if (!all.length) { el.innerHTML = '<div class="ac-empty">Nothing yet.<br/>Likes, replies, follows, messages and money all land here.</div>'; return; }
+  if (!all.length) { el.innerHTML = acEmpty('bell', 'Nothing yet', 'Likes, replies, follows, messages and money all land here — you will see each one the moment it happens.'); return; }
   const tab = AC._notifTab || 'all';
   const def = _NOTIF_TABS.find(([k]) => k === tab) || _NOTIF_TABS[0];
   const list = def[2] ? all.filter((n) => def[2].includes(n.type)) : all;
@@ -34681,7 +34696,7 @@ function acRenderNotifList() {
     ? '<div class="notif-group">'
       + grouped.map((n, i) => (n._group ? acNotifGroupRow(n) : notifRow(n, i))).join('')
       + '</div>'
-    : '<div class="ac-empty" style="padding:26px;">Nothing here yet.</div>');
+    : acEmpty('bell', 'Nothing in this tab', 'Try All — it shows everything at once.'));
 }
 function acNotifTab(k) { AC._notifTab = k; acRenderNotifList(); }
 // X-style aggregation: same-type notifications on the same target collapse into
@@ -36646,7 +36661,7 @@ function acRenderFeeds() {
     </div>`;
   let html = `<div class="ac-section-row"><span class="ac-prof-head">Feeds</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 15px;" onclick="acFeedCreate()">New feed</button></div>`;
   if (mine.length) html += `<div class="ac-prof-head">Your feeds</div>` + mine.map(row).join('');
-  html += `<div class="ac-prof-head">Discover</div>` + (disc.length ? disc.map(row).join('') : '<div class="ac-empty">No feeds yet. Create the first one.</div>');
+  html += `<div class="ac-prof-head">Discover</div>` + (disc.length ? disc.map(row).join('') : acEmpty('broadcast', 'No feeds yet', 'A feed is a channel people join to hear from you — one voice, many readers.'));
   el.innerHTML = html;
 }
 // Join / leave / request from the directory list.
@@ -36703,7 +36718,9 @@ function acRenderFeed(d) {
   const posts = f.restricted
     ? `<div class="ac-empty">This feed is private.<br/>${f.requested ? 'Your request is pending the admin’s approval.' : 'Request to join to see its posts.'}</div>`
     : (d.posts.length ? d.posts.map(acPostCard).join('')
-      : `<div class="ac-empty">${f.isAdmin ? 'No posts yet.<br/>Tap the + to broadcast your first post.' : 'No posts yet.<br/>Check back soon.'}</div>`);
+      : (f.isAdmin
+        ? acEmpty('broadcast', 'Nothing broadcast yet', 'Tap the + and your first post reaches everyone who joined this feed.')
+        : acEmpty('broadcast', 'Nothing here yet', 'When this feed posts, it will show up here.')));
   document.getElementById('acFeedBody').innerHTML = `
     <div class="ac-prof" style="padding-top:18px;">
       <div class="ac-prof-top" style="margin-top:0;">
@@ -38254,7 +38271,7 @@ function acOpenCompose() {
   const inp = document.getElementById('acSearchInput');
   inp.value = '';
   document.getElementById('acSearchResults').innerHTML = acSelfRow() +
-    '<div class="ac-empty">Search for someone by their @username to start a new chat.</div>';
+    acEmpty('people', 'Start a conversation', 'Search anyone on Atwe by their @username, or pick someone you have talked to before.');
   setTimeout(() => inp.focus(), 80);
 }
 function acBackToList() {
@@ -39216,7 +39233,9 @@ async function acLoadFeed() {
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + ((AC._bmkQ && AC._bmkQ.length >= 2)
         ? acAskAiEmpty(AC._bmkQ, 'No saved posts match “' + escHtml(AC._bmkQ) + '”.')
-        : `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here. Only you can see them.'}</div>`);
+        : (AC._bmkFolder
+        ? acEmpty('bookmark', 'Nothing in this folder', 'Move a saved post into this folder from the ⋯ menu on any bookmark.')
+        : acEmpty('bookmark', 'Nothing saved yet', 'Tap the bookmark on any post and it waits for you here. Only you can see what you save.')));
     } else {
       // Designed empty state: a glyph, one line, and a WHITE call-to-action.
       const empty = scope === 'following'
@@ -40334,7 +40353,7 @@ async function acOpenLists() {
       <div class="rr-ic" style="width:38px;height:38px;border-radius:10px;background:var(--s3);color:var(--t2);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></div>
       <div class="ac-item-main"><div class="ac-item-name">${escHtml(l.name)}</div><div class="ac-item-last">${l.members} member${l.members === 1 ? '' : 's'}</div></div>
       <button class="ac-post-more" onclick="event.stopPropagation();acDeleteList(${l.id})" aria-label="Delete list"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
-    </div>`).join('') : '<div class="ac-empty" style="padding:28px;">No lists yet.<br/>Create a list to follow a curated set of people.</div>';
+    </div>`).join('') : acEmpty('list', 'No lists yet', 'A list is a timeline of people you choose — follow a topic or a team without changing your main feed.');
   } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load lists.</div>'; }
 }
 async function acCreateList(forAdd) {
@@ -41699,7 +41718,7 @@ async function acOpenScheduledPosts() {
       return `<div class="ac-item" data-schedid="${p.id}"><div class="ac-item-main"><div class="ac-item-last">${escHtml((p.body || '').slice(0, 140)) || '<i>Media post</i>'}${media}</div><div class="ac-item-last" style="opacity:.6;font-size:12px;">Goes live ${w}</div>
         <div class="sched-edit hidden"><input class="jp-in" type="datetime-local" style="margin:8px 0 0;"/><div style="display:flex;gap:8px;margin-top:8px;"><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:7px 16px;" onclick="acReschedSave(${p.id}, this)">Save</button><button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 16px;" onclick="acReschedToggle(${p.id}, false)">Cancel</button></div></div>
       </div><span style="display:flex;flex-direction:column;gap:2px;align-items:flex-end;"><button class="ac-link-btn" onclick="acReschedToggle(${p.id}, true, ${jsAttr(p.scheduledAt)})">Change time</button><button class="ac-link-btn" style="color:var(--red-txt);" onclick="acCancelScheduled(${p.id})">Cancel</button></span></div>`;
-    }).join('') : '<div class="ac-empty" style="padding:20px;">No scheduled posts.</div>';
+    }).join('') : acEmpty('clock', 'Nothing scheduled', 'Write a post and set a time — it goes live on its own, even when you are busy.');
   } catch (e) { list.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
 }
 // Inline reschedule editor on a scheduled-post row.
@@ -41743,7 +41762,7 @@ async function acOpenDrafts() {
       <div class="ac-item-main"><div class="ac-item-last">${escHtml((d.body || '').slice(0, 140)) || '<i>Empty draft</i>'}</div>
         <div class="ac-item-sub" style="color:var(--t3);font-size:12px;margin-top:3px;">${acTime(d.updatedAt)}</div></div>
       <button class="ac-exp-del" onclick="event.stopPropagation();acDeleteDraft(${d.id})" aria-label="Delete"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    </div>`).join('') : '<div class="ac-empty" style="padding:20px;">No drafts saved.</div>';
+    </div>`).join('') : acEmpty('pencil', 'No drafts saved', 'A half-written post can be kept here and picked up later from any device.');
   } catch (e) { list.innerHTML = '<div class="ac-empty" style="padding:20px;">Could not load drafts.</div>'; }
 }
 // Show a small dot on the compose FAB when you have saved drafts waiting, so a
@@ -42099,30 +42118,23 @@ async function acOpenProfileViewers() {
     // Private-browsing reciprocity: while you browse anonymously you can't see who
     // viewed you. Make the trade-off explicit + a one-tap way to change it.
     if (isPrivate) {
-      el.innerHTML = teaser + `<div class="pv-empty">
-        <div class="pv-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><line x1="4.6" y1="19.4" x2="19.4" y2="4.6"/></svg></div>
-        <div class="pv-empty-t">You're browsing privately</div>
-        <div class="pv-empty-s">While private browsing is on, your visits stay anonymous, so you can't see who viewed you either. Turn it off to reveal your viewers.</div>
-        <button class="btn-white" style="margin-top:14px;" onclick="closeOverlay('viewersList');openSettings();setTimeout(()=>setNav('privacy'),120);">Change privacy settings</button>
-      </div>`;
+      el.innerHTML = teaser + acEmpty('eyeoff', 'You’re browsing privately',
+        'While private browsing is on your visits stay anonymous — so you cannot see who viewed you either. Turn it off to reveal your viewers.',
+        'Change privacy settings', "closeOverlay('viewersList');openSettings();setTimeout(()=>setNav('privacy'),120);");
       return;
     }
     // The Pro perk: free sees the count, Pro sees who. Said plainly, one tap up.
     if (proGated) {
-      el.innerHTML = teaser + `<div class="pv-empty">
-        <div class="pv-empty-t">${hiddenCount ? hiddenCount + (hiddenCount === 1 ? ' person is' : ' people are') + ' on your viewer list' : 'Your viewer list'}</div>
-        <div class="pv-empty-s">Seeing who they are is an Atwe Pro perk. The weekly count above is always free.</div>
-        <button class="btn-white" style="margin-top:14px;" onclick="closeOverlay('viewersList');openPlans()">See who — go Pro</button>
-      </div>`;
+      el.innerHTML = teaser + acEmpty('people',
+        hiddenCount ? hiddenCount + (hiddenCount === 1 ? ' person is' : ' people are') + ' on your viewer list' : 'Your viewer list',
+        'Seeing who they are is an Atwe Pro perk. The weekly count above is always free.',
+        'See who — go Pro', "closeOverlay('viewersList');openPlans()");
       return;
     }
     if (!viewers.length) {
-      el.innerHTML = `<div class="pv-empty">
-        <div class="pv-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg></div>
-        <div class="pv-empty-t">No profile views yet</div>
-        <div class="pv-empty-s">When someone opens your profile, they'll show up here. Share your profile to get discovered.</div>
-        <button class="btn-white" style="margin-top:14px;" onclick="closeOverlay('viewersList');shareProfile(S.user&&S.user.username);">Share your profile</button>
-      </div>`;
+      el.innerHTML = acEmpty('people', 'No profile views yet',
+        'When someone opens your profile they show up here. Share your profile to get discovered.',
+        'Share your profile', "closeOverlay('viewersList');shareProfile(S.user&&S.user.username);");
       return;
     }
     let list = viewers.map(acViewerRow).join('');
@@ -44250,7 +44262,7 @@ async function acOpenOffers() {
   box.innerHTML = acSkelRows(3);
   try {
     const { offers } = await API.req('GET', '/api/offers');
-    if (!offers.length) { box.innerHTML = '<div class="ac-empty" style="padding:26px;">No offers yet. Find a listing and make one.</div>'; return; }
+    if (!offers.length) { box.innerHTML = acEmpty('tag', 'No offers yet', 'See something you like at the wrong price? Make an offer — the seller can accept, counter or decline.', 'Browse the marketplace', "acOpenMarketplace()"); return; }
     const st = { pending: 'Waiting', countered: 'Countered', accepted: 'Accepted — pay to close', declined: 'Declined', paid: 'Paid', cancelled: 'Withdrawn' };
     box.innerHTML = offers.map((o) => `<button class="dlv-row" onclick="closeOverlay('offersListView');acOpenOffer(${Number(o.id)})">
       <div class="bk-main" style="text-align:start;">
@@ -45282,7 +45294,9 @@ async function acLoadBookings() {
   const host = AC._bkScope === 'host';
   try {
     const { bookings } = await API.req('GET', '/api/rentals/bookings?scope=' + (host ? 'host' : 'guest'));
-    if (!bookings.length) { b.innerHTML = `<div class="ac-empty" style="padding:22px;">${host ? 'No booking requests yet.' : 'No trips yet. Book a rental and it’ll show here.'}</div>`; return; }
+    if (!bookings.length) { b.innerHTML = (host
+      ? acEmpty('calendar', 'No booking requests', 'When someone asks to book one of your rentals, it lands here for you to confirm or decline.')
+      : acEmpty('calendar', 'No trips yet', 'Rentals you book — a room, a van, a piece of kit — are kept here with their dates and total.', 'Find something to book', "acOpenMarketplace()")); return; }
     b.innerHTML = bookings.map((bk) => acBookingCard(bk, host)).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load bookings.') + '</div>'; }
 }
@@ -45701,7 +45715,7 @@ async function acOpenAffiliate() {
         ${l.image ? `<div class="mc-prod-img" style="width:40px;height:40px;background-image:url('${l.image}')"></div>` : ''}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(l.productName)}</span></div><div class="ac-item-last">${l.clicks} click${l.clicks === 1 ? '' : 's'}</div></div>
         <button class="ac-join-btn" onclick="acCopyAffLink('${l.link}')">Copy link</button></div>`).join('')
-      : '<div class="ac-empty" style="padding:24px;">No affiliate links yet. Open any listing and tap “Share &amp; earn”.</div>';
+      : acEmpty('money', 'No links yet', 'Share someone else’s listing with your own link and earn a commission on anything sold through it.', 'Find something to share', "acOpenMarketplace()");
     body.innerHTML = hero + '<div class="co-sec-h">Your links</div>' + links;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
@@ -46694,7 +46708,7 @@ async function acLoadSell() {
   try {
     const { products } = await API.req('GET', '/api/my-listings');
     AC._shopProducts = products;
-    if (!products.length) { body.innerHTML = '<div class="ac-empty" style="padding:22px;">You’re not selling anything yet. Tap “New listing” to start.</div>'; return; }
+    if (!products.length) { body.innerHTML = acEmpty('bag', 'Nothing listed yet', 'Sell a product, a service or a rental. People can buy it straight from your profile, and the money lands in your wallet.'); return; }
     acRenderSellGrid();
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your listings.') + '</div>'; }
 }
@@ -48528,7 +48542,7 @@ async function acLoadGiftCards() {
   try {
     const { cards } = await API.req('GET', '/api/gift-cards');
     const el = document.getElementById('gcList');
-    if (!cards || !cards.length) { el.innerHTML = '<div class="ac-empty" style="padding:16px;">No gift cards yet.</div>'; return; }
+    if (!cards || !cards.length) { el.innerHTML = acEmpty('money', 'No gift cards', 'Buy one for someone by @username and it arrives in their messages, ready to spend anywhere on Atwe.'); return; }
     // Your spendable/claimable cards live in ONE Apple-Wallet stack (received first, then
     // owned) — each card's own ⋯ menu carries its actions. Sent + used-up sit in History.
     // A card sent to you that's now frozen (before you ever claimed it) is neither claimable
@@ -48546,7 +48560,7 @@ async function acLoadGiftCards() {
     if (mine.length) html += head('Your cards', mine.length) + acCardStackHtml(mine);
     if (held.length) html += head('On hold', held.length) + acCardStackHtml(held);
     if (history.length) html += head('Sent &amp; used', history.length) + acCardStackHtml(history);
-    el.innerHTML = html || '<div class="ac-empty" style="padding:16px;">No gift cards yet.</div>';
+    el.innerHTML = html || acEmpty('money', 'No gift cards', 'Buy one for someone by @username and it arrives in their messages, ready to spend anywhere on Atwe.');
   } catch (e) { document.getElementById('gcList').innerHTML = '<div class="ac-empty" style="padding:16px;">' + escHtml(e.message || 'Could not load your cards.') + '</div>'; }
 }
 // Claim a received gift card → it becomes one of your cards (its own balance).
@@ -49241,7 +49255,7 @@ async function acOpenIntent() {
           </div>
           <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();acProspect(${l.id})">✦ Write</button>
         </div></div>`;
-    }).join('') : '<div class="ac-empty" style="padding:16px;">Nobody has looked yet. Once people view your profile or your listings, they show up here.</div>';
+    }).join('') : acEmpty('people', 'Nobody has looked yet', 'Once people open your profile, you can see who they are and when they came by.');
   } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
 }
 /* ─── AI prospecting ────────────────────────────────────────────────────────
@@ -49487,7 +49501,7 @@ function acAddrCard(a, pickable) {
 async function acOpenAddresses() { showOverlay('addressesView'); const b = document.getElementById('addressesBody'); b.innerHTML = acSkelRows(2); await acLoadAddresses(); acRenderAddresses(); }
 function acRenderAddresses() {
   const b = document.getElementById('addressesBody'); if (!b) return;
-  b.innerHTML = (AC._addrs && AC._addrs.length) ? AC._addrs.map(a => acAddrCard(a, false)).join('') : '<div class="ac-empty" style="padding:22px;">No saved addresses yet. Tap “Add”.</div>';
+  b.innerHTML = (AC._addrs && AC._addrs.length) ? AC._addrs.map(a => acAddrCard(a, false)).join('') : acEmpty('bag', 'No saved addresses', 'Save where you want things delivered and checkout becomes one tap.');
 }
 function acAddressFormOpen(id) {
   AC._addrEditId = id || null;
@@ -49861,7 +49875,7 @@ async function acLoadProductAds() {
     AC._productAds = campaigns || [];
     const summary = (trend && trend.length) ? acProductAdsSummary(trend, spent14dCents, clicks14d) : '';
     b.innerHTML = summary + (campaigns.length ? campaigns.map(acProductAdRow).join('')
-      : '<div class="ac-empty" style="padding:22px;">No sponsored campaigns yet. Advertise a listing to win a "Sponsored" slot at the top of marketplace search.</div>');
+      : acEmpty('tag', 'No campaigns yet', 'Pay only when somebody taps. Set a daily budget and your listing can win a Sponsored slot at the top of marketplace search.', 'Advertise a listing', "acOpenProductAdForm()"));
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your campaigns.') + '</div>'; }
 }
 // 14-day spend/click trend across every campaign (reuses the business-analytics
@@ -50137,7 +50151,7 @@ async function acOpenAds() {
         <div class="ads-main"><div class="ads-title">${escHtml(a.title)}</div><div class="ads-sub">${status}</div><div class="ads-metrics">${metrics}</div></div></div>`;
     }).join('');
     const promoHtml = d.ads.length ? `<div class="ac-prof-head" style="padding-inline-start:0;">Promoted posts &amp; boosted jobs</div>${head}${promoRows}` : '';
-    const empty = (!camp.campaigns.length && !d.ads.length) ? `<div class="ac-empty" style="padding:22px;">No campaigns yet.<br/>Create a sponsored ad, or promote a post / boost a job.</div>` : '';
+    const empty = (!camp.campaigns.length && !d.ads.length) ? acEmpty('tag', 'No campaigns yet', 'Run a sponsored ad, promote one of your posts, or boost a job so it sits at the top of the board.') : '';
     b.innerHTML = createBtn + campHtml + promoHtml + empty;
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load your ads.') + '</div>'; }
 }
@@ -50832,7 +50846,7 @@ async function acOpenCoupons() {
   try {
     const { coupons } = await API.req('GET', '/api/coupons');
     AC._coupons = coupons;
-    if (!coupons.length) { b.innerHTML = '<div class="ac-empty" style="padding:22px;">No coupons yet. Create a code to offer a discount at checkout.</div>'; return; }
+    if (!coupons.length) { b.innerHTML = acEmpty('tag', 'No coupons yet', 'Create a code — a percentage or a flat amount — and buyers enter it at checkout.'); return; }
     b.innerHTML = coupons.map(acCouponRow).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load coupons.') + '</div>'; }
 }
@@ -51075,7 +51089,7 @@ async function acOpenCustomers() {
   const b = document.getElementById('customersBody'); b.innerHTML = acSkelRows(4);
   try {
     const { customers } = await API.req('GET', '/api/shop/customers');
-    if (!customers.length) { b.innerHTML = '<div class="ac-empty" style="padding:26px;">No customers yet — they’ll appear here after their first paid order.</div>'; return; }
+    if (!customers.length) { b.innerHTML = acEmpty('people', 'No customers yet', 'Everyone who buys from you appears here, with what they spent and when — so you can look after them.'); return; }
     const total = customers.reduce((s, c) => s + c.spentCents, 0);
     b.innerHTML = `<div class="ac-disc-sub" style="margin:0 0 10px;">${customers.length} customer${customers.length === 1 ? '' : 's'} · $${(total / 100).toFixed(2)} all-time</div>` +
       customers.map(c => `<div class="ac-item" onclick="closeOverlay('customersView');acGoProfile(${jsAttr(c.username)})">
@@ -51590,7 +51604,7 @@ async function acOpenWhoSavedMe() {
           ${acAvatarHtml(u.name, u.avatar, '', u.accountType === 'business')}
           <div class="ac-item-main"><div class="ac-item-name">${escHtml(u.name || '')}${vbadge(!!u.verified)}</div>
             <div class="ac-item-last">@${escHtml(u.username || '')}</div></div></div>`).join('')
-      : '<div class="ac-empty" style="padding:18px;">Nobody has saved you as a contact yet.</div>';
+      : acEmpty('people', 'Nobody has saved you yet', 'When someone adds you to their contacts, they show up here.');
   } catch (e) { b.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; }
 }
 
@@ -51819,7 +51833,7 @@ async function acOpenBundles() {
   try {
     const { bundles } = await API.req('GET', '/api/my-bundles');
     AC._myBundles = bundles;
-    if (!bundles.length) { b.innerHTML = '<div class="ac-empty" style="padding:24px;">No bundles yet. Group a few of your products into one saver price.</div>'; return; }
+    if (!bundles.length) { b.innerHTML = acEmpty('bag', 'No bundles yet', 'Group a few of your products and sell them together at one saver price. Buyers see what they save.'); return; }
     b.innerHTML = `<div class="shop-grid">${bundles.map(bd => acBundleCard(bd, true)).join('')}</div>`;
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load your bundles.') + '</div>'; }
 }
@@ -51984,7 +51998,7 @@ async function acOpenSubs() {
   try {
     const { subscriptions } = await API.req('GET', '/api/product-subscriptions');
     AC._subs = subscriptions;
-    if (!subscriptions.length) { b.innerHTML = '<div class="ac-empty" style="padding:24px;">No subscriptions yet. On an eligible product, tap “Subscribe &amp; Save”.</div>'; return; }
+    if (!subscriptions.length) { b.innerHTML = acEmpty('clock', 'No subscriptions', 'Set up a repeat delivery on anything a seller offers it for, and save on every one.', 'Browse the marketplace', "acOpenMarketplace()"); return; }
     b.innerHTML = subscriptions.map(acSubRow).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
@@ -52022,7 +52036,7 @@ async function acLoadSchedPays() {
   try {
     const { payments } = await API.req('GET', '/api/scheduled-payments?scope=' + AC._spScope);
     if (!payments.length) { b.innerHTML = AC._spScope === 'outgoing'
-      ? acEmpty('clock', 'No scheduled payments', 'Pay someone on a date, or on repeat — rent, a retainer, an allowance.', 'Schedule a payment', "acSchedPayCreateOpen()")
+      ? acEmpty('clock', 'No scheduled payments', 'Pay someone on a date, or on repeat — rent, a retainer, an allowance.')
       : acEmpty('clock', 'Nothing scheduled to you', 'Standing payments other people set up to pay you will show here.'); return; }
     b.innerHTML = payments.map(acSchedPayRow).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
@@ -52606,7 +52620,9 @@ async function acLoadAppointments() {
   body.innerHTML = acSkelRows ? acSkelRows(3) : '';
   try {
     const { appointments } = await API.req('GET', '/api/appointments?scope=' + AC._apptScope);
-    if (!appointments.length) { body.innerHTML = '<div class="ac-empty" style="padding:22px;">No appointments yet.</div>'; return; }
+    if (!appointments.length) { body.innerHTML = (AC._apptScope === 'incoming'
+      ? acEmpty('calendar', 'Nothing booked in', 'When a customer books one of your services, it appears here to confirm or decline.')
+      : acEmpty('calendar', 'Nothing booked', 'Appointments you make with a business are kept here, and land in your agenda.')); return; }
     body.innerHTML = appointments.map(a => {
       const incoming = AC._apptScope === 'incoming';
       const other = incoming ? a.customer : a.business;
@@ -52980,7 +52996,7 @@ async function acLoadShowcaseDiscover() {
   try {
     const { showcases } = await API.req('GET', '/api/showcases?scope=discover');
     AC._showcases = showcases;
-    b.innerHTML = showcases.length ? `<div class="sc-grid">${showcases.map(acShowcaseCard).join('')}</div>` : '<div class="ac-empty" style="padding:26px;">No showcases yet. Be the first to show your work.</div>';
+    b.innerHTML = showcases.length ? `<div class="sc-grid">${showcases.map(acShowcaseCard).join('')}</div>` : acEmpty('star', 'No showcases yet', 'A showcase is anything you are proud of — a job you did, a product you made. Be the first.');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 function acFeaturedSection(d, mine) {
@@ -55577,7 +55593,7 @@ function acLabelChatOpen() {
   showOverlay('labelAssign');
   const body = document.getElementById('labelAssignBody');
   const labels = AC._labels || [];
-  if (!labels.length) { body.innerHTML = '<div class="ac-empty" style="padding:18px;">No labels yet.<br/>Create one to organize your chats.</div><button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="closeOverlay(\'labelAssign\');acManageLabels()">Create a label</button>'; return; }
+  if (!labels.length) { body.innerHTML = acEmpty('tag', 'No labels yet', 'Labels file your conversations into groups — Customers, Suppliers, Family — and filter the list in one tap.', 'Create a label', "closeOverlay('labelAssign');acManageLabels()"); return; }
   body.innerHTML = labels.map(l => {
     const on = l.items.some(i => i.kind === t.kind && i.targetId === t.to);
     return `<button class="lm-row" onclick="acLabelToggle(${l.id},this)" data-on="${on ? 1 : 0}"><span class="ac-lchip-dot" style="--lc:${_LABEL_COLORS[l.color] || 'var(--accent)'}"></span><span class="lm-name">${escHtml(l.name)}</span><span class="lm-check">${on ? '✓' : ''}</span></button>`;
@@ -55750,11 +55766,11 @@ function acRenderChats() {
     // empty and should say so).
     const plainView = !q && !unreadOnly && !archivedView && !lockedView && !AC._labelFilter;
     if (plainView && !AC._chatsEverLoaded) { if (!el.querySelector('.ac-skel')) el.innerHTML = acSkelRows(); return; }
-    const empty = lockedView ? '<div class="ac-empty">No locked chats.</div>'
-      : archivedView ? '<div class="ac-empty">No archived chats.</div>'
+    const empty = lockedView ? acEmpty('block', 'No locked chats', 'A locked chat is hidden from your list until you enter your passcode. Lock one from its ⋯ menu.')
+      : archivedView ? acEmpty('bag', 'Nothing archived', 'Archiving tidies a conversation out of your list without deleting anything. It comes back if they write again.')
       : q ? acAskAiEmpty(q, 'No chats match “' + escHtml(q) + '”.')
-      : AC._labelFilter ? '<div class="ac-empty">No chats with this label yet.<br/>Open a chat → ⋯ → Label chat to add one.</div>'
-      : unreadOnly ? '<div class="ac-empty">No unread chats. You’re all caught up.<br/><button class="ac-link-btn" onclick="acToggleUnreadFilter()" style="margin-top:6px;">Show all chats</button></div>'
+      : AC._labelFilter ? acEmpty('tag', 'Nothing with this label', 'Open any chat, tap ⋯ and choose Label chat to file it here.')
+      : unreadOnly ? acEmpty('bell', 'You’re all caught up', 'Nothing is waiting for a reply.', 'Show all chats', "acToggleUnreadFilter()")
       : AC._chatsFilter === 'groups' ? `<div class="ac-feed-empty"><div class="ac-feed-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="ac-feed-empty-line">No groups yet</div><div class="ac-feed-empty-sub">Start a group chat or create a channel to broadcast.</div><button class="ac-pill-btn accent ac-feed-empty-cta" onclick="acNewChatMenu()">New group</button></div>`
       : `<div class="ac-feed-empty"><div class="ac-feed-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div><div class="ac-feed-empty-line">Your inbox is empty</div><div class="ac-feed-empty-sub">Message anyone, start a group, or create a channel.</div><button class="ac-pill-btn accent ac-feed-empty-cta" onclick="acNewChatMenu()">Start a chat</button></div>`;
     el.innerHTML = (archHeader ? archHeader.html : '') + (lockHeader ? lockHeader.html : '') + empty;
@@ -56013,7 +56029,7 @@ function acSearch() {
   clearTimeout(AC.searchT);
   const q = document.getElementById('acSearchInput').value.trim();
   const el = document.getElementById('acSearchResults');
-  if (!q) { el.innerHTML = '<div class="ac-empty">Search for someone by their @username to start a new chat.</div>'; return; }
+  if (!q) { el.innerHTML = acEmpty('people', 'Start a conversation', 'Search anyone on Atwe by their @username, or pick someone you have talked to before.'); return; }
   AC.searchT = setTimeout(async () => {
     try {
       const { users } = await API.req('GET', '/api/atchat/search?q=' + encodeURIComponent(q));
@@ -57292,18 +57308,18 @@ function acOpenChatMedia(tab) {
     inner = links.length ? links.map((l) => `<div class="cm-linkrow">
         <a href="${escHtml(l.url)}" target="_blank" rel="noopener noreferrer"><b>${escHtml(host(l.url))}</b><span>${escHtml(l.url.slice(0, 90))}</span></a>
         <button class="ac-post-more" onclick="acChatMediaJump(${l.mid})" aria-label="Show in chat"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
-      </div>`).join('') : '<div class="ac-empty" style="padding:30px;">No links shared in this chat yet.</div>';
+      </div>`).join('') : acEmpty('word', 'No links yet', 'Any web address either of you sends is collected here, newest first.');
   } else if (t === 'docs') {
     inner = docs.length ? docs.map((d2) => `<div class="cm-linkrow">
         <button class="cm-docbtn" onclick="acChatMediaJump(${d2.mid})"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><b>${escHtml(d2.name)}</b><span>${acTime(d2.at)}</span></button>
-      </div>`).join('') : '<div class="ac-empty" style="padding:30px;">No documents in this chat yet.</div>';
+      </div>`).join('') : acEmpty('receipt', 'No documents yet', 'Files you send each other are kept here, so you never have to scroll back for one.');
   } else {
     inner = media.length
       ? `<div class="cm-grid">${media.map((it) => it.kind === 'image'
           ? `<button class="cm-cell" onclick="openImageViewer(${jsAttr(it.src)}, this)" aria-label="Photo"><img src="${escHtml(it.src)}" alt="" loading="lazy" decoding="async"/></button>`
           : `<button class="cm-cell" onclick="acChatMediaJump(${it.mid})" aria-label="Video"><video src="${escHtml(it.src)}" preload="metadata" muted playsinline></video><span class="cm-play"><svg viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19"/></svg></span></button>`
         ).join('')}</div>`
-      : '<div class="ac-empty" style="padding:30px;">No photos or videos in this chat yet.</div>';
+      : acEmpty('bookmark', 'No photos or videos yet', 'Everything either of you sends is gathered here in one grid.');
   }
   document.getElementById('chatMediaTitle').textContent = 'Media, links & docs';
   body.innerHTML = tabs + inner;
@@ -62169,6 +62185,22 @@ const _EMPTY_ICONS = {
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   people: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16.5 6.6a3.2 3.2 0 0 1 0 6.3M17 14.8c2.2.4 3.8 2.2 3.8 4.7"/>',
   calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3"/>',
+  bell: '<path d="M18 9a6 6 0 1 0-12 0c0 5.2-2 6.5-2 6.5h16S18 14.2 18 9Z"/><path d="M10.3 19a2 2 0 0 0 3.4 0"/>',
+  mute: '<path d="M18 9a6 6 0 1 0-12 0c0 5.2-2 6.5-2 6.5h16S18 14.2 18 9Z"/><path d="M10.3 19a2 2 0 0 0 3.4 0"/><path d="M4 4 20 20"/>',
+  bookmark: '<path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z"/>',
+  star: '<path d="m12 4 2.5 5.2 5.5.8-4 3.9 1 5.6-5-2.7-5 2.7 1-5.6-4-3.9 5.5-.8L12 4Z"/>',
+  pencil: '<path d="M4 20h4L18 10a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="m14.5 6.5 3 3"/>',
+  list: '<path d="M8 6.5h12M8 12h12M8 17.5h12"/><circle cx="4" cy="6.5" r="1.1"/><circle cx="4" cy="12" r="1.1"/><circle cx="4" cy="17.5" r="1.1"/>',
+  book: '<path d="M12 7.5C10.6 6.2 8.7 5.5 6 5.5H3.5v12H6c2.7 0 4.6.7 6 2 1.4-1.3 3.3-2 6-2h2.5v-12H18c-2.7 0-4.6.7-6 2Z"/><path d="M12 7.5v11"/>',
+  globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.2 2.3 3.4 5.3 3.4 8.5S14.2 18.2 12 20.5c-2.2-2.3-3.4-5.3-3.4-8.5S9.8 5.8 12 3.5Z"/>',
+  phone: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.8 18.3h2.4"/>',
+  block: '<circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/>',
+  eyeoff: '<ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><path d="M4 4 20 20"/>',
+  word: '<path d="M4.5 5.5h15a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H12l-4.5 3.5V15.5h-3a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z"/><path d="M8.5 10.2h7"/>',
+  search: '<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.4 15.4 20 20"/>',
+  store: '<path d="M4 9.5h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-10Z"/><path d="M3.2 9.5 5 4h14l1.8 5.5"/><path d="M9.8 20.5v-5.5h4.4v5.5"/>',
+  broadcast: '<circle cx="12" cy="12" r="2.3"/><path d="M8.1 8.1a5.5 5.5 0 0 0 0 7.8M15.9 15.9a5.5 5.5 0 0 0 0-7.8"/><path d="M5.3 5.3a9.5 9.5 0 0 0 0 13.4M18.7 18.7a9.5 9.5 0 0 0 0-13.4"/>',
+  briefcase: '<rect x="3" y="7.5" width="18" height="12.5" rx="2.2"/><path d="M8.8 7.5V5.8a1.8 1.8 0 0 1 1.8-1.8h2.8a1.8 1.8 0 0 1 1.8 1.8v1.7"/><path d="M3 12.5h18"/>',
 };
 function acEmpty(icon, line, sub, ctaLabel, ctaRun) {
   const g = _EMPTY_ICONS[icon] || _EMPTY_ICONS.bag;
@@ -62495,7 +62527,7 @@ async function acOpenScheduled() {
   try {
     const { scheduled } = await API.req('GET', '/api/atchat/scheduled?kind=' + t.kind + '&to=' + t.to);
     AC._scheduled = scheduled || [];
-    if (!scheduled.length) { body.innerHTML = '<div class="ac-empty" style="padding:26px;">No scheduled messages for this chat.</div>'; return; }
+    if (!scheduled.length) { body.innerHTML = acEmpty('clock', 'Nothing scheduled here', 'Write a message and set a time — it sends itself, even in the middle of the night.'); return; }
     body.innerHTML = scheduled.map(s => `<div class="ac-item" style="align-items:flex-start;" data-smid="${s.id}">
       <div class="ac-item-main"><div class="ac-item-last sm-body" style="color:var(--t1);white-space:normal;">${escHtml(s.body)}</div>
         <div class="ac-item-last" style="color:var(--accent);font-size:12px;margin-top:3px;">${escHtml(acSchedWhen(s.sendAt))}</div>
