@@ -972,6 +972,118 @@ below).
 
 ### Profile — X-style tabbed page
 
+**The banner is a CARD, not a full-bleed strip** (the founder's design team, adopted). It was the
+only edge-to-edge block on a screen where the trust card, the "You might also like" cards and every
+post below it are already inset rounded cards, so the page read as two systems stacked. It is now
+inset by **`--feed-gutter`** on both sides and above, and turns on **`--post-card-r`** — the same
+two tokens the post cards use, so it can never drift from them.
+
+Two derived tokens carry the rest, both declared on `#acProfileScreen`:
+
+| token | is | why |
+|---|---|---|
+| `--prof-top` | `env(safe-area-inset-top) + --feed-gutter` | the gap above the card (a notch adds to it in a browser tab; in the installed app the inset is 0) |
+| `--prof-inset` | `--post-card-r − 19px` | the gap that makes a **38px** round button CONCENTRIC with the card's corner — the app's corner law, outer radius = inner radius + gap, so 30 = 19 + 11 |
+
+**The back arrow is a solid grey `--s2` circle nested in the card's top-left corner**, at
+`--prof-inset` from both edges, so the gap is even the whole way round the curve. It used to be a
+translucent black disc with a live `backdrop-filter` — that existed because it floated on a
+full-bleed photo with nothing to sit in; the card gives it a ground, so one material for every
+round control wins and one more live blur goes away. **The honest trade:** `--s2` is the page
+tone, so over a photo of that exact tone the disc goes quiet. The ARROW is `--t1`, i.e. maximum
+contrast against `--s2` whatever the photo, so it is always legible — the disc is the thing that
+can fade, never the mark.
+
+**`.ac-icon-btn` (the Message and ⋯ circles beside Follow) is SOLID now.** Its fill lived on
+`:hover` only, and a phone has no hover — so on every phone they rendered as two bare glyphs with
+no button around them, contradicting design rule 3. Same class, same fix, as `.ac-pill-btn` before
+it; it is used in eight places (hashtag mute, the jobs toolbar, circle share, the profile row, pot
+edit/delete) and solid is correct in all of them.
+
+**The picture's VISIBLE circle sits on the card's left edge, not its box.** `.ac-prof-ava` carries
+a 4px ring in the page colour, so `margin-inline-start:-4px` pulls the box out by exactly the
+ring's width: the photo lands on the gutter line (and on the name's line below it) while the ring
+stays invisible against the page — it only shows where it overlaps the banner, which is the one
+place it is doing any work. Aligning the BOX instead leaves a 4px page-coloured band between the
+card's edge and the photo, which reads as the picture not being flush.
+
+`.ac-prof`'s padding is `var(--feed-gutter)` (was a hardcoded 16) and `.ac-prof-actions` ends on
+`inset-inline-end:var(--feed-gutter)`, so the whole column — picture, name, buttons — shares the
+card's two edges. Business avatars stay full circles here (`.user-avatar.biz{border-radius:50%}`,
+the owner's own decision, not a bug); an earlier note in this file claiming they are app-shaped
+everywhere is wrong about the avatar itself.
+
+**The two places where the picture's cut meets the card's outline are FILLETED.** They used to
+be hard corners and the founder marked both: *"it shouldn't be pointed, rather be a little rounded
+on the two points."* A fillet is an arc tangent to BOTH curves at once, so nothing here is
+eyeballed — `acProfNotchPath` solves each fillet's centre (exactly `R + F` from the cut's centre
+and exactly `F` from the edge it blends into), its two tangent points, and the sweep of every arc,
+from the LIVE geometry: the card's radius, the picture's size, and where it sits. Change
+`--post-card-r` and the blend follows. `PROF_NOTCH_FILLET` (12) is the one knob.
+
+**A fillet does not round the intersection point — it REPLACES the junction with a tangent blend
+that begins well before it.** That is why the cut appears to flow up the card's left edge and out
+along its bottom rather than poking through them, and it is what makes the shape read as one
+continuous curve instead of a circle stamped on a rectangle.
+
+**ONE RADIUS DOES NOT LOOK THE SAME AT BOTH JUNCTIONS**, and the founder saw that before the
+arithmetic did — *"the left side is a little too rounded… they should be the same size of round."*
+The cut's centre sits ON the bottom edge, so it meets that edge almost square-on and a 12px fillet
+sweeps **79°**; it crosses the left edge at a shallow angle, where the same 12px sweeps **121°** —
+half as much curve again, which reads as a visibly bigger curl. **What has to match is the LENGTH
+of curve, not the radius.** The bottom fillet keeps the nominal `PROF_NOTCH_FILLET`; the left one's
+radius is solved by bisection (`_acFillet` returns each blend's sweep) so both arcs come out the
+same length — today 12 and **7.27**, both drawing 16.5px of curve. Two matching curves, two
+different radii, and the pair re-solves itself if the card's radius or the picture's size changes.
+`profcard.js` asserts the OUTCOME on the shipped path — it parses the `clip-path` and compares the
+two arc lengths — rather than re-running the maths, so how it is solved can change and the eye's
+own measure still decides; forcing one radius fails it with 25.26 against 16.52.
+
+Three things about it are load-bearing:
+
+- **It is a page-coloured overlay clipped to that shape, NOT a mask on the banner**, and that
+  choice is what makes it free: nothing in the path depends on the card's WIDTH, so one path is
+  correct at every screen size and there is no resize handler. Every point it draws is inside the
+  card, so it can never leave a mark on the page.
+- **The closing run is bled 1px OUTSIDE the card** (a concentric `r + 1` corner). Closing along
+  the card's own outline instead leaves a visible hairline of banner: two curves drawn to the same
+  edge each antialias, and the fringes do not cancel. The strip beyond the card is outside the
+  overlay's own box, so nothing paints there — it only widens the clip.
+- **`.ac-prof-notch` is `display:none` until the JS proves `clip-path: path()` works**
+  (`CSS.supports`). Unclipped, this element is a page-coloured slab straight across the photo, so
+  a silent failure would be far worse than no fillet. If the blend cannot be built — the left
+  tangent would land on the card's own corner arc rather than the straight edge — it draws nothing
+  and the plain circular cut stands.
+
+`acSkelProfile` mirrors all of it (148px, the gutter, `--post-card-r`, the −4px picture) so nothing
+changes shape as the profile lands. It is shared with the circle and feed screens, where
+`--prof-top` does not resolve — hence its `14px` fallback.
+
+**The regression runner was quietly covering 68 probes, not 85.** Seventeen probes need a bearer
+token and printed `export TOK first` and were counted as a pass by `run-all.sh` — every Beam,
+composer and boot check among them had not run for some time. `run-all.sh` now picks `TOK` up from
+`/tmp/tok.txt` and exports `JWT_SECRET`/`DATABASE_URL` (the two probes that SPAWN their own servers
+need those). Turning them on found three real probe bugs, all of which had made a probe report a
+failure on correct code:
+
+- **`cluster.js` waited on `/api/health`, which answers BEFORE `db.init()` finishes** — health is
+  deliberately exempt from the "still setting up" gate so a platform healthcheck passes during a
+  schema build. Against the big test database every later request came back `503 {starting:true}`.
+  Wait on a route BEHIND the gate (`/api/config`) instead.
+- **`cluster.js` required `auth.js` before setting `JWT_SECRET`.** `auth.js` reads the secret once,
+  at require time, so the probe minted tokens with the insecure dev fallback while the servers it
+  spawned used the real one — every request 401'd. Set `process.env.JWT_SECRET` FIRST, then require.
+- **`attach.js` restyled "the last message" into a photo album**, but another probe may have left a
+  voice note or a view-once photo there, and `acMsgMedia` returns from one of those branches long
+  before it reaches the image stack. It neutralises the other kinds first now. **A probe that
+  mutates whatever a shared account happens to hold must clear the fields it is not testing.**
+
+Covered by `scratchpad/profcard.js` (32 checks, both themes, plus the skeleton). It asserts the
+concentric corner as a RELATIONSHIP (`cardR === buttonR + gap`), never as a number, so changing
+`--post-card-r` keeps it honest. Self-tested: reverting the banner to full-bleed and the icon
+buttons to transparent fails 18 of them.
+
+
 > **The "Me" hub** (`acGoProfileHub` → `#acMeScreen`/`#acMeBody`, the bottom-nav
 > Profile tab) has **no top bar** — `acMeScreen` is in `AC_OWN_HEADER` so `acShow`
 > hides the topbar (and `acGoProfileHub` runs `syncTopbar` *before* `acShow` so the

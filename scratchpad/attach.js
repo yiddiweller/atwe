@@ -146,7 +146,14 @@ const IMG = (fill) => 'data:image/svg+xml;base64,' + Buffer.from(
       const mk = (c) => 'data:image/svg+xml;base64,' + btoa(
         `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900"><rect width="600" height="900" fill="${c}"/></svg>`);
       if (!AC.messages || !AC.messages.length) return { skip: true };
+      /* Whatever the last message HAPPENS to be is not a blank canvas: another probe
+         may have left a voice note, a view-once photo or a rich card there, and
+         acMsgMedia returns from one of those branches long before it reaches the
+         image stack — so this reported "no stack" on perfectly good code. Neutralise
+         every other kind first, then make it the album this check is about. */
       const m = AC.messages[AC.messages.length - 1];
+      m.media = null; m.mediaKind = null; m.media_kind = null; m.meta = null;
+      m.viewOnce = false; m.view_once = false; m.deleted = false; m.deletedAll = false;
       m.images = [mk('#3a7'), mk('#c33'), mk('#37a')]; m.image = m.images[0]; m.body = '';
       acRenderThread();
       await new Promise((r) => setTimeout(r, 600));
