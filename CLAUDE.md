@@ -409,6 +409,31 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
     DECLARED, so on `:root` they would freeze at the Black theme's `--s3` and Light would never
     flip. No underline anywhere: the fill says it, and an underline could drift a pixel while the
     row scrolls.
+> **The rim, and the label strength — both measured off Apple Fitness+**, which the
+> founder sent as the reference. Its unselected pill is a `#1D1D1D` fill with a
+> **one-physical-pixel** hairline compositing to grey 65 (white at **.16** over that
+> fill), its selected white pill has **no rim at all**, and — the part that mattered most
+> — **its unselected labels read 247-254, i.e. essentially white**. Only the FILL says
+> which tab you are on.
+>
+> So: `--tab-edge` (`rgba(255,255,255,.16)` / `rgba(0,0,0,.12)` on Light) draws a **1px**
+> rim on a resting tab — three times Apple's width, because the founder asked for it
+> thicker — and the selected tab's border goes `transparent` rather than being removed,
+> so nothing shifts when you pick one (`box-sizing:border-box` is app-wide, so the rim
+> costs no layout either way). And **`--tab-ink` is `--t1`, not `--t2`**: ours were dimmed
+> and visibly receded beside Apple's, which made three of four choices look switched off.
+> Double-encoding the state in the text was never needed — the white pill is unmissable.
+>
+> The rim is declared **after every family's own rule**, in one block near the end of the
+> stylesheet, because most of them set `border:none` at the same specificity and would
+> otherwise win on source order. It is deliberately stronger than the `.05` rim on an
+> ordinary secondary button: a row of choices has to be countable at a glance.
+>
+> **`.tb-feedtab-add` moved with the tabs** — `--t3` → `--t2`. Its rule is "one step
+> quieter than an inactive tab", and that stopped being true the moment the tabs went to
+> full strength. `--t2` is 5.4:1 on black, clear of the 4.5 floor for 15px text; `--t4`
+> would not be, and this repo has shipped that exact mistake before.
+
 > **Where rule 9b lands, and the one it deliberately skips.** Every "pick one of these"
 > row goes through the `--tab-*` tokens: the three worlds' own row (`.tb-feedtab` — Home,
 > Beam AND Engine share the one class), `.ac-scope-chip`, `.ac-ptab`, `.ntf-tab`,
@@ -428,7 +453,7 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
 > too, not only on the base class; the first pass restyled `.tb-feedtab` and Engine's row
 > still rendered as bare words with `padding:6px 0`.
 >
-> Covered by `scratchpad/tabpills.js` (64 checks, both themes): every tab a true capsule,
+> Covered by `scratchpad/tabpills.js` (106 checks, both themes): every tab a true capsule,
 > exactly one selected per row, everything else the shared grey, no underline, "Add" bare
 > — plus a synthetic pass that renders one button of EVERY family off-screen and checks
 > what the rules resolve to, which is how the awkward-to-reach rows (a wallet with no
