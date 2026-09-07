@@ -1639,6 +1639,66 @@ for (const [route, file] of Object.entries(LEGAL_PAGES)) {
   });
 }
 
+/* ─── The app shell, compressed ONCE ───────────────────────────────────────
+   index.html is ~4.7MB of markup, CSS and JS in one file. The compression
+   middleware below was re-compressing all of it on EVERY page load: measured
+   with curl, the server sat on the response for 112ms before sending a single
+   byte, and paid that CPU again for every visitor. It only changes on deploy,
+   so it is compressed once, in the background, and served from memory after
+   that — 112ms off every page load, and the browser gets its first byte
+   immediately instead of waiting for the compressor.
+
+   Brotli quality 9 rather than the middleware's fast default: paying 0.6s once
+   at boot buys 1029KB instead of 1179KB, so every visitor downloads 150KB less.
+   (Quality 11 is 941KB but takes EIGHT SECONDS to produce — not worth holding a
+   thread for at boot.) It runs ASYNCHRONOUSLY, on libuv's threadpool, so it
+   never blocks the event loop; until it lands, every request simply falls
+   through to the normal path.
+
+   It is deliberately incapable of breaking the site: it only ever answers when
+   the buffer is built AND the client asked for brotli, and anything unexpected
+   falls through to res.sendFile exactly as before. */
+let _shellBr = null;
+(function buildShellBr() {
+  try {
+    const zlib = require('zlib');
+    const file = path.join(__dirname, 'public', 'index.html');
+    require('fs').readFile(file, (err, raw) => {
+      if (err || !raw) return;
+      zlib.brotliCompress(raw, { params: {
+        [zlib.constants.BROTLI_PARAM_QUALITY]: 9,
+        [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length,
+      } }, (e2, out) => {
+        if (e2 || !out) return;
+        _shellBr = out;
+        console.log(`[shell] pre-compressed: ${(raw.length / 1048576).toFixed(2)}MB -> ${(out.length / 1024).toFixed(0)}KB brotli`);
+      });
+    });
+  } catch (_) { /* the normal path still works */ }
+})();
+
+/* Serve the app shell. Used both for "/" and by the deep-link catch-all, so the
+   two can never drift apart. Falls back to sendFile whenever anything is not
+   exactly as expected. */
+function sendShell(req, res) {
+  try {
+    const ae = String(req.headers['accept-encoding'] || '');
+    if (_shellBr && /\bbr\b/.test(ae)) {
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set('Content-Encoding', 'br');
+      res.set('Vary', 'Accept-Encoding');
+      res.set('Cache-Control', 'no-cache, must-revalidate');
+      return res.send(_shellBr);   // express adds the ETag and answers 304s
+    }
+  } catch (_) { /* fall through */ }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+}
+app.get(['/', '/index.html'], (req, res, next) => {
+  if (req.hostname === ADMIN_HOST) return next();   // the admin subdomain serves its own page
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  sendShell(req, res);
+});
+
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     // The app shell + service worker must always revalidate so a fresh deploy
@@ -44862,7 +44922,7 @@ app.get('*', async (req, res, next) => {
       if (og) { const html = renderShellWithOg(og); if (html) return res.type('html').send(html); }
     } catch (_) { /* fall through to the plain shell */ }
   }
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  sendShell(req, res);
 });
 
 /* ═══════════════════════════════════════════════

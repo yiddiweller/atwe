@@ -25,6 +25,50 @@
 <meta name="twitter:image" content="https://atwe.com/icon-384.png"/>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Atwe","alternateName":["atwe.com","Atwe.com","www.atwe.com"],"url":"https://atwe.com/"}</script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Atwe","url":"https://atwe.com/","logo":"https://atwe.com/icon-384.png"}</script>
+<!-- ── BOOT PREFLIGHT ──────────────────────────────────────────────────────────
+     The shell is ~4.9MB decoded (1.27MB over the wire), so on a phone the browser
+     spends nearly two seconds downloading, decompressing and parsing it BEFORE the
+     app can ask the server for anything. Measured at a 4x CPU throttle: the server
+     answered at 135ms and the first API call went out at 2020ms — the network sat
+     completely idle in between, and the feed was only requested at 2413ms.
+
+     This fires the handful of requests EVERY boot certainly makes, the instant the
+     first bytes of HTML arrive, so the answers are already in hand by the time the
+     app is ready to use them. It is deliberately tiny and it can only ever be an
+     optimisation, never a behaviour change:
+       - each entry is consumed AT MOST ONCE (API.req deletes it on use), so a later
+         call of the same path is a genuine fresh request, never a stale replay;
+       - a failure resolves to null and API.req falls back to a normal fetch;
+       - the headers are the same ones API.req sends, so the server cannot tell the
+         difference (X-Atwe-TZ is how coarse location is derived);
+       - the whole thing is wrapped, so it can never stop the app booting.
+     When adding a request here, be sure the URL matches CHARACTER FOR CHARACTER what
+     the app will ask for, or the cache simply misses and nothing is gained or lost. -->
+<script>
+window.__pre = (function () {
+  var out = {};
+  try {
+    var tok = null, tab = null;
+    try { tok = localStorage.getItem('atwe_token'); tab = localStorage.getItem('atwe_last_tab'); } catch (e) {}
+    var tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+    var get = function (path, needsToken) {
+      if (needsToken && !tok) return;
+      var h = { 'Content-Type': 'application/json' };
+      if (tz) h['X-Atwe-TZ'] = tz;
+      if (tok) h.Authorization = 'Bearer ' + tok;
+      try { out['GET ' + path] = fetch(path, { method: 'GET', headers: h }).catch(function () { return null; }); }
+      catch (e) {}
+    };
+    get('/api/config', false);
+    get('/api/auth/me', true);
+    // The feed is by far the most valuable one, but only when Home is where this
+    // person will actually land — appTab() remembers the last world, and the feed
+    // always opens on For You (the scope is not persisted).
+    if (tok && (!tab || tab === 'home')) get('/api/social/feed?scope=foryou', true);
+  } catch (e) {}
+  return out;
+})();
+</script>
 <meta name="theme-color" content="#000000"/>
 <!-- content="dark" (not "dark light") forces iOS WebKit to use a DARK backing surface
      for the very first frame, before any CSS parses. With "dark light" iOS picks the
@@ -21879,7 +21923,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1813'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1814'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -22102,6 +22146,21 @@ const API = {
       return { queued: true };
     }
     let res;
+    /* The boot preflight (see the script at the top of this file) already asked the
+       server for the handful of things every boot needs, while the browser was still
+       parsing this file. Take the answer if one is waiting — CONSUMING it, so a later
+       call of the same path is a genuine fresh request and never a stale replay. A
+       failed preflight resolves to null and falls through to a normal fetch below. */
+    let _pre = null;
+    try {
+      const k = method + ' ' + path;
+      if (method === 'GET' && window.__pre && window.__pre[k]) {
+        const pr = window.__pre[k]; delete window.__pre[k];
+        _pre = await pr;
+      }
+    } catch (e) { _pre = null; }
+    if (_pre) { res = _pre; }
+    else
     try {
       res = await fetch(path, {
         method, headers,
