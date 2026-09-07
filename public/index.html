@@ -9888,16 +9888,38 @@ body.light .ac-post-toolbar .msg-attach:active{background:rgba(0,0,0,.1);}
 
 /* Profile */
 #acProfileBody{padding:0;}
-.ac-prof-banner{height:148px;background-color:var(--s2);background-size:cover;background-position:center;
+/* The banner is a CARD, not a full-bleed strip: inset by the same --feed-gutter as
+   every post card below it and turned on the app's own --post-card-r, so a profile
+   reads as part of the same system rather than as a page with a header stuck on top.
+   Two derived tokens, never hand-picked numbers:
+     --prof-top   the gap above the card (the gutter, plus a notch's inset in a tab)
+     --prof-inset the gap that makes a 38px round button CONCENTRIC with the card's
+                  corner — the app's corner law, outer radius = inner radius + gap,
+                  so 30 = 19 + 11. Change --post-card-r and the arrow follows. */
+#acProfileScreen{--prof-top:calc(env(safe-area-inset-top,0px) + var(--feed-gutter));
+  --prof-inset:calc(var(--post-card-r) - 19px);}
+.ac-prof-banner{position:relative;height:148px;margin:var(--prof-top) var(--feed-gutter) 0;border-radius:var(--post-card-r);
+  background-color:var(--s2);background-size:cover;background-position:center;
   background-image:linear-gradient(135deg,var(--s3),var(--s1));}
+/* The picture cuts a notch out of the banner. This page-coloured overlay IS that cut —
+   see acProfNotchPath for why it is a clipped overlay rather than a mask on the banner,
+   and how the two junctions are filleted. display:none until the JS proves the browser
+   can clip it: unclipped, this is a page-coloured slab across the photo. */
+.ac-prof-notch{position:absolute;inset:0;display:none;background:var(--bg);pointer-events:none;}
+[dir="rtl"] .ac-prof-notch{transform:scaleX(-1);}
 .ac-avaopen{cursor:zoom-in;}
 .ac-prof-banner.ac-avaopen{cursor:zoom-in;}
-.ac-prof{position:relative;display:flow-root;padding:0 16px 14px;}
+.ac-prof{position:relative;display:flow-root;padding:0 var(--feed-gutter) 14px;}
 .ac-prof-top{display:flex;align-items:flex-end;gap:12px;margin-top:-46px;margin-bottom:12px;}
-.ac-prof .ac-prof-ava{width:90px;height:90px;font-size:34px;flex-shrink:0;border:4px solid var(--bg);box-sizing:border-box;}
+/* The picture's VISIBLE circle sits flush with the card's left edge. Its 4px ring is
+   page-coloured, so pulling the box out by exactly the ring's width puts the photo on
+   the gutter line (and on the name's line below it) while the ring itself stays
+   invisible against the page — it only shows where it overlaps the banner. */
+.ac-prof .ac-prof-ava{width:90px;height:90px;font-size:34px;flex-shrink:0;border:4px solid var(--bg);box-sizing:border-box;
+  margin-inline-start:-4px;}
 /* Action buttons sit at the top-right, evenly inset from the banner and the
    right edge (16px on both sides) so the spacing reads as balanced. */
-.ac-prof-actions{position:absolute;top:16px;right:16px;z-index:2;display:flex;align-items:center;gap:9px;}
+.ac-prof-actions{position:absolute;top:16px;inset-inline-end:var(--feed-gutter);z-index:2;display:flex;align-items:center;gap:9px;}
 .ac-prof-actions .ac-follow-btn,.ac-prof-actions .ac-pill-btn{flex:0 0 auto;height:38px;padding:0 18px;}
 .ac-prof-actions .ac-icon-btn,.ac-prof-actions .ac-follow-btn,.ac-prof-actions .ac-pill-btn{display:flex;align-items:center;justify-content:center;}
 .ac-prof-name{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);
@@ -10036,13 +10058,18 @@ body.light .ac-post-toolbar .msg-attach:active{background:rgba(0,0,0,.1);}
 .ac-prof-head{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);padding:14px 16px 2px;}
 body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 /* Floating back arrow over a profile banner (no top menu, X-style) */
-.ac-prof-back{position:absolute;top:max(12px,calc(env(safe-area-inset-top,0px) + 8px));left:12px;z-index:8;
-  width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.45);border:none;color:#fff;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+/* The same solid grey circle as the two icon buttons on the right, nested in the
+   banner card's top-left corner by --prof-inset so the gap is even the whole way
+   round the curve. It used to be a translucent black disc with a live blur; the
+   card gives it a shape to sit in, so one material for every round control wins. */
+.ac-prof-back{position:absolute;top:calc(var(--prof-top) + var(--prof-inset));
+  inset-inline-start:calc(var(--feed-gutter) + var(--prof-inset));z-index:8;
+  width:38px;height:38px;border-radius:50%;background:var(--s2);border:none;color:var(--t1);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ac-prof-back svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.4;fill:none;}
 .ac-prof-back:active{transform:scale(.92);}
-@media(hover:hover){.ac-prof-back:hover{background:rgba(0,0,0,.62);}}
+@media(hover:hover){.ac-prof-back:hover{background:var(--s3);}}
 /* X-style profile tab bar (sticky under the banner/header) */
 .ac-prof-tabs{position:sticky;top:0;z-index:6;display:flex;background:var(--bg);
   border-top:1px solid var(--b1);border-bottom:1px solid var(--b1);}
@@ -13494,11 +13521,13 @@ body.reduce-motion .notif-detail{transition:none;}
 .ac-addc.on .ic-plus{display:none;}
 .ac-addc.on .ic-check{display:inline-block;}
 @media(hover:hover){.ac-addc:hover{color:var(--accent);}}
-.ac-icon-btn{width:38px;height:38px;border-radius:50%;border:none;background:transparent;color:var(--t1);cursor:pointer;
+/* Solid, never bare: the fill used to live on :hover only, so on a phone these read
+   as two floating glyphs with no button around them (design rule 3). */
+.ac-icon-btn{width:38px;height:38px;border-radius:50%;border:none;background:var(--s2);color:var(--t1);cursor:pointer;
   display:flex;align-items:center;justify-content:center;flex:0 0 auto;transition:all var(--t-fast) var(--ease);}
 .ac-icon-btn svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;}
 .ac-icon-btn .ic-check{display:none;}
-.ac-icon-btn:hover{background:var(--s2);}
+.ac-icon-btn:hover{background:var(--s3);}
 .ac-icon-btn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-tint);}
 .ac-icon-btn.on .ic-plus{display:none;}
 .ac-icon-btn.on .ic-check{display:inline-block;}
@@ -21923,7 +21952,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1815'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1816'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -30708,10 +30737,109 @@ function acSkelFeed(n) {
   }
   return s;
 }
+/* ── The picture's notch, and why every number in it is solved ──────────────────
+   The profile picture sits over the bottom-left corner of the banner card, and its
+   page-coloured ring cuts a notch out of it. Where that cut met the card's own
+   outline it made two hard corners — the founder marked both and asked for them
+   rounded. A FILLET is an arc tangent to BOTH curves at once, which is not something
+   you can eyeball: its centre, its two tangent points and the arc between them are
+   solved from the live geometry (the card's radius, the picture's size, where it
+   sits), so changing --post-card-r or the avatar's size keeps the blend true.
+
+   Note the fillet does NOT round the intersection point — it REPLACES the junction
+   with a tangent blend that starts well before it, which is why the cut appears to
+   flow up the card's edge instead of poking through it.
+
+   It is drawn as a page-coloured overlay clipped to that shape rather than as a mask
+   on the banner, and that choice is what makes it free: nothing in the path depends
+   on the card's WIDTH, so one path is correct at every screen size with no resize
+   handler. Every point it draws is inside the card, so it can never mark the page. */
+const PROF_NOTCH_FILLET = 12;   // how round the two junctions read
+const _NOTCH_OK = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('clip-path', 'path("M 0 0")');
+
+/* An SVG arc taking the SHORT way from S to E around O. The sweep flag is derived
+   from which side E falls on, so no arc here is hand-flagged. */
+function _acArc(O, S, E, rad) {
+  const cross = (S[0] - O[0]) * (E[1] - O[1]) - (S[1] - O[1]) * (E[0] - O[0]);
+  return `A ${rad.toFixed(2)} ${rad.toFixed(2)} 0 0 ${cross > 0 ? 1 : 0} ${E[0].toFixed(2)} ${E[1].toFixed(2)}`;
+}
+/* ONE RADIUS DOES NOT LOOK THE SAME AT BOTH JUNCTIONS, and the founder saw that before
+   the arithmetic did. The cut's centre sits on the bottom edge, so it meets that edge
+   almost square-on and a fillet there sweeps ~79 degrees; it crosses the left edge at a
+   shallow angle, where the SAME radius sweeps ~121 — half as much curve again, which
+   reads as a visibly bigger curl. What has to match is the LENGTH of curve, not the
+   radius, so the bottom fillet keeps the nominal radius and the left one is solved to
+   draw an arc of the same length. Two matching curves, two different radii. */
+function _acFillet(cx, cy, R, F, vertical, H) {
+  const k = R + F;
+  const d = vertical ? F - cx : H - F - cy;
+  const s = k * k - d * d;
+  if (!(s > 0)) return null;
+  const O = vertical ? [F, cy - Math.sqrt(s)] : [cx + Math.sqrt(s), H - F];
+  // the sweep is the angle between the edge's own tangent at O and the line O -> centre
+  const u = vertical ? (O[0] - cx) / k : (cy - O[1]) / k;
+  return { O, F, sweep: Math.acos(Math.max(-1, Math.min(1, u))) };
+}
+/* The cut, in the banner's own coordinates: H tall, corner radius r, notch of radius R
+   centred (cx,cy), blended into the bottom edge with radius F and into the left edge
+   with whatever radius draws the same length of arc. */
+function acProfNotchPath(H, r, cx, cy, R, F) {
+  const f2 = _acFillet(cx, cy, R, F, false, H);
+  if (!f2) return '';
+  const want = f2.F * f2.sweep;                  // the length of curve to match
+  let lo = 0.5, hi = F;                          // arc length grows with the radius
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2, t = _acFillet(cx, cy, R, mid, true, H);
+    if (!t) { hi = mid; continue; }
+    if (t.F * t.sweep > want) hi = mid; else lo = mid;
+  }
+  const f1 = _acFillet(cx, cy, R, (lo + hi) / 2, true, H);
+  if (!f1) return '';
+  const O2 = f2.O, O1 = f1.O, F2 = f2.F, F1 = f1.F;
+  const T2l = [O2[0], H], T1l = [0, O1[1]];      // where each fillet meets its edge
+  const on = (O, f) => [cx + R * (O[0] - cx) / (R + f), cy + R * (O[1] - cy) / (R + f)];
+  const T2c = on(O2, F2), T1c = on(O1, F1);      // ...and where it meets the notch
+  /* Both tangent points must land on the STRAIGHT part of their edge, clear of the
+     card's own corner arc — otherwise the blend runs into the corner and the shape
+     comes apart. If it cannot, draw nothing and keep the plain circular cut. */
+  if (!(T1l[1] > 0) || !(T1l[1] < H - r) || !(T2l[0] > r)) return '';
+  /* Closing along the card's OWN outline leaves a hairline of banner showing: two
+     curves drawn to the same edge each antialias, and the fringes do not cancel. So
+     the closing run is bled 1px OUTSIDE the card (a concentric r+1 corner) — that
+     strip is beyond the overlay's box, so nothing paints there, but the clip now
+     covers the edge completely. */
+  return `M ${T2l[0].toFixed(2)} ${H.toFixed(2)} `
+    + _acArc(O2, T2l, T2c, F2) + ' '
+    + _acArc([cx, cy], T2c, T1c, R) + ' '
+    + _acArc(O1, T1c, T1l, F1) + ' '
+    + `L -1 ${T1l[1].toFixed(2)} L -1 ${(H - r).toFixed(2)} `
+    + _acArc([r, H - r], [-1, H - r], [r, H + 1], r + 1) + ' '
+    + `L ${T2l[0].toFixed(2)} ${(H + 1).toFixed(2)} L ${T2l[0].toFixed(2)} ${H.toFixed(2)} Z`;
+}
+/* Measure the real boxes and clip each notch to the shape above. Called right after a
+   profile (or its skeleton) is written, so the cut is there on the first frame. */
+function acSyncProfNotch(scope) {
+  if (!_NOTCH_OK) return;
+  const root = (scope && scope.querySelectorAll) ? scope : document;
+  root.querySelectorAll('.ac-prof-notch').forEach((n) => {
+    const banner = n.parentElement; if (!banner) return;
+    const host = banner.parentElement;
+    const ava = host && host.querySelector('.ac-prof-ava, .skel-ava');
+    const b = banner.getBoundingClientRect();
+    if (!ava || !b.width || !b.height) { n.style.display = 'none'; return; }
+    const a = ava.getBoundingClientRect();
+    const R = a.width / 2;
+    const r = parseFloat(getComputedStyle(banner).borderBottomLeftRadius) || 0;
+    const d = acProfNotchPath(b.height, r, a.left - b.left + R, a.top - b.top + R, R, PROF_NOTCH_FILLET);
+    if (!d) { n.style.display = 'none'; return; }
+    n.style.clipPath = `path('${d}')`;
+    n.style.display = 'block';
+  });
+}
 function acSkelProfile(biz) {
-  return `<div class="skel" style="height:128px;border-radius:0"></div>
-    <div style="padding:0 16px 14px">
-      <div class="skel skel-ava${biz ? ' biz' : ''}" style="width:80px;height:80px;margin-top:-40px;border:4px solid var(--bg)"></div>
+  return `<div class="skel" style="position:relative;height:148px;margin:var(--prof-top,14px) var(--feed-gutter) 0;border-radius:var(--post-card-r)"><i class="ac-prof-notch"></i></div>
+    <div style="padding:0 var(--feed-gutter) 14px">
+      <div class="skel skel-ava${biz ? ' biz' : ''}" style="width:90px;height:90px;margin:-46px 0 0 -4px;border:4px solid var(--bg)"></div>
       <div class="skel skel-line" style="width:150px;height:18px;margin-top:14px"></div>
       <div class="skel skel-line" style="width:96px;height:12px;margin-top:11px"></div>
       <div class="skel skel-line" style="width:200px;height:12px;margin-top:16px"></div>
@@ -42162,6 +42290,7 @@ async function acLoadProfile(username, mine) {
   const targetUn = String(username || S.user?.username || '').toLowerCase().replace(/^@/, '');
   const skelBiz = mine ? acIsBiz(S.user) : (AC._bizUns && AC._bizUns[targetUn]);
   body.innerHTML = acSkelProfile(skelBiz);
+  acSyncProfNotch(body);
   try {
     const d = await API.req('GET', '/api/social/profile/' + encodeURIComponent(username));
     AC.profile = d;
@@ -42673,8 +42802,8 @@ function acRenderProfile(d, mine) {
   const rest = d.pinnedPost ? d.posts.filter(p => p.id !== d.pinnedPost.id) : d.posts;
   const posts = pinned + (rest.length ? rest.map(acPostCard).join('') : (pinned ? '' : '<div class="ac-empty">No posts yet.</div>'));
   const banner = u.banner
-    ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}', this)"></div>`
-    : `<div class="ac-prof-banner"></div>`;
+    ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}', this)"><i class="ac-prof-notch"></i></div>`
+    : `<div class="ac-prof-banner"><i class="ac-prof-notch"></i></div>`;
   // ── Tabbed panes (X-style). Posts / Replies / About / [Business] / Media.
   //    Only the active Posts pane is built now; the rest are empty placeholders
   //    (data-built="0") that acProfTab → acBuildProfPane fills on first tap. ──
@@ -42703,7 +42832,7 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}${u.businessVerified ? BIZ_VBADGE : ''}${acAffBadge(u)}${u.pro ? '<span class="ac-pro-chip" title="Atwe Pro member">PRO</span>' : ''}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}${d.connectionDegree ? ` <span class="deg-chip">${d.connectionDegree === 1 ? '1st' : '2nd'}</span>` : ''}${u.pronouns ? ` <span class="ac-prof-pron">· ${escHtml(u.pronouns)}</span>` : ''}${(!mine && d.followsYou) ? ' <span class="ac-followsyou">Follows you</span>' : ''}</div>
       ${acBizVerifyLine(u, mine)}
-      ${(!mine && u.paused) ? `<div class="ac-prof-paused" role="status" style="display:flex;gap:10px;align-items:flex-start;margin:12px var(--feed-gutter) 2px;padding:12px 14px;background:var(--s2);border:1px solid var(--b2);border-radius:14px;">
+      ${(!mine && u.paused) ? `<div class="ac-prof-paused" role="status" style="display:flex;gap:10px;align-items:flex-start;margin:12px 0 2px;padding:12px 14px;background:var(--s2);border:1px solid var(--b2);border-radius:14px;">
         <svg viewBox="0 0 24 24" width="20" height="20" style="flex:0 0 auto;margin-top:1px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round"><circle cx="12" cy="12" r="9"/><line x1="10" y1="9" x2="10" y2="15"/><line x1="14" y1="9" x2="14" y2="15"/></svg>
         <div style="min-width:0"><div style="font-weight:700;color:var(--t1);font-size:14px">This account is currently away</div><div style="color:var(--t2);font-size:13.5px;margin-top:2px;white-space:pre-wrap;word-break:break-word">${u.pauseMessage ? escHtml(u.pauseMessage) : 'Temporarily unavailable — they’ll be back soon.'}</div></div>
       </div>` : ''}
@@ -42735,6 +42864,7 @@ function acRenderProfile(d, mine) {
     ${tabBar}
     ${panes}`;
   AC._profTab = 'posts';
+  acSyncProfNotch(document.getElementById('acProfileBody'));
   acLoadHighlights(u.username, mine);
   if (!mine) acLoadSimilarAccounts(u.username);
 }

@@ -25,10 +25,15 @@ const crypto = require('crypto');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const { Pool } = require(path.join(ROOT, 'node_modules/pg'));
-const auth = require(path.join(ROOT, 'auth'));
 
 const DB = process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore';
 const SECRET = process.env.JWT_SECRET || 'scoresecret';
+/* auth.js reads JWT_SECRET once, AT REQUIRE TIME. Requiring it before this line means
+   the probe mints tokens with the insecure dev fallback while the servers it spawns
+   are told to use SECRET — every request then comes back 401 and the run reports "the
+   message was never accepted" on code that is fine. Set it first, then require. */
+process.env.JWT_SECRET = SECRET;
+const auth = require(path.join(ROOT, 'auth'));
 const PORT_A = 3281, PORT_B = 3282;
 
 let pass = 0, fail = 0;
@@ -44,9 +49,18 @@ function start(port, cluster) {
   p.stdout.on('data', () => {}); p.stderr.on('data', () => {});
   return p;
 }
-async function waitUp(port, tries = 40) {
+/* /api/health answers BEFORE db.init() has finished — it is deliberately exempt from
+   the "still setting up" gate so a platform healthcheck passes during a schema build.
+   So waiting on health alone is not waiting for a usable server: against a big
+   database every request the probe then makes comes back 503 {starting:true} and the
+   whole run reports "the message was never accepted" on perfectly good code. Wait for
+   a route that is BEHIND the gate instead. */
+async function waitUp(port, tries = 120) {
   for (let i = 0; i < tries; i++) {
-    try { const r = await fetch(`http://localhost:${port}/api/health`); if (r.ok) return true; } catch (e) {}
+    try {
+      const r = await fetch(`http://localhost:${port}/api/config`);
+      if (r.ok) { const j = await r.json().catch(() => ({})); if (!j.starting) return true; }
+    } catch (e) {}
     await sleep(500);
   }
   return false;
