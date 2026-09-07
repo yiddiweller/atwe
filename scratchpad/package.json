@@ -1,0 +1,10 @@
+{
+  "name": "atwe-scratchpad",
+  "private": true,
+  "description": "Probe dependencies. NOT part of the app — nothing here ships. A package.json exists for one reason: without it, `npm install <anything>` in this folder PRUNES everything else, and playwright-core disappearing silently breaks the whole regression suite. It happened. Reinstall with: npm install",
+  "dependencies": {
+    "playwright-core": "*",
+    "pngjs": "*",
+    "aws4": "*"
+  }
+}

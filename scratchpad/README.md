@@ -15,13 +15,23 @@ the repo.**
 They need a browser and a database, neither of which is a project dependency:
 
 ```bash
+# the probe dependencies (playwright-core, pngjs, aws4) — NOT app dependencies
+cd scratchpad && npm install
+
 # a throwaway Postgres, and a server pointed at it
 DATABASE_URL=postgres://atwe:atwe@localhost:5432/atwescore \
 JWT_SECRET=scoresecret PORT=3262 node server.js &
 
-# playwright-core + pngjs must resolve from the directory you run in
+# they must resolve from the directory you run in
 cd scratchpad && bash run-all.sh
 ```
+
+> **`npm install <one-package>` here USED to delete the others.** With no
+> `package.json`, npm treats whatever you just asked for as the entire intended
+> contents of `node_modules` and prunes the rest — so installing `aws4` silently
+> removed `playwright-core`, and the next probe failed with a module-not-found that
+> looked nothing like the real cause. The `package.json` beside this file exists for
+> that one reason. Do not delete it, and prefer plain `npm install`.
 
 Each probe seeds its own accounts and exits non-zero on failure. `fullscan.js` is
 the broad one — 33 surfaces × 3 configurations, looking for JS errors, failed

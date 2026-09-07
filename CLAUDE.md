@@ -5943,6 +5943,69 @@ the page it was about to measure left that page's first boot in flight when the 
 started — the control appeared to reach the server at **14ms**, which is impossible with no
 preflight. It reports medians; a single boot measurement here is worthless.
 
+### Running on more than one server — now actually tested
+
+One machine only holds so many people; past that you run several copies of the app behind
+a load balancer. Atwe keeps **who is connected in one process's memory**, so with two
+servers a message sent by somebody on server A would never reach somebody connected to
+server B — the app would look fine and quietly lose half its realtime. That is the single
+architectural thing standing between this and very large numbers.
+
+`CLUSTER_MODE=true` is the groundwork, and it uses the database already there rather than
+adding Redis: **Postgres LISTEN/NOTIFY** on channel `atwe_rt` carries realtime events
+between instances (`clusterPublish` from `rtPush`, `clusterListen` fanning back into
+`rtPushLocal`), and a shared `rate_counters` table carries the limits so nobody gets double
+the allowance. Off by default, so a single-server deploy keeps today's faster in-memory
+behaviour byte for byte.
+
+**It had never been run with two servers.** Written but unproven is not working.
+`scratchpad/cluster.js` now starts two real servers against one database, opens a realtime
+stream for somebody on server A, sends them a message through server B, and checks it
+arrives — **exactly once**, since an instance must not re-deliver its own broadcast.
+Measured: `cluster ON → arrived, 1 copy`.
+
+**It self-tests, and that is the point.** The whole scenario runs twice, once with cluster
+mode OFF, and the OFF run must FAIL to deliver (`arrived:false`). A probe that passed
+either way would prove nothing — the exact trap an untested feature invites.
+
+Two limits worth knowing before relying on it. A notification payload is capped at
+**7500 bytes** (Postgres allows 8000) and anything larger **stays local** — fine today
+because media is served by URL rather than inlined, but a future event carrying bulk would
+silently reach only one instance. And the in-memory call/live rooms (`liveStreams`,
+`callLinkRooms`, `GROUPCALL`) are **not** covered by any of this: video and calls are still
+single-machine.
+
+### The skeleton remembers what the last feed looked like
+
+The grey placeholder is drawn before the feed arrives, so it cannot know what is coming —
+and a post is **269-653px** depending on the shape of its photo, or whether it has one at
+all. One fixed guess for every slot is what made a post jump **608 -> 410px** as the real
+thing replaced it.
+
+So it remembers. After each feed render `_feedSkelRemember` notes, per slot, how tall that
+post's picture was (**0 = it had none**), and the next `acSkelFeed` reserves exactly that.
+Measured on a real repeat visit: the real posts were `[0,0,0,0,211]`, the old fixed guess
+was `[180,180,180,180,0]` — wrong on all five — and the remembered skeleton is
+`[0,0,0,0,211]`, exact.
+
+Same rules as `_xpHeights` on Engine, and each is load-bearing: it is keyed to the account
+**and the viewport width** (a picture's height depends on how wide the screen is); a card
+still loading its picture measures ~0, which is not "no picture", so a snapshot containing
+one is **discarded rather than remembered wrong**; and any mismatch falls straight back to
+the old fixed shape, so a first visit is byte-identical to before.
+
+**This does NOT fix `settle.js`'s Home check, and is not meant to.** That probe uses a
+BRAND-NEW account, whose second feed fetch returns a completely different set of posts —
+the already-seen filter guarantees it — so no memory of the first set could predict the
+second. A returning person's feed keeps roughly the same shape, which is the case this
+helps. `scratchpad/feedskel.js` proves it on a genuine second visit.
+
+**Engine's own 56px growth is fixed at the same time**, and it was one wrong number:
+`_XP_TYPICAL.acTrending` reserved 250px for a block that measures **306** on five different
+accounts (trending tags are global, so everyone sees the same block, and the part that
+varies — "Hashtags you follow" — is empty for somebody who has never been here). **Round
+these UP, never down**: under-reserving pushes the page down under someone already reading.
+
 ## Telling people a new build is out
 
 Nothing used to. A tab left open for days kept running old code, the service worker
