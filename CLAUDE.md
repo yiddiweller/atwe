@@ -327,7 +327,29 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
     ramps 2→24px rather than one flat frost with a hard bottom edge.
 
 > **Where it lives.** `.tb-glass` is one child (`<i>×4`) inside `.topbar` and `#notifHead`;
-> the bars themselves paint no fill. `--tb-tail` (26px) is how far it runs on below the bar.
+> the bars themselves paint no fill.
+>
+> **THE BAND IS THE BAR'S *VISIBLE* HEIGHT, AND `--tb-tail` IS ZERO.** It shipped as a
+> fixed 102px + a 26px tail, and the founder caught it at once: with the brand row
+> collapsed the bar is only ~47px on screen, so the band kept dissolving content for
+> another ~80px — posts went dark and blurry *before they had reached the menu*. The
+> height subtracts `--tb-hide` so the effect stops exactly where the bar stops, and the
+> tail is gone: the tint already eases to fully transparent at the band's bottom, so
+> there was never an edge for a tail to hide. Both collapse writers set `--tb-hide` —
+> `_onListScroll` for the installed app and `_onWinScroll` for a browser — on the same
+> line that writes the transform, so the two cannot drift.
+>
+> **THE TINT HOLDS ACROSS THE BAR AND FALLS ONLY IN THE LAST FIFTH**, and that is a
+> second correction from the same review. An even ease from top to bottom looked right on
+> Home, where the brand row had collapsed and the band was short — but on Beam and Engine,
+> with the lockup still showing, the tab row sat where the ease had already reached nearly
+> zero and names and avatars showed through beside the pills. It now runs .93 → .83 over
+> the first 78% and dissolves to 0 across the rest: never opaque, never flat, always
+> falling, and content behind the bar stays veiled wherever the bar happens to be.
+>
+> **The frost is deliberately light** (1/2/4/8px, against 2/5/12/24 at first) — the
+> founder asked for the blurriness taken down. The tint is what hides content now; the
+> blur only softens what little shows.
 >
 > **IT IS COUNTER-TRANSLATED BY `--tb-hide`, and that is load-bearing.** `brand-collapse`
 > slides the whole `.topbar` up as the brand row collapses (it writes `translateY` on the
@@ -367,7 +389,9 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
 > carry the class — `.tb-brandrow` sets this header's own position and background at
 > (0,1,1,0) and a bare `#notifHead` loses to it.
 >
-> Covered by `scratchpad/topglass.js` (44 checks, both themes). Its see-through test had to
+> Covered by `scratchpad/topglass.js` (52 checks, both themes), which now guards the
+> over-reach directly: the glass's bottom may not sit more than a pixel below the bar's,
+> and its height must equal the bar's VISIBLE height. Restoring the fixed band fails 9. Its see-through test had to
 > be restricted to the bar's OWN box: the tail dissolves content whether or not the bar
 > itself is transparent, so a band that included it nearly passed with the black wall put
 > back (5287px against a 5990 bar). Restricted, the same revert gives 3817 against an
