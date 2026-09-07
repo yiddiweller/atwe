@@ -1652,7 +1652,12 @@ body.light .tb-iconbtn.on{color:#fff;}
    as a tab label so the row stays even, but a step quieter so it reads as an extra action
    rather than a sixth tab. Colour lives further down, with the tab colours — see the
    .tb-feedtab-add colour rule for why it needs the specificity it has. */
-.tb-feedtab-add{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+/* "Add" is an extra action at the END of the row, not one of the choices — so it is
+   deliberately NOT a pill. background:none is load-bearing: the base .tb-feedtab rule
+   excludes it, and a <button> with no background falls back to the browser's own
+   buttonface grey (rgb(107,107,107) on dark, rgb(239,239,239) on light) — which is
+   exactly how it rendered the first time. */
+.tb-feedtab-add{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:none;border:none;
   font-size:15px;font-weight:600;padding:6px 11px;transition:color var(--t-fast) var(--ease);}
 /* New chat list sheet (WhatsApp-style: name it + add people/groups) */
 #newListView .notif-card,#newListPicker .notif-card{max-width:600px;}
@@ -2089,8 +2094,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .rent-total b{color:var(--t1);font-size:16px;}
 .bk-tabs{display:flex;gap:8px;margin:6px 0 12px;}
 .bk-tab{flex:1;min-height:var(--btn-h);font:inherit;font-size:14px;font-weight:700;padding:9px 0;
-  border-radius:999px;border:none;background:var(--s2);color:var(--t2);cursor:pointer;}
-.bk-tab.on{background:var(--t1);color:var(--bg);border-color:var(--t1);}
+  border-radius:999px;border:none;background:var(--tab-fill);color:var(--tab-ink);cursor:pointer;}
+.bk-tab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .bk-card{border:1px solid var(--divider);border-radius:16px;padding:12px;margin-bottom:10px;}
 .bk-top{display:flex;gap:12px;align-items:center;cursor:pointer;}
 .bk-thumb{width:56px;height:56px;border-radius:12px;background:var(--s2) center/cover no-repeat;flex:0 0 auto;}
@@ -2719,13 +2724,12 @@ body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand
    the old tabs reserved extra bottom padding for the underline (7px top / 12px
    bottom), which floated the text above the icon centers — symmetric now.
    (Doubled-class selectors outrank the later per-world mobile rules.) */
-.topbar.tb-solo.tb-home .tb-feedtab.active::after,.topbar.tb-solo.tb-chat .tb-feedtab.active::after,.topbar.tb-solo.tb-engine .tb-feedtab.active::after{display:none;}
-.topbar.tb-solo.tb-home .tb-feedtab,.topbar.tb-solo.tb-chat .tb-feedtab{padding-top:8px;padding-bottom:8px;
-  /* Home + Beam tab words must be IDENTICAL across worlds — same size/weight/colour
+.topbar.tb-solo.tb-home .tb-feedtab:not(.tb-feedtab-add),.topbar.tb-solo.tb-chat .tb-feedtab:not(.tb-feedtab-add){
+  /* Home + Beam tabs must be IDENTICAL across worlds — same size/weight/colour
      so switching worlds never feels "off" (founder). */
-  font-size:15px;font-weight:600;color:var(--t2);}
-.topbar.tb-solo.tb-home .tb-feedtab.active,.topbar.tb-solo.tb-chat .tb-feedtab.active,.topbar.tb-solo.tb-engine .tb-feedtab.active{font-weight:700;color:#fff;}
-body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo.tb-chat .tb-feedtab.active,body.light .topbar.tb-solo.tb-engine .tb-feedtab.active{color:var(--t1);}
+  padding:7px 15px;font-size:15px;font-weight:600;color:var(--tab-ink);background:var(--tab-fill);}
+.topbar.tb-solo.tb-home .tb-feedtab.active:not(.tb-feedtab-add),.topbar.tb-solo.tb-chat .tb-feedtab.active:not(.tb-feedtab-add),.topbar.tb-solo.tb-engine .tb-feedtab.active:not(.tb-feedtab-add){
+  font-weight:700;background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{align-self:center;align-items:center;}
 /* The ≡ + ＋ icoset is retired on Home/Beam — the brand row above now carries the
    drawer-opener (logo) + compose (＋). Hidden here so the tab row is just the tabs. */
@@ -2742,7 +2746,7 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
 @media(min-width:769px) and (min-height:501px){.tb-ico.tb-ico-menu{display:none;}} /* desktop has the sidebar */
 /* Beam tabs match the home row's scrollable rhythm in solo mode (they were
    space-between across the full width, which fights the icon cluster). */
-.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{justify-content:flex-start;gap:36px;margin-inline-start:0;/* owner: more space between Beam tabs, matched to Home */}
+.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{justify-content:flex-start;gap:8px;margin-inline-start:0;/* pills sit close; the gap between WORDS used to be 36 */}
 /* Unified Home + Beam tab-row geometry (founder polish, single source of truth —
    (0,4,0) so it beats the per-world mobile rules):
    • text sits CLOSE to the ≡/＋ icons (small start padding + tiny icoset gap above);
@@ -2835,23 +2839,20 @@ body.light .tb-home-dot{border-color:#fff;}
    centered within it (centered with the post avatars). */
 .topbar.tb-home .tb-homeava{width:42px;}
 .topbar.tb-home .tb-left{flex:0 0 auto;gap:7px;}
-.topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:3px;margin-inline-start:0;padding-inline-end:8px;}
+.topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:8px;margin-inline-start:0;padding-inline-end:8px;}
 .topbar.tb-home .topbar-actions{flex:0 0 auto;}
-.topbar.tb-home .tb-feedtab{padding:6px 4px;}
-.topbar.tb-home .tb-feedtab:first-child{padding-inline-start:0;}
-.topbar.tb-home .tb-feedtab:last-child{padding-inline-end:2px;}
+.topbar.tb-home .tb-feedtab:not(.tb-feedtab-add){padding:7px 15px;}
 /* Chat tab: All/Chats/Calls/Contacts sit in the topbar like home, but keep the
    hamburger (no avatar swap). */
 .topbar.tb-chat .tb-left{flex:0 0 auto;gap:7px;}
 .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-inline-start:0;}
 .topbar.tb-chat .topbar-actions{flex:0 0 auto;}
-.topbar.tb-chat .tb-feedtab{padding:6px 4px;}
+.topbar.tb-chat .tb-feedtab:not(.tb-feedtab-add){padding:7px 15px;}
 @media(min-width:769px) and (min-height:501px){
   .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:center;gap:6px;}
-  .topbar.tb-chat .tb-feedtab{padding:9px 20px;font-size:15.5px;border-radius:var(--r-pill);
+  .topbar.tb-chat .tb-feedtab:not(.tb-feedtab-add){padding:9px 20px;font-size:15.5px;border-radius:var(--r-pill);
     transition:color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
-  .topbar.tb-chat .tb-feedtab:hover{background:var(--s1);color:var(--t1);}
-  .topbar.tb-chat .tb-feedtab.active::after{width:30px;}
+  .topbar.tb-chat .tb-feedtab:not(.tb-feedtab-add):not(.active):hover{background:var(--tab-fill-hv);color:var(--t1);}
 }
 /* The tab strip (home For You/Following/… and chat All/Chats/…) scrolls ONLY
    horizontally. touch-action:pan-x tells the browser a drag here pans the strip
@@ -2882,13 +2883,19 @@ body.light .tb-home-dot{border-color:#fff;}
           mask-image:linear-gradient(to right,#000 calc(100% - 44px),transparent 100%);}
 .ac-post-toolbar.fade-l.fade-r{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 44px,#000 calc(100% - 44px),transparent 100%);
           mask-image:linear-gradient(to right,transparent 0,#000 44px,#000 calc(100% - 44px),transparent 100%);}
-.tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
-  padding:6px 11px;white-space:nowrap;transition:color var(--t-fast) var(--ease);}
-.tb-feedtab:hover{color:var(--t1);}
-/* Active tab = brighter/bolder text only — no moving underline (it could drift a
-   pixel up/down while the row scrolls). Clean and rock-steady. */
-.tb-feedtab.active{color:#fff;font-weight:800;}
-body.light .tb-feedtab.active{color:var(--t1);}
+/* Home, Beam AND Engine all draw their tab row from this one class, so the three
+   worlds cannot drift apart. "Add" is excluded — it is an extra action at the end
+   of the row, not one of the choices, and must stay a bare quiet word. */
+.tb-feedtab:not(.tb-feedtab-add){position:relative;background:var(--tab-fill);border:none;cursor:pointer;
+  color:var(--tab-ink);font-size:15px;font-weight:600;border-radius:var(--r-pill);
+  padding:7px 15px;white-space:nowrap;-webkit-tap-highlight-color:transparent;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+@media(hover:hover){.tb-feedtab:not(.tb-feedtab-add):hover{background:var(--tab-fill-hv);color:var(--t1);}}
+.tb-feedtab:not(.tb-feedtab-add):active{transform:scale(.96);}
+/* Selected = the white pill. No underline: it could drift a pixel while the row
+   scrolls, and the fill says it far more plainly. */
+.tb-feedtab.active:not(.tb-feedtab-add){background:var(--tab-fill-on);color:var(--tab-ink-on);font-weight:700;}
+@media(hover:hover){.tb-feedtab.active:not(.tb-feedtab-add):hover{background:var(--tab-fill-on);color:var(--tab-ink-on);}}
 /* "Add" is one step quieter than an inactive tab, in every theme and on every surface.
    The specificity is deliberate and load-bearing: on phones .topbar.tb-home .tb-feedtab
    and .topbar.tb-chat/.tb-engine .tb-feedtab (0,3,0) repaint the tabs --t2, which beat a
@@ -2909,11 +2916,9 @@ body.light .tb-feedtab.active{color:var(--t1);}
    600px feed column) instead of a stretched left-to-right bar; hover pill. */
 @media(min-width:769px) and (min-height:501px){
   .topbar.tb-home .tb-feedtabs{flex:1;justify-content:center;gap:6px;}
-  .topbar.tb-home .tb-feedtab{padding:9px 20px;font-size:15.5px;border-radius:var(--r-pill);
+  .topbar.tb-home .tb-feedtab:not(.tb-feedtab-add){padding:9px 20px;font-size:15.5px;border-radius:var(--r-pill);
     transition:color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
-  .topbar.tb-home .tb-feedtab:first-child{padding-inline-start:20px;}
-  .topbar.tb-home .tb-feedtab:hover{background:var(--s1);color:var(--t1);}
-  .topbar.tb-home .tb-feedtab.active::after{width:30px;}
+  .topbar.tb-home .tb-feedtab:not(.tb-feedtab-add):not(.active):hover{background:var(--tab-fill-hv);color:var(--t1);}
 }
 /* Mobile home: ≡ menu at the far left, then a left-aligned, horizontally
    scrollable tab row (For You · Following · Collections · Circles). No underline;
@@ -2971,17 +2976,16 @@ body.light .tb-feedtab.active{color:var(--t1);}
   /* Search + AI: put the ≡ at the exact same gutter position as Home/Chat. */
   .topbar.tb-plain{padding-inline-start:var(--feed-gutter);}
   .topbar.tb-plain .sb-toggle{justify-content:flex-start;width:auto;}
-  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:36px;margin-inline-start:8px;padding-inline-start:16px;padding-inline-end:0;}
+  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:8px;margin-inline-start:8px;padding-inline-start:16px;padding-inline-end:0;}
     /* (Left-edge fade is a static overlay on .tb-solo .tb-icoset — no mask on the
        scrolling row, so the Beam tab scroll stays 60fps too.) */
   /* Beam tabs bottom-align to the hairline so the active tab carries a short BLUE
      underline sitting on it (blueprint §Beam) — mirrors the Home feed tabs. */
-  .topbar.tb-chat .tb-feedtabs,.topbar.tb-engine .tb-feedtabs{align-self:stretch;align-items:flex-end;}
-  .topbar.tb-chat .tb-feedtab,.topbar.tb-engine .tb-feedtab{padding:6px 0 12px;font-size:15px;font-weight:600;color:var(--t2);}
-  .topbar.tb-chat .tb-feedtab.active,.topbar.tb-engine .tb-feedtab.active{font-weight:700;color:#fff;}
-  body.light .topbar.tb-chat .tb-feedtab.active,body.light .topbar.tb-engine .tb-feedtab.active{color:var(--t1);}
-  .topbar.tb-chat .tb-feedtab.active::after,.topbar.tb-engine .tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
-    bottom:0;width:22px;height:3px;border-radius:3px;background:var(--accent);}
+  /* Pills sit CENTRED in the strip, not bottom-aligned: there is no underline to
+     rest on the hairline any more — the fill is what says which tab you are on. */
+  .topbar.tb-chat .tb-feedtabs,.topbar.tb-engine .tb-feedtabs{align-self:stretch;align-items:center;}
+  .topbar.tb-chat .tb-feedtab:not(.tb-feedtab-add),.topbar.tb-engine .tb-feedtab:not(.tb-feedtab-add){padding:7px 15px;font-size:15px;font-weight:600;color:var(--tab-ink);background:var(--tab-fill);}
+  .topbar.tb-chat .tb-feedtab.active:not(.tb-feedtab-add),.topbar.tb-engine .tb-feedtab.active:not(.tb-feedtab-add){font-weight:700;background:var(--tab-fill-on);color:var(--tab-ink-on);}
 
   /* ── Phase 5: two-row Home top bar (blueprint §Home) ──
      Row 1 (52px): avatar → Profile · "Home" title · bell + compose.
@@ -2996,10 +3000,8 @@ body.light .tb-feedtab.active{color:var(--t1);}
   .topbar.tb-home .tb-pagelabel{display:block;font-size:21px;font-weight:800;letter-spacing:-.02em;}
   /* Feed tabs are their own full-width row. No mask at rest — the .fade-l /
      .fade-r classes add one only on a side that really has more to show. */
-  .topbar.tb-home .tb-feedtabs{grid-area:tabs;flex:0 0 auto;margin:0;gap:36px;padding:0;/* owner: more space between Home tabs, matched to Beam */}
-  .topbar.tb-home .tb-feedtab{padding:7px 0 12px;font-size:15px;}
-  .topbar.tb-home .tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
-    bottom:0;width:22px;height:3px;border-radius:3px;background:var(--accent);}
+  .topbar.tb-home .tb-feedtabs{grid-area:tabs;flex:0 0 auto;margin:0;gap:8px;padding:0;/* pills sit close; the gap between WORDS used to be 36 */}
+  .topbar.tb-home .tb-feedtab:not(.tb-feedtab-add){padding:7px 15px;font-size:15px;}
   /* The brand-row redesign replaces the old grid lockup: with a brand row + a tab
      row, Home stacks them like Beam (flex column). Overrides the tb-home grid above
      (same specificity, later in source) so the two rows don't land side-by-side. */
@@ -4219,7 +4221,7 @@ body.light .iset-signout{border:1px solid var(--b1);}
 .iset-back:active{transform:scale(.88);background:var(--s2);}
 .iset-signout:active{transform:scale(.985);background:rgba(255,0,51,.12);}
 .iset-select:active{border-color:var(--accent);}
-.ac-ptab:active{background:var(--s1);}
+.ac-ptab:active{transform:scale(.96);}
 .iset-back,.iset-signout{transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ac-pill-btn:active,.iset-search-x:active{transform:scale(.96);}
 .iset-search-x{transition:transform var(--t-fast) var(--ease);}
@@ -4699,6 +4701,28 @@ body.nav-mini .sb-divider{width:38px;margin-inline-start:auto;margin-inline-end:
 
 /* ── THEME: LIGHT — the color law's own light-mode recipe: white bg, --F5F5F7
    cards, --1D1D1F primary text, --6E6E73 secondary, iOS light blue #007AFF. ── */
+/* ── Segmented tabs: a row of choices reads as BUTTONS, not words ─────────────
+   The founder's team, and the reason is recognition: every "pick one of these"
+   row in the app is now the same object — a grey pill at rest, a WHITE pill when
+   it is the one you are on (near-black in Light: --primary/--on-primary flip per
+   theme, the same pair the one primary action uses).
+
+   WHITE HERE IS A STATE, NOT AN ACTION. The colour law reserves white for the
+   single primary action on a screen; a selected tab does not DO anything, it says
+   "you are here". That is why it is allowed, and why the one-white-action check
+   in emptystates.js ignores a selected tab.
+
+   DECLARED ON body, NEVER ON :root. A custom property whose value references
+   another one resolves where it is DECLARED — on :root these would freeze at the
+   Black theme's --s3 and Light would never flip. body.light sets --s3 on body
+   itself, so declaring here makes both themes resolve correctly. */
+body{
+  --tab-fill:    var(--s3);      /* at rest — the app's own secondary-button grey */
+  --tab-ink:     var(--t2);
+  --tab-fill-on: var(--primary); /* selected — white on Black, near-black on Light */
+  --tab-ink-on:  var(--on-primary);
+  --tab-fill-hv: var(--s4);
+}
 body.light{
   --bg:#ffffff;--bg-1:#F5F5F7;--bg-2:#F5F5F7;--bg-3:#eff3f4;
   --s1:#F5F5F7;--s2:#F5F5F7;--s3:#e6ecf0;--s4:#d9e1e8;
@@ -7379,8 +7403,8 @@ body.reduce-motion #acFeed{animation:none!important;}
 /* "See who reacted" sheet: tabs + reactor rows */
 .rx-tabs{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 12px;scrollbar-width:none;}
 .rx-tabs::-webkit-scrollbar{display:none;}
-.rx-tab{flex:0 0 auto;border:none;border-radius:999px;background:var(--s2);color:var(--t2);font-size:13.5px;font-weight:700;padding:7px 14px;cursor:pointer;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
-.rx-tab.on{background:var(--accent);color:var(--accent-tint,#fff);}
+.rx-tab{flex:0 0 auto;border:none;border-radius:999px;background:var(--tab-fill);color:var(--tab-ink);font-size:13.5px;font-weight:700;padding:7px 14px;cursor:pointer;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.rx-tab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 #reactionsList .rx-row-em{font-size:18px;line-height:1;margin-inline-start:auto;padding-inline-start:8px;}
 /* Reaction burst (delight) */
 .rx-burst{position:fixed;inset:0;pointer-events:none;z-index:4200;}
@@ -8232,8 +8256,8 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .sf-lay-showcase .shop-grid .shop-img{height:210px;}
 /* Theme picker chips + swatches */
 .stt-chips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px;}
-.stt-chip{background:var(--s2);border:none;border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:650;color:var(--t2);cursor:pointer;}
-.stt-chip.on{background:var(--primary);color:var(--on-primary);}
+.stt-chip{background:var(--tab-fill);border:none;border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:650;color:var(--tab-ink);cursor:pointer;}
+.stt-chip.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .stt-swatches{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px;}
 .stt-sw{width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;}
 .stt-sw.on{box-shadow:0 0 0 2.5px var(--bg),0 0 0 4.5px var(--t1);}
@@ -8320,13 +8344,13 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 /* Notification filter tabs */
 .ntf-tabs{display:flex;gap:8px;padding:4px var(--feed-gutter) 10px;overflow-x:auto;scrollbar-width:none;}
 .ntf-tabs::-webkit-scrollbar{display:none;}
-.ntf-tab{flex:0 0 auto;background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
-.ntf-tab.on{background:var(--accent-dim);color:var(--accent);}
+.ntf-tab{flex:0 0 auto;background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.ntf-tab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 /* Wallet history filter chips */
 .wf-chips{display:flex;gap:8px;margin:2px 0 10px;overflow-x:auto;scrollbar-width:none;}
 .wf-chips::-webkit-scrollbar{display:none;}
-.wf-chip{flex:0 0 auto;background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
-.wf-chip.on{background:var(--accent-dim);color:var(--accent);}
+.wf-chip{flex:0 0 auto;background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.wf-chip.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 /* "This month" activity strip atop the wallet history (green in · plain out) */
 .wm-strip{display:flex;align-items:center;gap:12px;background:var(--s1);border-radius:14px;padding:10px 14px;margin-bottom:10px;font-size:13.5px;}
 /* Tap-open "where the money went" breakdown under the month strip. */
@@ -8342,8 +8366,8 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 /* Sell-view sort chips (reuse the wallet-filter chip look) */
 .sell-sortbar{display:flex;gap:7px;overflow-x:auto;padding:2px 0 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
 .sell-sortbar::-webkit-scrollbar{display:none;}
-.sell-sortchip{flex:0 0 auto;background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;}
-.sell-sortchip.on{background:var(--accent-dim);color:var(--accent);}
+.sell-sortchip{flex:0 0 auto;background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;}
+.sell-sortchip.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .sell-sortchip:active{transform:scale(.96);}
 /* Recently visited profiles row (Engine empty state) */
 .rp-head{display:flex;align-items:center;justify-content:space-between;margin:10px 10px 6px;}
@@ -8385,8 +8409,8 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .bmk-search::placeholder{color:var(--t3);}
 /* Report-a-problem sheet */
 .fb-cats{display:flex;gap:8px;flex-wrap:wrap;}
-.fb-cat{background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:13.5px;font-weight:600;padding:8px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
-.fb-cat.on{background:var(--accent-dim);color:var(--accent);}
+.fb-cat{background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:13.5px;font-weight:600;padding:8px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.fb-cat.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .fb-note{font-size:12px;color:var(--t3);margin-top:8px;line-height:1.4;}
 /* Recently viewed products — horizontal jump-back row */
 .rv-head{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 8px;}
@@ -8940,9 +8964,9 @@ body.reduce-motion .dlv-trip-dot{animation:none;}
 .rev-ask-go{flex:0 0 auto;font-size:13px;font-weight:750;color:var(--accent);}
 /* filters */
 .rev-filters{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:2px 0 10px;}
-.rev-chip{padding:6px 13px;border:none;border-radius:var(--r-pill);background:var(--s1);
-  color:var(--t2);font-size:12.5px;font-weight:650;cursor:pointer;font-family:inherit;}
-.rev-chip.on{background:var(--primary);color:var(--on-primary);}
+.rev-chip{padding:6px 13px;border:none;border-radius:var(--r-pill);background:var(--tab-fill);
+  color:var(--tab-ink);font-size:12.5px;font-weight:650;cursor:pointer;font-family:inherit;}
+.rev-chip.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .rev-sort{margin-left:auto;background:var(--s1);color:var(--t2);border:none;
   border-radius:var(--r-pill);padding:6px 10px;font-size:12.5px;font-weight:650;
   font-family:inherit;cursor:pointer;}
@@ -9260,8 +9284,8 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 /* Services & local directory */
 .svc-cats{display:flex;gap:7px;overflow-x:auto;padding:2px 0 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
 .svc-cats::-webkit-scrollbar{display:none;}
-.svc-cat{flex:0 0 auto;padding:6px 13px;border-radius:999px;border:none;background:var(--s2);color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
-.svc-cat.on{background:var(--accent-dim);border-color:var(--accent);color:var(--t1);}
+.svc-cat{flex:0 0 auto;padding:6px 13px;border-radius:999px;border:none;background:var(--tab-fill);color:var(--tab-ink);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.svc-cat.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .svc-card{background:var(--s1);border:none;border-radius:16px;overflow:hidden;margin-bottom:12px;}
 .svc-head{display:flex;align-items:center;gap:9px;padding:10px 12px 8px;cursor:pointer;}
 .svc-head-main{display:flex;flex-direction:column;min-width:0;flex:1;}
@@ -9677,17 +9701,16 @@ body.light .ac-pdot{background:var(--accent);}
 .cash-chart{width:100%;height:170px;display:block;margin:6px 0 2px;touch-action:pan-y;cursor:crosshair;}
 .cash-scrubtime{font-size:13px;font-weight:600;color:var(--t3);}
 .cash-ranges{display:flex;gap:6px;margin:6px 0 4px;}
-.cash-range{flex:1;padding:7px 0;border:none;background:none;color:var(--t3);font:inherit;font-size:13px;font-weight:700;
+.cash-range{flex:1;padding:7px 0;border:none;background:var(--tab-fill);color:var(--tab-ink);font:inherit;font-size:13px;font-weight:700;
   border-radius:999px;cursor:pointer;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
-.cash-range.on{background:var(--s2);color:var(--t1);}
+.cash-range.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 @media(hover:hover){.cash-range:not(.on):hover{color:var(--t1);}}
 .cash-noquote{display:flex;align-items:center;gap:10px;padding:22px 14px;margin:6px 0;border-radius:14px;background:var(--s1);
   color:var(--t3);font-size:13.5px;line-height:1.4;}
 .cash-noquote svg{width:26px;height:26px;flex:0 0 auto;stroke:var(--t4);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
-.cash-stream-tabs{display:flex;gap:26px;border-bottom:1px solid var(--b2);margin:8px 0 0;position:sticky;top:0;background:var(--bg);z-index:2;}
-.cash-stab{background:none;border:none;padding:12px 0;font:inherit;font-size:15px;font-weight:700;color:var(--t3);cursor:pointer;position:relative;}
-.cash-stab.on{color:var(--t1);}
-.cash-stab.on::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--t1);}
+.cash-stream-tabs{display:flex;gap:8px;border-bottom:1px solid var(--b2);margin:8px 0 8px;padding-bottom:8px;position:sticky;top:0;background:var(--bg);z-index:2;}
+.cash-stab{background:var(--tab-fill);border:none;border-radius:var(--r-pill);padding:7px 15px;font:inherit;font-size:15px;font-weight:700;color:var(--tab-ink);cursor:pointer;position:relative;}
+.cash-stab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 /* Inline cashtag price card (under a post that mentions a ticker) */
 .ac-cashcard{display:flex;align-items:center;gap:12px;margin-top:10px;padding:11px 13px;border:none;
   border-radius:16px;background:var(--s1);cursor:pointer;overflow:hidden;
@@ -9799,7 +9822,7 @@ body.light .cc-ic-img{filter:brightness(0);}
 /* Reply-sort chips on the post detail (Top · Newest) */
 .reply-head{display:flex;align-items:center;justify-content:space-between;}
 .reply-sort{display:inline-flex;gap:6px;}
-.reply-sort-chip{background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:12.5px;font-weight:600;padding:5px 12px;cursor:pointer;font-family:inherit;}
+.reply-sort-chip{background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:12.5px;font-weight:600;padding:5px 12px;cursor:pointer;font-family:inherit;}
 .reply-sort-chip.on{background:var(--accent-dim);color:var(--accent);}
 /* Composer character-count ring (X-style): grey progress → amber under 100 left
    (remaining count shown inside) → red under 20. Sits just before the Post pill. */
@@ -10071,15 +10094,19 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-prof-back:active{transform:scale(.92);}
 @media(hover:hover){.ac-prof-back:hover{background:var(--s3);}}
 /* X-style profile tab bar (sticky under the banner/header) */
-.ac-prof-tabs{position:sticky;top:0;z-index:6;display:flex;background:var(--bg);
+/* Pills, like every other tab row — so they scroll rather than squeeze six words
+   into the width, and the blue underline goes with them (blue is identity in this
+   app, and a selected tab is now said by its fill). */
+.ac-prof-tabs{position:sticky;top:0;z-index:6;display:flex;gap:8px;background:var(--bg);
+  padding:10px var(--feed-gutter);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  touch-action:pan-x;overscroll-behavior:contain;
   border-top:1px solid var(--b1);border-bottom:1px solid var(--b1);}
-.ac-ptab{flex:1 1 auto;position:relative;padding:15px 8px;background:none;border:none;cursor:pointer;
-  font-family:inherit;font-size:14.5px;font-weight:600;color:var(--t3);white-space:nowrap;
+.ac-prof-tabs::-webkit-scrollbar{display:none;}
+.ac-ptab{flex:0 0 auto;position:relative;padding:7px 15px;background:var(--tab-fill);border:none;cursor:pointer;
+  border-radius:var(--r-pill);font-family:inherit;font-size:14.5px;font-weight:600;color:var(--tab-ink);white-space:nowrap;
   transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);-webkit-tap-highlight-color:transparent;}
-@media(hover:hover){.ac-ptab:hover{background:var(--s1);}}
-.ac-ptab.on{color:var(--t1);font-weight:700;}
-.ac-ptab.on::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);
-  width:56px;max-width:72%;height:4px;border-radius:3px 3px 0 0;background:var(--accent);}
+@media(hover:hover){.ac-ptab:not(.on):hover{background:var(--tab-fill-hv);color:var(--t1);}}
+.ac-ptab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);font-weight:700;}
 .ac-tabpane{display:block;}
 .ac-tabpane.hidden{display:none;}
 .ac-tab-empty{text-align:center;color:var(--t3);font-size:14px;padding:46px 24px;}
@@ -10814,16 +10841,16 @@ body:not(.nav-mini) .sidebar #sbHelp2.sb-foot svg{transform:scale(.870);stroke-w
 /* Search scope row = word-only tabs, matching the home/chat top bars: roomy
    spacing, bold-white active, a left-edge fade, a grey hairline inset to the
    gutter. (No pill chips.) */
-.ac-search-scopes{display:flex;gap:34px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;position:relative;
+.ac-search-scopes{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;position:relative;
   padding:9px var(--feed-gutter);
   -webkit-mask-image:linear-gradient(to right,transparent 0,#000 14px);mask-image:linear-gradient(to right,transparent 0,#000 14px);}
 .ac-search-scopes::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
 .ac-search-scopes::-webkit-scrollbar{display:none;}
-.ac-scope-chip{flex:0 0 auto;background:none;border:none;color:var(--t2);padding:6px 0;font-family:inherit;
-  font-size:15px;font-weight:600;cursor:pointer;white-space:nowrap;transition:color var(--t-fast) var(--ease);}
-.ac-scope-chip:hover{color:var(--t1);}
-.ac-scope-chip.active{color:#fff;font-weight:700;}
-body.light .ac-scope-chip.active{color:var(--t1);}
+.ac-scope-chip{flex:0 0 auto;background:var(--tab-fill);border:none;color:var(--tab-ink);padding:7px 15px;font-family:inherit;
+  border-radius:var(--r-pill);font-size:15px;font-weight:600;cursor:pointer;white-space:nowrap;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+@media(hover:hover){.ac-scope-chip:not(.active):hover{background:var(--tab-fill-hv);color:var(--t1);}}
+.ac-scope-chip.active{background:var(--tab-fill-on);color:var(--tab-ink-on);font-weight:700;}
 .ac-scope-chip:active{transform:scale(.96);}
 /* Recent searches (empty search page) */
 /* Demo-mode floating pill (admin showcase) — non-blocking, never shifts layout */
@@ -10999,10 +11026,10 @@ body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
 .ac-job-views{display:flex;gap:7px;padding:2px 12px 6px;overflow-x:auto;scrollbar-width:none;}
 .ac-job-views::-webkit-scrollbar{display:none;}
 .ac-jv{flex:0 0 auto;display:inline-flex;align-items:center;min-height:var(--btn-h);
-  background:var(--s2);border:none;color:var(--t2);border-radius:var(--r-pill);
+  background:var(--tab-fill);border:none;color:var(--tab-ink);border-radius:var(--r-pill);
   font-family:inherit;font-size:13.5px;font-weight:600;padding:7px 15px;cursor:pointer;white-space:nowrap;
   transition:all var(--t-fast) var(--ease);}
-.ac-jv.on{background:var(--t1);border-color:var(--t1);color:var(--bg);}
+.ac-jv.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .ac-job-topr{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .ac-job-save{width:30px;height:30px;border:none;background:none;cursor:pointer;color:var(--t4);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;border-radius:50%;-webkit-tap-highlight-color:transparent;
@@ -11377,11 +11404,11 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .ny-cat{color:var(--t3);}
 /* Events */
 .ev-tabs{display:flex;gap:6px;margin:0 0 12px;}
-.ev-tab{flex:1;min-height:var(--btn-h);background:var(--s2);border:none;color:var(--t2);border-radius:var(--r-pill);font-family:inherit;font-size:13px;font-weight:700;padding:8px 6px;cursor:pointer;}
-.ev-tab.on{background:var(--accent-dim);border-color:var(--accent);color:var(--t1);}
+.ev-tab{flex:1;min-height:var(--btn-h);background:var(--tab-fill);border:none;color:var(--tab-ink);border-radius:var(--r-pill);font-family:inherit;font-size:13px;font-weight:700;padding:8px 6px;cursor:pointer;}
+.ev-tab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .ev-seg{display:flex;gap:6px;margin:0 0 10px;}
-.ev-seg-btn{flex:1;background:var(--s2);border:none;color:var(--t2);border-radius:10px;font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 6px;cursor:pointer;}
-.ev-seg-btn.on{background:var(--s3);border-color:var(--accent);color:var(--t1);}
+.ev-seg-btn{flex:1;background:var(--tab-fill);border:none;color:var(--tab-ink);border-radius:10px;font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 6px;cursor:pointer;}
+.ev-seg-btn.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .ev-lbl{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--t3);font-weight:600;}
 .ev-card{display:flex;gap:12px;padding:12px;border:none;border-radius:14px;margin-bottom:10px;cursor:pointer;background:var(--s2);}
 .ev-card:active{transform:scale(.99);}
@@ -11433,8 +11460,8 @@ body.light .ev-date .evd-m{color:var(--accent-hover);}
 .dir-vchk input{width:17px;height:17px;accent-color:var(--accent);}
 .dir-inds{display:flex;gap:7px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none;}
 .dir-inds::-webkit-scrollbar{display:none;}
-.dir-ind{flex:0 0 auto;background:var(--s2);border:none;color:var(--t2);border-radius:var(--r-pill);font-family:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;cursor:pointer;white-space:nowrap;}
-.dir-ind.on{background:var(--accent-dim);border-color:var(--accent);color:var(--t1);}
+.dir-ind{flex:0 0 auto;background:var(--tab-fill);border:none;color:var(--tab-ink);border-radius:var(--r-pill);font-family:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;cursor:pointer;white-space:nowrap;}
+.dir-ind.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .dir-meta{font-size:12px;color:var(--t3);margin-top:3px;}
 .dir-near{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:none;background:var(--s2);border-radius:var(--r-pill);color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px;}
 .dir-near svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;}
@@ -11594,8 +11621,8 @@ body.light .ev-date .evd-m{color:var(--accent-hover);}
 .lm-del svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
 /* Jobs / Workers board toggle */
 .ac-job-board{display:flex;gap:6px;padding:8px 12px 4px;}
-.ac-jbtab{flex:1;background:var(--s1);border:none;border-radius:12px;padding:9px;font-size:14px;font-weight:700;color:var(--t2);cursor:pointer;transition:all var(--t-fast) var(--ease);}
-.ac-jbtab.on{background:var(--accent-dim);border-color:var(--accent);color:var(--t1);}
+.ac-jbtab{flex:1;background:var(--tab-fill);border:none;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;color:var(--tab-ink);cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.ac-jbtab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .ac-jbtab:active{transform:scale(.98);}
 .ac-ai-thinking{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:14px;padding:14px 4px;}
 .ac-ai-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;animation:aiPulse 1s infinite ease-in-out;}
@@ -11829,8 +11856,8 @@ body.light .ac-job-early{color:var(--accent);background:var(--accent-dim);}
 .ja-tools{display:flex;align-items:center;gap:8px;margin:2px 0 12px;}
 .ja-filters{flex:1;display:flex;gap:7px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
 .ja-filters::-webkit-scrollbar{display:none;}
-.ja-fchip{flex:0 0 auto;background:var(--s2);border:none;border-radius:99px;padding:6px 13px;color:var(--t2);font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;}
-.ja-fchip.on{background:var(--accent-dim);border-color:var(--accent);color:var(--t1);}
+.ja-fchip{flex:0 0 auto;background:var(--tab-fill);border:none;border-radius:99px;padding:6px 13px;color:var(--tab-ink);font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;}
+.ja-fchip.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .ja-select-btn{flex:0 0 auto;background:var(--s2);border:none;border-radius:99px;padding:6px 14px;color:var(--t1);font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;}
 .ja-select-btn.on{background:var(--accent-dim);border-color:var(--accent);color:var(--t1);}
 .ja-check{flex-shrink:0;width:22px;height:22px;border-radius:50%;border:2px solid var(--b3);display:flex;align-items:center;justify-content:center;}
@@ -12993,7 +13020,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
   scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior:contain;}
 .circ2-chips::-webkit-scrollbar{display:none;}
 .circ2-chip{flex:0 0 auto;display:inline-flex;align-items:center;min-height:var(--btn-h);
-  font-size:13.5px;font-weight:650;color:var(--t2);background:var(--s2);border:none;
+  font-size:13.5px;font-weight:650;color:var(--tab-ink);background:var(--tab-fill);border:none;
   border-radius:var(--r-pill);padding:7px 15px;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 .circ2-chip:active{background:var(--s3);color:var(--t1);}
@@ -21952,7 +21979,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1816'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1817'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —

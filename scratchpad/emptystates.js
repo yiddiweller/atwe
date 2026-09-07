@@ -136,9 +136,22 @@ const SCREENS = [
           const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || cs.display === 'none') return false;
           return cs.backgroundColor === primary;
         });
+        /* A SELECTED TAB IS A STATE, NOT AN ACTION, and since the tab rows became pill
+           buttons the selected one is white on every screen. The rule being checked is
+           "one white ACTION per screen", so a tab is excluded — identified structurally,
+           never by class name: it is one of several same-shaped siblings in a row, at
+           least one of which is NOT the primary fill. */
+        const isTab = (el) => {
+          const par = el.parentElement; if (!par) return false;
+          const key = (el.className || '').split(/\s+/)[0]; if (!key) return false;
+          const kin = [...par.children].filter((c) => c.tagName === el.tagName
+            && (c.className || '').split(/\s+/)[0] === key);
+          return kin.length >= 2 && kin.some((c) => getComputedStyle(c).backgroundColor !== primary);
+        };
         const seen = {}, clash = [];
         for (const el of whites) {
-          const f = fnOf(el); if (!f) continue;                 // a selected TAB has no action
+          if (isTab(el)) continue;
+          const f = fnOf(el); if (!f) continue;                 // no action = nothing to clash
           if (seen[f]) clash.push(f + ': "' + seen[f] + '" and "' + el.textContent.trim().slice(0, 24) + '"');
           else seen[f] = el.textContent.trim().slice(0, 24);
         }

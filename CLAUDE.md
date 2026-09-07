@@ -138,7 +138,7 @@ networking & jobs marketplace"** below.
 | Role | Hex | Used for |
 |------|-----|----------|
 | **Black** | `#000000` | The background, always. Never a panel colour behind content. |
-| **White** | `#FFFFFF` | The ONE primary action per screen (solid white pill, dark label). `--pill`/`--on-primary`. |
+| **White** | `#FFFFFF` | The ONE primary action per screen (solid white pill, dark label) — **and the SELECTED tab in a row of choices**, which is a state, not an action. `--pill`/`--on-primary`. |
 | **Dark grey** | `#1C1C1E` fill + `rgba(255,255,255,.05)` border | Secondary buttons beside the white one. **The only bordered thing in the app.** |
 | **Blue** | `#0088FF` (`--accent`, rgb `0,136,255`) | Identity, NOT action — links, usernames, active tab, verified seal, toggles-on, the AI. |
 | **Green** | `#88FF00` (`--green`, dark text `--green-ink #132a00`) | Accept · pick up a call · live · success · money. |
@@ -317,6 +317,46 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    (the same trap `#statusScrim` had). It keeps `z-index:120` so it still sits
    UNDER every panel exactly as before; only `body.notif-tab` lifts it, so the bar
    stays reachable while the Alerts panel is open.
+9b. **A row of choices is a row of BUTTONS, never a row of words** (the founder's design team,
+    and the reason is recognition — every "pick one of these" row in the app is the same object).
+    A grey pill at rest, a **WHITE pill** for the one you are on; in Light both flip via
+    `--primary`/`--on-primary`. **White here is a STATE, not an action** — a selected tab does not
+    DO anything, it says "you are here" — which is the one carve-out from rule "white = the ONE
+    primary action", and why the one-white-action sweep ignores a selected tab. Everything routes
+    through **`--tab-fill` / `--tab-ink` / `--tab-fill-on` / `--tab-ink-on` / `--tab-fill-hv`**, so
+    the whole app restyles from one place. Those tokens are **declared on `body`, never on
+    `:root`** — a custom property whose value references another one resolves where it is
+    DECLARED, so on `:root` they would freeze at the Black theme's `--s3` and Light would never
+    flip. No underline anywhere: the fill says it, and an underline could drift a pixel while the
+    row scrolls.
+> **Where rule 9b lands, and the one it deliberately skips.** Every "pick one of these"
+> row goes through the `--tab-*` tokens: the three worlds' own row (`.tb-feedtab` — Home,
+> Beam AND Engine share the one class), `.ac-scope-chip`, `.ac-ptab`, `.ntf-tab`,
+> `.ev-tab`, `.bk-tab`, `.ac-jv`, `.wf-chip`, `.sell-sortchip`, `.fb-cat`, `.ac-jbtab`,
+> `.ja-fchip`, `.dir-ind`, `.svc-cat`, `.rx-tab`, `.rev-chip`, `.stt-chip`,
+> `.ev-seg-btn`, `.cash-stab`, `.cash-range`. **Form option pickers are NOT tabs and are
+> left alone** (a gift-card amount, a booking frequency, a screening answer) — those sit
+> on a screen that has a real primary action, and making them white would spend the one
+> white on a field.
+>
+> **Two things bite here.** (1) **"Add" at the end of the Home/Beam row must carry
+> `background:none` of its own.** It is excluded from the pill rule
+> (`:not(.tb-feedtab-add)`), and a `<button>` with no background falls back to the
+> browser's own buttonface grey — `rgb(107,107,107)` on dark, `rgb(239,239,239)` on light
+> — which is exactly how it rendered the first time. (2) **The topbar carries per-world
+> overrides at (0,3,0)-(0,4,1)**, so the pill treatment has to be applied in those rules
+> too, not only on the base class; the first pass restyled `.tb-feedtab` and Engine's row
+> still rendered as bare words with `padding:6px 0`.
+>
+> Covered by `scratchpad/tabpills.js` (64 checks, both themes): every tab a true capsule,
+> exactly one selected per row, everything else the shared grey, no underline, "Add" bare
+> — plus a synthetic pass that renders one button of EVERY family off-screen and checks
+> what the rules resolve to, which is how the awkward-to-reach rows (a wallet with no
+> history never renders its filter) stay covered. Self-tested: reverting two families
+> fails 8 checks. `emptystates.js` learned the carve-out at the same time — it now
+> identifies a tab structurally (one of several same-shaped siblings, at least one of
+> which is not the primary fill) rather than by class name.
+
 10. **Verified seal** = a neutral **silver** seal sized to the name (never blue, never a plain dot).
 11. **Anchored** flow = pure black, only answer-boxes boxed, buttons morph in place (no blink/jump),
     grey→white pills, red destructive. **Glide menu** = the frosted press-hold context sheet.
@@ -1341,7 +1381,9 @@ overlapping avatar, action buttons, name/handle/headline/bio, a meta row.
 > continues below
 (location · website · **"Joined <Month Year>"** from `user.joinedAt`), stats, and
 (own profile) the views + strength meters. Below the header is a **sticky tab
-bar** (`.ac-prof-tabs`/`.ac-ptab`, `acProfTab(name)`): **Posts · Replies · About
+bar of **pills** (`.ac-prof-tabs`/`.ac-ptab`, `acProfTab(name)` — it used to be plain
+words with a blue underline; the underline is gone, the fill says it now, design rule
+9b): **Posts · Replies · About
 · [Business] · Media · Likes**. Posts = pinned + timeline; Replies = the user's public
 replies (`d.replies`, served from `/api/social/profile`); Media = posts with
 photos/video; **Likes** = posts the user has publicly liked (X-style), lazy-loaded on
@@ -2140,10 +2182,10 @@ functions, organized by banner comments.
 
 ### Surfaces
 
-> **Chat-list top bar (X-style, mirrors the home feed).** `#tbChatTabs` is a
-> **word-only** tab row — **All · Chats · Calls · Contacts** (`AC_CHATS_TABS`,
+> **Chat-list top bar (mirrors the home feed).** `#tbChatTabs` is a
+> **pill** tab row — **All · Chats · Calls · Contacts** (`AC_CHATS_TABS`,
 > `acChatsTab`) — styled exactly like the home feed tabs on mobile: roomy `gap:34px`,
-> active = bold white, a soft **left-edge fade** under the ≡, a solid bar with a
+> the selected pill white, a soft **left-edge fade** under the ≡, a solid bar with a
 > **grey hairline** inset to `--feed-gutter`, and the same tab-tap **page-slide**
 > (direction computed from the previous tab in `acChatsTab` — tapping a tab is the
 > ONLY way to switch now; a whole-pane swipe-to-switch-tabs gesture used to live here
@@ -2904,8 +2946,9 @@ only, not the owner's.
   tabs (`#tbFeedTabs`) are **exactly four** — **For You · Following · Circles ·
   Collections** (`AC_FEED_TABS`; "Collections" is the bookmarks scope relabelled —
   order per the design blueprint, Circles before Collections) — a
-  horizontally-scrollable row with **no underline**, all tabs the **same size**
-  (active = bold white, inactive = muted gray — the active tab never resizes). On **mobile** home the row leads with the **≡ menu**
+  horizontally-scrollable row of **pills** with **no underline**, all tabs the **same size**
+  (selected = the white pill, the rest the shared grey — the selected tab never resizes;
+  see design rule 9b). On **mobile** home the row leads with the **≡ menu**
   (the home avatar is gone; `syncTopbar`/`acShow` show `#sbToggle` on home, the avatar
   only on Search) and the extra top-bar buttons are hidden so the row is just ≡ + the
   4 tabs, with a soft **left-edge fade mask** (tabs dissolve under the ≡ as the row
@@ -5376,10 +5419,10 @@ already produce — no separate ML model:
 - **Search / Explore page (X-style, mirrors the home + chat top bars).** Leads with
   the **≡ menu** (no top-bar avatar anywhere now — `acShow`/`syncTopbar` keep the
   hamburger on Home *and* Search). The scope row (`#acSearchScopes`,
-  `acRenderSearchScopes`/`acSetSearchScope`) is **word-only tabs** — All · People ·
+  `acRenderSearchScopes`/`acSetSearchScope`) is **pill tabs** — All · People ·
   Services · Shop · Jobs · Businesses · Industries · Posts · Feeds · Chats · Groups —
-  styled like the feed tabs (roomy `gap:34px`, bold-white active, left-edge fade, a
-  grey hairline inset to `--feed-gutter`, scrollable); no pill chips. The empty state
+  styled like the feed tabs (`gap:8px`, the selected one a white pill, left-edge fade, a
+  grey hairline inset to `--feed-gutter`, scrollable). The empty state
   (`acSearchDiscover` → `.ac-explore`, inside `#acSearchPageResults`) is a clean
   **Explore**: a beautiful gradient **"Ask Atwe AI"** hero (`.xp-ai`, `acOpenAiMatch`),
   then a single **DISCOVER** row of **shortcut tiles** (`.xp-tile` — borderless
