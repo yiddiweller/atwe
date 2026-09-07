@@ -8,9 +8,12 @@
  *  1. the bar paints NO fill of its own on Home / Beam / Engine / Notifications, and
  *     carries a .tb-glass layer that really is a progressive blur (four stacked passes,
  *     each with a real backdrop-filter, radii increasing toward the top);
- *  2. the tint is NEVER opaque — an opaque plateau reads as a slab switching on at a
- *     fixed distance down the screen, which is the mistake three passes on the chat
- *     edge made before it was written down;
+ *  2. the tint is NEVER opaque and never flat — an opaque plateau reads as a slab
+ *     switching on at a fixed distance down the screen, the mistake three passes on the
+ *     chat edge made before it was written down;
+ *  2b. THE EFFECT STOPS EXACTLY WHERE THE BAR STOPS. The founder caught a fixed-height
+ *     band still dissolving content ~80px after the bar had collapsed away, so posts
+ *     went dark and blurry before they had reached the menu at all;
  *  3. content genuinely shows THROUGH it: with the glass removed the same scrolled
  *     screen looks materially different in the bar's own band;
  *  4. the glass stays PINNED to the top of the screen while the bar slides up as the
@@ -76,8 +79,11 @@ const WORLDS = [
         const alphas = (gs.backgroundImage.match(/rgba\([^)]*\)/g) || []).map((c) => {
           const n = c.match(/[\d.]+/g); return n && n.length === 4 ? parseFloat(n[3]) : 1;
         });
+        const rb = bar.getBoundingClientRect(), rg = g.getBoundingClientRect();
         return { barBg: getComputedStyle(bar).backgroundColor, layers,
           maxAlpha: alphas.length ? Math.max(...alphas) : 1, nAlphas: alphas.length,
+          monotonic: alphas.every((a, i) => i === 0 || a <= alphas[i - 1] + 1e-9),
+          overhang: +(rg.bottom - rb.bottom).toFixed(1),
           display: gs.display };
       }, w.bar);
       const T = `${theme} ${w.name}:`;
@@ -89,8 +95,12 @@ const WORLDS = [
         `${T} four real blur passes (${r.layers.join('/')})`);
       chk(r.layers[0] < r.layers[r.layers.length - 1],
         `${T} the blur RAMPS — strongest at the top, not one flat frost (${r.layers.join('/')})`);
-      chk(r.maxAlpha <= 0.92 && r.nAlphas >= 8,
-        `${T} the tint is never opaque and has no flat step (max ${r.maxAlpha}, ${r.nAlphas} stops)`);
+      chk(r.maxAlpha <= 0.95 && r.nAlphas >= 8 && r.monotonic,
+        `${T} the tint is never opaque, never flat, always falling (max ${r.maxAlpha}, ${r.nAlphas} stops)`);
+      /* The effect must not reach PAST the bar. 1px of slack for sub-pixel rounding —
+         anything more and content is being dissolved before it gets to the menu. */
+      chk(r.overhang <= 1,
+        `${T} the glass stops where the bar stops, never below it (${r.overhang}px past)`);
       await p.evaluate(() => { document.querySelectorAll('.overlay:not(.hidden)').forEach((o) => closeOverlay(o.id, true)); });
       await p.waitForTimeout(400);
     }
@@ -130,12 +140,14 @@ const WORLDS = [
        collapses; the glass must stay at 0 and keep its height. */
     const pin = await p.evaluate(() => {
       const tb = document.querySelector('.topbar'), g = tb.querySelector('.tb-glass');
-      return { barTop: tb.getBoundingClientRect().top, glassTop: g.getBoundingClientRect().top,
+      return { barTop: tb.getBoundingClientRect().top, barH: tb.getBoundingClientRect().height,
+        glassTop: g.getBoundingClientRect().top,
         glassH: g.getBoundingClientRect().height, hide: tb.style.getPropertyValue('--tb-hide') };
     });
     chk(pin.barTop < -8, `the bar really does slide up as the brand row collapses (${pin.barTop.toFixed(0)})`);
     chk(Math.abs(pin.glassTop) < 1.5, `the glass stays pinned to the top of the screen (${pin.glassTop.toFixed(1)})`);
-    chk(pin.glassH > 100, `and keeps its full height rather than shrinking with the bar (${pin.glassH.toFixed(0)})`);
+    chk(Math.abs(pin.glassH - (pin.barTop + pin.barH)) < 1.5,
+      `and is exactly the bar's VISIBLE height — not its full one (${pin.glassH.toFixed(0)} for ${(pin.barTop + pin.barH).toFixed(0)} visible)`);
 
     /* THE BAND MUST BE THE BAR'S OWN BOX, not the whole top of the screen. The glass
        runs on BELOW the bar as a tail, and that tail dissolves content whether or not
