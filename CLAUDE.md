@@ -317,6 +317,62 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    (the same trap `#statusScrim` had). It keeps `z-index:120` so it still sits
    UNDER every panel exactly as before; only `body.notif-tab` lifts it, so the bar
    stays reachable while the Alerts panel is open.
+9c. **The world bars are GLASS, not a black wall** (founder). Content passes UNDER the
+    Home / Beam / Engine / Notifications bar and dissolves as it rises — blurriest and most
+    tinted at the very top, clearest at the bar's bottom edge, with a tail below so it never
+    ends on a line. Same material as a conversation's own top edge, and the same two laws:
+    **it is never opaque** (an opaque plateau reads as a slab switching on at a fixed
+    distance down the screen — the mistake three passes on the chat edge made), and **the
+    blur is progressive**, four stacked passes each masked to its own band so the radius
+    ramps 2→24px rather than one flat frost with a hard bottom edge.
+
+> **Where it lives.** `.tb-glass` is one child (`<i>×4`) inside `.topbar` and `#notifHead`;
+> the bars themselves paint no fill. `--tb-tail` (26px) is how far it runs on below the bar.
+>
+> **IT IS COUNTER-TRANSLATED BY `--tb-hide`, and that is load-bearing.** `brand-collapse`
+> slides the whole `.topbar` up as the brand row collapses (it writes `translateY` on the
+> bar); the glass has to stay pinned to the top of the SCREEN at a constant height, or the
+> band shrinks with the bar and the dissolve turns back into a hard edge exactly when it is
+> most needed. The same line that writes the transform writes `--tb-hide`, so the two cannot
+> drift.
+>
+> **The old comment on `.topbar` said "SOLID, never frosted" and it was a WRONG DIAGNOSIS.**
+> It blamed a `backdrop-filter` for the desktop smear — photos painting straight through the
+> bar on a real mouse-wheel scroll. The actual cause was the **media shield**: a switched-off
+> cursor-glow effect whose JS still cloned every image near the pointer into a
+> `position:fixed` copy on `<body>`, which the feed's scroller could not clip. That code is
+> deleted, and the smear was re-tested here with a real wheel scroll — the bar differs by at
+> most **16/255**, in its bottom three rows only (the tint's own edge).
+>
+> **Measured, not assumed.** At a 6× CPU throttle, flinging the feed with the glass on and
+> off gives p50 **16.7ms both** and the same count of frames over 32ms. Same caveat as the
+> chat glass: a CPU throttle does not throttle the GPU, and `backdrop-filter` is GPU-bound,
+> so this bounds the CPU cost, not an iPhone's rasterisation.
+>
+> **Three surfaces are deliberately excluded.** `.topbar.tb-plain` (an inside page's bare
+> bar — nothing scrolls under it, so a tint there is just an unexplained shadow);
+> `#tbRevealBar` (the floating copy that slides in on scroll-up in a mobile BROWSER — it has
+> to stay opaque or you see two menus stacked); and `body.feed-cover:not(.pgscroll)`, where
+> the bar sits BEHIND the feed at z:4 and the rising opaque content covers it, which is the
+> whole mechanism. **That `:not(.pgscroll)` is not decoration** — Home in a browser carries
+> both classes, and `pgscroll` makes the bar fixed and ABOVE the content, so without it the
+> bar came out fixed, transparent AND unfrosted, with content scrolling under it raw.
+>
+> **Notifications needed a structural change to join in.** Its header stopped retracting in
+> build 1766 (the fix for a scroll the founder called choppy), which left it a permanent
+> slab in flow with nothing able to pass beneath it. `#notifHead.tb-brandrow` is now
+> `position:absolute` over the list, `#notifList` is padded by `--notif-head-h` (measured on
+> every open, because the safe-area inset changes it), and `.notif-detail` was lifted to
+> `z-index:7` so the floating lockup cannot paint over the detail page. NB the override must
+> carry the class — `.tb-brandrow` sets this header's own position and background at
+> (0,1,1,0) and a bare `#notifHead` loses to it.
+>
+> Covered by `scratchpad/topglass.js` (44 checks, both themes). Its see-through test had to
+> be restricted to the bar's OWN box: the tail dissolves content whether or not the bar
+> itself is transparent, so a band that included it nearly passed with the black wall put
+> back (5287px against a 5990 bar). Restricted, the same revert gives 3817 against an
+> 18330 bar. Self-tested: restoring the wall or dropping the counter-translate fails 2.
+
 9b. **A row of choices is a row of BUTTONS, never a row of words** (the founder's design team,
     and the reason is recognition — every "pick one of these" row in the app is the same object).
     A grey pill at rest, a **WHITE pill** for the one you are on; in Light both flip via
