@@ -5877,6 +5877,83 @@ three counting sub-queries each). The only further step is denormalised
 like/repost/reply counters on `posts`, maintained on every write — a real change
 with a real cost, and not worth it at this size.
 
+### Opening the app: the network used to wait for the parse
+
+Two separate costs, both measured, both removed. Measured at a **4x CPU throttle with a
+150ms round trip** (a mid-range phone on mobile data), medians over several loads:
+
+| | before | after |
+|---|---|---|
+| the app's first request to the server | 2011ms | **434ms** |
+| a post on screen | 2816ms | **2471ms** |
+| server CPU per page load | 112ms | **2.7ms** |
+| bytes down the wire | 1268KB | **1053KB** |
+
+**1. The network sat idle for two seconds.** The shell is ONE ~4.7MB file, so a phone
+spends most of a second downloading, decompressing and parsing it before a line of the app
+runs — and the app cannot ask the server for anything until then. Traced: the server
+answered at 135ms and the first API call went out at **2020ms**, with the feed only
+requested at **2413ms**. **The boot preflight** — a tiny script at the very TOP of
+`index.html`, before the giant one — fires the three requests every boot certainly makes
+(`/api/config`, `/api/auth/me`, and `/api/social/feed?scope=foryou` when Home is where this
+person will land) the instant the first bytes of HTML arrive. `API.req` then takes the
+waiting answer instead of asking again.
+
+Four properties make it safe, and all four are load-bearing: each entry is **consumed at
+most once** (`API.req` deletes it), so a later call of the same path is a genuine fresh
+request and never a stale replay; a failure resolves to **null** and falls through to a
+normal `fetch`; the **headers are identical** to `API.req`'s, so the server cannot tell
+the difference (`X-Atwe-TZ` is how coarse location is derived); and the whole thing is
+wrapped, so it can never stop the app booting. **A new entry must match the URL CHARACTER
+FOR CHARACTER** or the cache simply misses — nothing is gained and nothing breaks.
+
+**It also changed which `<script>` comes first in the file.** Anything extracting the app's
+code with a greedy `/<script>([\s\S]*)<\/script>\s*<\/body>/` now captures the preflight
+plus all the markup between. Search from after `</head>`. (A plain
+`lastIndexOf('<script>')` is wrong for a different reason: the JS itself contains
+`"<script>"` strings — the packing-slip print window.)
+
+**2. The server re-compressed 4.7MB on every single page load.** The `compression`
+middleware brotli-compresses the shell per request: with curl the server held the response
+for **112ms before sending a byte**, and paid that CPU again for every visitor. The shell
+only changes on deploy, so it is now compressed **once**, in the background, and served
+from memory (`_shellBr` + `sendShell` in `server.js`). Quality **9** rather than the
+middleware's fast default: 0.6s once at boot buys 1029KB instead of 1179KB, so everyone
+downloads 150KB less. (Quality 11 is 941KB but takes **eight seconds** — measured — and is
+not worth holding a threadpool thread for.) It runs asynchronously so it never blocks the
+event loop, and until it lands every request falls through to the normal path.
+
+`sendShell` is used by BOTH `/` and the deep-link catch-all so the two cannot drift, and it
+only answers when the buffer exists AND the client asked for brotli — everything else is
+`res.sendFile` exactly as before. Verified by hand: brotli, gzip and identity clients all
+decode to real HTML; the ETag still returns a 304; link-preview crawlers still get their
+custom OG tags (that path builds modified HTML and must never use the cache); the admin
+subdomain is untouched; a missing asset still 404s.
+
+**What is left is the parse itself**, and it is the ceiling: ~2.2s of the remaining time is
+the browser reading 4.7MB (1.10MB of CSS, 2.95MB of JS, 0.63MB of markup — only 80KB is
+base64 data URIs, so there is no easy fat to trim). Cutting it further means splitting the
+file, which this project deliberately does not do. **Do not "optimise" that without being
+asked.**
+
+**Two settling faults are KNOWN and pre-existing — `settle.js` is red on both, and was
+before any of this.** Verified by running it three times on each build: Engine grows
+**863 -> 919px** after first paint (one late block), and Home's third visible post shrinks
+**608 -> 410px** as a real post replaces its skeleton. That second one is the variance
+`settle.js`'s own comment already describes (a real post is 269-653px depending on the
+shape of its photo, so no single skeleton height can match whichever arrives first) and it
+shifts UP, which is the less disruptive direction. **Do not read a single settle run as
+evidence**: one baseline run showed only ONE failure and briefly looked like this pass had
+caused the other.
+
+`scratchpad/bootspeed.js` guards it. Two things it had to learn: it A/Bs by **stripping the
+preflight out of the served HTML** rather than by stashing the file, because stashing also
+changes the server's cached shell and the OS page cache and gave numbers that moved 800ms
+between identical runs; and it seeds the token on a **throwaway page**, because seeding on
+the page it was about to measure left that page's first boot in flight when the clock
+started — the control appeared to reach the server at **14ms**, which is impossible with no
+preflight. It reports medians; a single boot measurement here is worthless.
+
 ## Telling people a new build is out
 
 Nothing used to. A tab left open for days kept running old code, the service worker
