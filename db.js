@@ -19,8 +19,41 @@ function resolveSsl() {
   return local ? false : { rejectUnauthorized: false };
 }
 
+/* HOW MANY CONVERSATIONS WE CAN HAVE WITH THE DATABASE AT ONCE.
+   `pg` defaults to 10, which was never chosen — it was simply never set.
+
+   BE HONEST ABOUT WHAT THIS BOUGHT: it was raised on the theory that ten was the
+   first ceiling under load, and THAT THEORY DID NOT SURVIVE MEASUREMENT. A/B'd on
+   a local database, 60 concurrent feed loads gave 23/sec at either setting, and
+   300 concurrent notification counts gave 644 vs 645/sec. No difference anywhere.
+
+   It is kept for two reasons that do stand up. First, the local test understates
+   it: here the database is a unix socket away, so a connection is handed back
+   almost instantly; in production it is a separate service across a network, so
+   each query holds its connection several times longer and ten of them bind
+   sooner. Second, connectionTimeoutMillis is a real robustness gain regardless —
+   a full pool now surfaces as a clear error instead of a request that hangs.
+
+   The ACTUAL throughput ceiling is the For You ranking query (~20/sec, against
+   500-900/sec for everything else). Look there, not here.
+
+   30 is a deliberate middle. Managed Postgres commonly allows ~100 connections in
+   total, shared across every instance of this app plus any admin tool connected at
+   the time — so this must stay well under it, and must come DOWN (or move behind a
+   pooler like PgBouncer) if the app is ever run as several instances.
+   DB_POOL_MAX overrides it without a deploy. */
+const POOL_MAX = Math.max(2, Math.min(100, Number(process.env.DB_POOL_MAX) || 30));
+
 const pool = connectionString
-  ? new Pool({ connectionString, ssl: resolveSsl() })
+  ? new Pool({
+      connectionString,
+      ssl: resolveSsl(),
+      max: POOL_MAX,
+      // Hand a connection back rather than hanging forever if the pool is full,
+      // so a stampede surfaces as a clear error instead of a stuck request.
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 30000,
+    })
   : null;
 
 // An idle pooled connection dying — the database restarting, a failover, a

@@ -21923,7 +21923,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1814'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1815'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -30644,10 +30644,51 @@ function acSkelStories() {
    landed. It will never match every feed (a text-only run shrinks, a tall-photo run
    grows) — the aim is only that nothing ON SCREEN moves, which scratchpad/settle.js
    measures directly rather than trusting the total height. */
+/* WHAT THE LAST FEED ACTUALLY LOOKED LIKE.
+   The skeleton is drawn before the feed arrives, so it cannot know what is coming —
+   and a post is 269-653px depending on the shape of its photo, or whether it has one
+   at all. Guessing one shape for every slot is what made the third post jump 608->410
+   as the real thing replaced it.
+
+   So the skeleton remembers. After each feed render we note, per slot, how tall that
+   post's picture was (0 = it had none), and the next skeleton reserves exactly that.
+   Same trick as _xpHeights on Engine, and the same rules: it is keyed to the account
+   AND the viewport width (a picture's height depends on how wide the screen is), and
+   ANY mismatch falls straight back to the old fixed shape. It can only ever improve a
+   repeat visit; a first one is unchanged. */
+const _FEED_SKEL_KEY = 'atwe_feed_skel';
+function _feedSkelWho() { return String((S.user && S.user.id) || 'guest'); }
+function _feedSkelRead() {
+  try {
+    const v = JSON.parse(localStorage.getItem(_FEED_SKEL_KEY) || '{}');
+    if (v.who !== _feedSkelWho() || v.w !== window.innerWidth) return null;
+    return Array.isArray(v.slots) ? v.slots : null;
+  } catch (e) { return null; }
+}
+function _feedSkelRemember(el) {
+  try {
+    if (!el) return;
+    const slots = [];
+    el.querySelectorAll('.ac-post').forEach((card) => {
+      if (slots.length >= 6 || card.classList.contains('skel-post')) return;
+      const m = card.querySelector('.ac-post-img, .ac-imggrid, .ac-vid-wrap');
+      const h = m ? Math.round(m.getBoundingClientRect().height) : 0;
+      // A card still loading its picture measures ~0; that is not "no picture", so
+      // skip the whole snapshot rather than remember a wrong shape.
+      if (m && h < 8) return;
+      slots.push(h > 700 ? 700 : h);
+    });
+    if (!slots.length) return;
+    localStorage.setItem(_FEED_SKEL_KEY,
+      JSON.stringify({ who: _feedSkelWho(), w: window.innerWidth, slots }));
+  } catch (e) { /* storage blocked — the skeleton just stays generic */ }
+}
 function acSkelFeed(n) {
   let s = '';
+  const remembered = _feedSkelRead();
   for (let i = 0; i < (n || 5); i++) {
-    const media = i % 5 !== 4;               // most real posts carry a picture
+    const known = remembered && typeof remembered[i] === 'number' ? remembered[i] : null;
+    const media = known === null ? (i % 5 !== 4) : known > 0;   // most real posts carry a picture
     const last = i % 2 ? '64%' : '46%';
     s += `<div class="ac-post skel-post">
       <div class="ac-post-top">
@@ -30660,7 +30701,7 @@ function acSkelFeed(n) {
       <div class="ac-post-body">
         <div class="skel skel-line" style="width:92%;margin-top:4px"></div>
         <div class="skel skel-line" style="width:${last};margin-top:8px"></div>
-        ${media ? '<div class="skel skel-media"></div>' : ''}
+        ${media ? `<div class="skel skel-media"${known ? ` style="height:${known}px"` : ''}></div>` : ''}
         <div class="skel-acts"><span class="skel skel-pill"></span><span class="skel skel-pill"></span><span class="skel skel-pill"></span><span class="skel skel-pill"></span><span class="skel skel-pill"></span></div>
       </div>
     </div>`;
@@ -34062,7 +34103,19 @@ function acXpPaintCached(id) {
 /* A block's last height, kept apart from its html so it still applies when the content
    itself changed. Typicals are only for a device that has never opened Engine. */
 const _XP_H_KEY = 'atwe_xp_heights';
-const _XP_TYPICAL = { acTrending: 250, acPymkSection: 300, acDiscoverShorts: 210 };
+/* Only ever used on a device that has NEVER opened Engine — after that each block's
+   own measured height is remembered. So these are the FIRST-VISIT heights, and the
+   first visit is the one case we can reason about exactly.
+
+   acTrending measured 306 on five different accounts: the list of trending tags is
+   global, so everyone sees the same block, and the one part that varies ("Hashtags
+   you follow") is empty for somebody who has never been here. It was 250, and those
+   missing 56px were the whole of the "Engine grows under the reader" fault.
+
+   WHEN IN DOUBT ROUND UP, NEVER DOWN. Under-reserving pushes the page down under
+   somebody who is already reading it; over-reserving just closes a small gap. Do not
+   "correct" these to a tighter number without measuring, which is how this drifted. */
+const _XP_TYPICAL = { acTrending: 306, acPymkSection: 300, acDiscoverShorts: 210 };
 function _xpHeights() { try { const h = JSON.parse(localStorage.getItem(_XP_H_KEY) || '{}'); return h.who === _xpWho() ? h : {}; } catch { return {}; } }
 function _xpRememberHeight(id, px) {
   if (!(px > 0)) return;
@@ -39279,6 +39332,11 @@ async function acLoadFeed() {
       const annHtml = (scope === 'foryou' || scope === 'following') ? acAnnBarHtml() : '';
       el.innerHTML = annHtml + railHtml + bar + list.join('');
       if (annHtml) _annFireImpression();
+      /* Note the shape of what actually landed, so the NEXT skeleton reserves the
+         right room instead of a guess. A frame later, once the browser has laid the
+         cards out — reading it in this tick measures nothing. */
+      if (scope === 'foryou' || scope === 'following')
+        requestAnimationFrame(() => { try { _feedSkelRemember(el); } catch (e) {} });
       if (scope === 'foryou' || scope === 'following') {
         acLoadStoryTray(); acFeedSetupSentinel(); // stories + arm infinite scroll (cheap)
         // Defer the iterate-every-card observer setup (dwell / video-park / ad
