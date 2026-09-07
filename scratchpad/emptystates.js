@@ -26,6 +26,40 @@ const SCREENS = [
   ['Splits',              'acOpenSplits()',         false],
   ['Pools',               'acOpenPools()',          false],
   ['Scheduled payments',  'acOpenSchedPays()',      false],
+  /* Second pass: the rest of the app. A screen only asks for a way out when there is
+     somewhere honest to send someone — "nobody blocked" has nowhere to go. */
+  ['Notifications',       'openNotifications()',    false],
+  ['Starred messages',    'acOpenStarred()',        false],
+  ['Drafts',              'acOpenDrafts()',         false],
+  ['Scheduled posts',     'acOpenScheduledPosts()', false],
+  ['Lists',               'acOpenLists()',          false],
+  ['Courses',             'acOpenCourses("teaching")', false],
+  ['Communities',         'acOpenCommunities(); acCommTab("mine")',  true],
+  ['Events',              'acOpenEvents(); acEventsTab("mine")',     false],
+  ['Newsletters',         'acOpenNewsletters(); acNlTab("mine")',    false],
+  ['Showcase',            'acOpenShowcaseDiscover()', false],
+  ['Business directory',  'acOpenDirectory()',      false],
+  ['Saved searches',      'acOpenSavedSearches()',  false],
+  ['Saved candidates',    'acOpenSavedCandidates()', true],
+  ['Blocked',             'openBlockedAccounts()',  false],
+  ['Muted accounts',      'acOpenMutedAccounts()',  false],
+  ['Muted words',         'acOpenMutedWords()',     false],
+  ['Hidden last seen',    'acOpenLastSeenHidden()', false],
+  /* Third pass: the selling and money screens a business account lands on. */
+  ['Offers',              'acOpenOffers()',         true],
+  ['Bookings',            'acOpenBookings()',       true],
+  ['Affiliate links',     'acOpenAffiliate()',      true],
+  ['Sell / listings',     'acOpenSell()',           false],
+  ['Gift cards',          'acOpenGiftCards()',      false],
+  ['Addresses',           'acOpenAddresses()',      false],
+  ['Sponsored ads',       'acOpenProductAds()',     true],
+  ['Ads manager',         'acOpenAds()',            false],
+  ['Coupons',             'acOpenCoupons()',        false],
+  ['Customers',           'acOpenCustomers()',      false],
+  ['Bundles',             'acOpenBundles()',        false],
+  ['Subscriptions',       'acOpenSubs()',           true],
+  ['Appointments',        'acOpenAppointments()',   false],
+  ['Profile viewers',     'acOpenProfileViewers()', false],
 ];
 
 (async () => {
@@ -50,7 +84,11 @@ const SCREENS = [
           /* Not empty is fine — this account may genuinely have rows. Say which, so a
              failure is never mistaken for "the empty state is missing". */
           const any = document.querySelector('.overlay:not(.hidden)');
-          return { none: true, hasRows: !!(any && any.querySelectorAll('.ac-item,.ac-job-card,.ord-card,.inv-row').length) };
+          /* Every surface names its rows differently (a card grid has no .ac-item at
+             all), so fall back to asking whether there is any real content at all. */
+          const rows = any ? any.querySelectorAll('.ac-item,.ac-job-card,.ord-card,.inv-row,.ev-card,.crs-card,.sc-card,.ac-post,.comm-card').length : 0;
+          const text = any ? (any.innerText || '').trim().length : 0;
+          return { none: true, hasRows: rows > 0 || text > 140 };
         }
         const cta = e.querySelector('.ac-feed-empty-cta');
         const ic = e.querySelector('.ac-feed-empty-ic svg');
@@ -72,8 +110,43 @@ const SCREENS = [
         const missing = await p.evaluate((names) => names.filter(n => typeof window[n] !== 'function'), fn);
         ok(missing.length === 0, theme + ': ' + name + '’s button goes somewhere real', 'missing: ' + missing.join(','));
       }
-      await p.evaluate(() => { document.querySelectorAll('.overlay:not(.hidden)').forEach(o => closeOverlay(o.id)); });
-      await p.waitForTimeout(400);
+      /* closeOverlay walks history BACK for a route-owning panel, so closing twenty of
+         them in a row leaves the router somewhere unpredictable. Pass noHistory. */
+      /* THE RULE THIS PASS ADDED, and the one it is easiest to break again: a screen may
+         not show TWO white pills that do the same job. The empty state explains and offers
+         a way forward; if the header already carries that exact action in white, the empty
+         state states the case and does not repeat the button. (A CTA that goes somewhere
+         DIFFERENT — "Browse the marketplace" beside "＋ New listing" — is not a duplicate.)
+         Nine screens broke this when the empty states were written, one of them before. */
+      const dup = await p.evaluate(() => {
+        const ov = [...document.querySelectorAll('.overlay:not(.hidden)')].pop();
+        if (!ov) return null;
+        const fnOf = (el) => (el.getAttribute('onclick') || '')
+          .replace(/closeOverlay\([^)]*\);?/g, '').replace(/\s+/g, '');
+        /* "Primary" is the theme's own --primary token, NOT the colour white: on Light it
+           is near-black, and hardcoding white matched Light's pale unselected TABS instead
+           (two of them, reported as a duplicate on correct code). */
+        const probe = document.createElement('span');
+        probe.style.cssText = 'position:fixed;left:-9999px;background:var(--primary)';
+        document.body.appendChild(probe);
+        const primary = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        const whites = [...ov.querySelectorAll('button,a')].filter((el) => {
+          const r = el.getBoundingClientRect(); if (r.width < 40 || r.height < 20) return false;
+          const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || cs.display === 'none') return false;
+          return cs.backgroundColor === primary;
+        });
+        const seen = {}, clash = [];
+        for (const el of whites) {
+          const f = fnOf(el); if (!f) continue;                 // a selected TAB has no action
+          if (seen[f]) clash.push(f + ': "' + seen[f] + '" and "' + el.textContent.trim().slice(0, 24) + '"');
+          else seen[f] = el.textContent.trim().slice(0, 24);
+        }
+        return clash;
+      });
+      if (dup) ok(dup.length === 0, theme + ': ' + name + ' has only one white button per action', dup.join(' / '));
+      await p.evaluate(() => { document.querySelectorAll('.overlay:not(.hidden)').forEach(o => closeOverlay(o.id, true)); });
+      await p.waitForTimeout(500);
     }
 
     /* The marketplace filters: the app's own controls, not the browser's. */

@@ -158,14 +158,30 @@ const ok=(c,m,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+m+(d?'
      JSON.stringify(aa));
   await p.evaluate(()=>{closeAddAccount&&closeAddAccount();closeProfileMenu();});
 
-  // ── desktop keeps the row ────────────────────────────────────────────────
+  // ── desktop can still get out ────────────────────────────────────────────
+  /* This used to assert the SIDEBAR's own account row (#sbProfile) is visible on a
+     computer, on the reasoning that it was the only route to Log out / Add account
+     there. That stopped being true: the row is hidden in the markup, and both live on
+     the ACCOUNT page now — Log out at the bottom of it, Add account in the hero's
+     switcher panel — reachable from the sidebar footer's own Account row. So the
+     invariant worth guarding is the OUTCOME (a desktop user can sign out and can add
+     an account), not which element happens to carry it. Asserting the element failed
+     on correct, shipped code. */
   console.log('\n── desktop ──');
   const d=await b.newPage({viewport:{width:1280,height:900}});
   d.on('pageerror',e=>errs.push(String(e)));
   await boot(d);
-  const dr=await d.evaluate(()=>{const r=document.getElementById('sbProfile');
-    return !!r&&getComputedStyle(r).display!=='none';});
-  ok(dr,'the sidebar keeps its account row on a computer — it is the only Log out there');
+  await d.evaluate(()=>appTab('profile'));
+  await d.waitForTimeout(2200);
+  const dr=await d.evaluate(()=>{
+    const v=(el)=>{const r=el.getBoundingClientRect();const cs=getComputedStyle(el);
+      return r.width>0&&r.height>0&&cs.visibility!=='hidden';};
+    const txt=(re)=>[...document.querySelectorAll('button,a,div')]
+      .filter(e=>v(e)&&re.test((e.textContent||'').trim())).length;
+    return {logout:txt(/^log ?out$/i), sw:!!document.getElementById('meHeroSwitch')};
+  });
+  ok(dr.logout>0,'a desktop user can still sign out (Account page)','no visible Log out');
+  ok(dr.sw,'and can still reach the account switcher to add one');
   await d.close();
 
   ok(errs.length===0,'no JS errors',errs.slice(0,2).join(' | ')||'0');
