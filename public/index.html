@@ -699,8 +699,20 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
    on purpose — that is the start screen (Continue with Email / Google / Apple), the one
    page the founder asked to leave exactly as it was. Two separate classes, so widening
    the steps cannot reach it. */
+/* THE FOOTER BUTTON SITS WHERE THE NAV BAR SITS, and this expression is copied from it
+   rather than chosen. It read 28px + the safe-area inset, and the overlay added its own
+   20px on top, so on the founder's iPhone Continue floated 82pt above the bottom while
+   sitting 14pt from each side — they photographed exactly that. The floating nav pill's
+   own rule is `max(--nav-inset, safe-area - 16px)`, which lands on 23pt there, so the
+   button now stops level with every other floating thing in the app.
+   IT IS NOT THE 14pt OF THE SIDES, and that is deliberate: the home indicator occupies
+   roughly the bottom 21pt, and a 56pt button ending 14pt up would have its lower third
+   fighting the system's swipe-up gesture. 23 is the smallest inset that clears it —
+   which is why the nav bar uses it too. The keyboard arm of the max() is unchanged: with
+   --kb set the field must clear the keyboard, and that always wins. */
 .auth-step{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
-  padding:calc(env(safe-area-inset-top) + 8px) var(--feed-gutter) max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
+  padding:calc(env(safe-area-inset-top) + 8px) var(--feed-gutter)
+          max(var(--nav-inset), calc(env(safe-area-inset-bottom, 0px) - 16px), calc(var(--kb, 0px) + 16px));
   transition:padding-bottom var(--t-base) var(--ease);}
 .auth-step.hidden{display:none;}
 /* Out of the flow entirely — not a flex item, no box, nothing to shift. Kept RENDERED
@@ -4846,13 +4858,35 @@ body.nav-mini .sb-divider{width:38px;margin-inline-start:auto;margin-inline-end:
    Black theme's --s3 and Light would never flip. body.light sets --s3 on body
    itself, so declaring here makes both themes resolve correctly. */
 body{
-  /* How far the bar's glass reaches BELOW its own bottom edge. ZERO, deliberately: the
-     founder saw content going dark and blurry before it had even reached the bar, and a
-     tail is exactly that. Nothing is lost by removing it — the tint already eases to
-     fully transparent at the band's bottom, so there was never an edge for a tail to
-     hide. Declared here beside the tab tokens for the same reason. */
+  /* How far the bar's glass reaches BELOW its own bottom edge. Small and deliberate:
+     the fade cannot die out inside the bar's own 45px without showing an edge (see the
+     .tb-glass note), and it carries only the faint end of the curve — .22 at the bar's
+     edge, 1% twenty pixels below. Declared here beside the tab tokens for the same
+     reason: one place for the bar's numbers. */
   --tb-tail: 26px;
-  --tab-fill:    var(--s3);      /* at rest — the app's own secondary-button grey */
+  /* AT REST, A TAB IS THE LOGIN SCREEN'S OWN GREY BUTTON. The founder sent their sign-in
+     page as the reference — "I really love that grey buttons... the outline is thinner
+     or more 3-D" — so this is measured off `.auth-btn` rather than invented: a .06 white
+     wash and a HALF-pixel #3A3A3C hairline, which render 15 and 58 over black. The old
+     pill was a solid --s3 (28) behind a 1px .16 rim (41): a lighter box behind a fainter
+     line. Darkening the fill and brightening the rim takes the rim from 1.5x the fill to
+     3.8x, which is the whole reason the login button reads as a raised object.
+     THE FILL IS SOLID, AND THAT IS THE ONE PLACE THIS PARTS FROM THE LOGIN BUTTON.
+     `.auth-btn` is a .06 white WASH, which is free on the sign-in page because there is
+     only black behind it — but a tab pill floats over the feed, and shot over a bright
+     photo the translucent version let the picture straight through: the labels bled from
+     dark grey to near-white and the row stopped reading as buttons at all. #0F0F0F is
+     exactly what .06 white composites to over black, so on the sign-in page's own ground
+     the two are pixel-identical; over a photo this one stays a button.
+     THE THIRD INGREDIENT IS THE ONE THE FOUNDER COULD SEE BUT NOT NAME: `.auth-btn`
+     carries a soft accent wash centred BELOW the button (at 50% 120%), so it lifts and
+     goes faintly blue toward its bottom edge — "the outline is a drop different on the
+     sides on the bottom, it's like shadow". It is real: their screenshot reads 15,15,16
+     at the button's top and 14,25,35 at its bottom. Sized in percentages here rather
+     than the login button's fixed 120x86px, because a tab is a third of its width. */
+  --tab-fill:    radial-gradient(90% 130% at 50% 128%,
+                   rgba(var(--accent-rgb),.11), transparent 72%),
+                 #0F0F0F;
   /* A RESTING LABEL IS FULL STRENGTH, not a dimmed one — measured off the same Apple
      screenshot, where the unselected labels read 247-254 (essentially white) and only
      the FILL says which tab you are on. Ours were --t2 (142) and visibly receded beside
@@ -4861,17 +4895,36 @@ body{
   --tab-ink:     var(--t1);
   --tab-fill-on: var(--primary); /* selected — white on Black, near-black on Light */
   --tab-ink-on:  var(--on-primary);
-  --tab-fill-hv: var(--s4);
-  /* The rim on a resting tab. MEASURED off Apple Fitness+, which the founder sent as
-     the reference: its unselected pill is a #1D1D1D fill with a ONE-PHYSICAL-PIXEL rim
-     that composites to grey 65 — i.e. white at .16 over that fill — and its selected
-     white pill has no rim at all. Ours keeps that alpha but draws a full CSS pixel,
-     which on a 3x phone is three times Apple's width: the founder asked for it thicker.
-     It is deliberately stronger than the .05 rim on an ordinary secondary button — a row
-     of choices has to be countable at a glance, and that is what the rim buys. */
-  --tab-edge: rgba(255,255,255,.16);
+  --tab-fill-hv: radial-gradient(90% 130% at 50% 128%,
+                   rgba(var(--accent-rgb),.14), transparent 72%),
+                 #1E1E1F;
+  /* The rim, and it is the login button's exactly: --divider at HALF a pixel, which is
+     one physical pixel on a 2x/3x phone. It shipped for one build as a full CSS pixel of
+     rgba(255,255,255,.16) — measured off Apple Fitness+, whose own rim really is one
+     physical pixel — and the founder asked for thinner, which is Apple's width and ours
+     now. A solid --divider rather than a white alpha is what makes it flip cleanly in
+     Light (#D1D1D6) instead of dissolving into the page. */
+  --tab-edge: var(--divider);
+  /* The 3-D the founder could see but not name: a whisper of light along the pill's TOP
+     inside edge and a soft shadow underneath, so it reads as sitting ON the bar rather
+     than being cut out of it. Both are far below the rim's strength on purpose — a bevel
+     you can point at is a bevel that is too strong. */
+  --tab-hi:    rgba(255,255,255,.09);
+  --tab-shade: rgba(0,0,0,.45);
 }
-body.light{ --tab-edge: rgba(0,0,0,.12); }
+body.light{
+  /* Mirrored, not copied: .06 WHITE over a white page is nothing at all, so Light takes
+     the same idea from the other side — a whisper of black, again flattened to a solid
+     for the same reason as Black. */
+  --tab-fill:    radial-gradient(90% 130% at 50% 128%,
+                   rgba(var(--accent-rgb),.09), transparent 72%),
+                 #F2F2F4;
+  --tab-fill-hv: radial-gradient(90% 130% at 50% 128%,
+                   rgba(var(--accent-rgb),.12), transparent 72%),
+                 #E8E8EC;
+  --tab-hi:      rgba(255,255,255,.7);
+  --tab-shade:   rgba(0,0,0,.10);
+}
 body.light{
   --bg:#ffffff;--bg-1:#F5F5F7;--bg-2:#F5F5F7;--bg-3:#eff3f4;
   --s1:#F5F5F7;--s2:#F5F5F7;--s3:#e6ecf0;--s4:#d9e1e8;
@@ -11282,7 +11335,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
    branding hero. The START screen was unaffected (it is .auth-inner, not .auth-step),
    which is exactly why it looked fine and only the steps after it were wrong. */
 @media(max-width:1099px){
-.overlay:has(> .auth-step:not(.hidden)){padding-inline-start:0;padding-inline-end:0;}
+.overlay:has(> .auth-step:not(.hidden)){padding-inline-start:0;padding-inline-end:0;padding-block-end:0;}
 /* And again at ID strength, because #loginOverlay/#signupOverlay set `padding:20px` by ID
    inside the phone media query — (0,1,0,0) beats the class rule above however far down the
    file it sits, so the class rule alone matched and changed nothing. The wizard's own back
@@ -11290,7 +11343,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
    which cancels the offset of a 30px chevron centred in a 48px tap box, so its INK tracks
    the step's padding edge on its own once the overlay stops adding 20px in front of it. */
 #loginOverlay:has(> .auth-step:not(.hidden)),
-#signupOverlay:has(> .auth-step:not(.hidden)){padding-inline-start:0;padding-inline-end:0;}
+#signupOverlay:has(> .auth-step:not(.hidden)){padding-inline-start:0;padding-inline-end:0;padding-block-end:0;}
 }
 .ac-job-h{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);padding-inline-end:30px;}
 .ac-job-poster{display:flex;align-items:center;gap:11px;margin:14px 0;padding:11px;background:var(--s1);border-radius:14px;cursor:pointer;}
@@ -14147,15 +14200,21 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    A resting pill carries a hairline; the SELECTED one does not — it is already the
    loudest thing in the row and a rim on white would only muddy its edge (Apple's
    selected pill has none either). Declared here, after every family's own rule, so a
-   `border:none` further up cannot beat it; box-sizing is border-box app-wide, so the
-   rim costs no layout and nothing shifts when a tab is picked. */
+   `border:none` further up cannot beat it.
+
+   IT IS A BOX-SHADOW, NOT A BORDER, and that is what the login button uses: an inset
+   shadow can be half a pixel (one physical pixel on a phone) where a border rounds up,
+   and it costs no layout at all, so nothing shifts when a tab is picked. Three layers:
+   the hairline all round, a whisper of light on the top inside edge, and a soft shadow
+   underneath — the "3-D" the founder saw on the sign-in buttons. */
 .tb-feedtab:not(.tb-feedtab-add),.ac-scope-chip,.ac-ptab,.ntf-tab,.ev-tab,.bk-tab,
 .ac-jv,.wf-chip,.sell-sortchip,.fb-cat,.ac-jbtab,.ja-fchip,.dir-ind,.svc-cat,
-.rx-tab,.rev-chip,.stt-chip,.ev-seg-btn,.cash-stab,.cash-range{border:1px solid var(--tab-edge);}
+.rx-tab,.rev-chip,.stt-chip,.ev-seg-btn,.cash-stab,.cash-range{border:none;
+  box-shadow:0 0 0 .5px var(--tab-edge) inset, 0 .5px 0 var(--tab-hi) inset, 0 1px 2px var(--tab-shade);}
 .tb-feedtab.active:not(.tb-feedtab-add),.ac-scope-chip.active,.ac-ptab.on,.ntf-tab.on,
 .ev-tab.on,.bk-tab.on,.ac-jv.on,.wf-chip.on,.sell-sortchip.on,.fb-cat.on,.ac-jbtab.on,
 .ja-fchip.on,.dir-ind.on,.svc-cat.on,.rx-tab.on,.rev-chip.on,.stt-chip.on,
-.ev-seg-btn.on,.cash-stab.on,.cash-range.on{border-color:transparent;}
+.ev-seg-btn.on,.cash-stab.on,.cash-range.on{box-shadow:none;}
 </style>
 </head>
 <body style="background:#000">
@@ -22156,7 +22215,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1821'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1822'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —

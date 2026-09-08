@@ -79,7 +79,7 @@ const ROWS = [
           ink: tokenOf('var(--tab-ink)'),
           rows: tabs.map((e) => { const q = e.getBoundingClientRect(); const cs = getComputedStyle(e);
             return { bg: cs.backgroundColor, rad: parseFloat(cs.borderRadius) || 0, h: q.height,
-              bw: parseFloat(cs.borderTopWidth) || 0, bc: cs.borderTopColor, fg: cs.color,
+              sh: cs.boxShadow, img: cs.backgroundImage, fg: cs.color,
               under: getComputedStyle(e, '::after').content !== 'none' && parseFloat(getComputedStyle(e, '::after').height) > 0 };
           }),
           addBg: add ? getComputedStyle(add).backgroundColor : null,
@@ -94,11 +94,20 @@ const ROWS = [
         `${T} every other tab is the shared resting grey`);
       chk(!r.rows.some((t) => t.under), `${T} no tab still draws an underline`);
       const rest = r.rows.filter((t) => t.bg !== r.primary);
-      const clear = (c) => /rgba\([^)]*,\s*0\)/.test(c);
-      chk(rest.every((t) => t.bw >= 1 && !clear(t.bc)),
-        `${T} every resting tab carries a rim (${rest.map((t) => t.bw + 'px').join(',')})`);
-      chk(on.every((t) => clear(t.bc)),
-        `${T} ...and the selected one does not (${on.map((t) => t.bc).join(',')})`);
+      /* THE RIM IS A BOX-SHADOW NOW, not a border — the login button's own hairline,
+         which can be HALF a pixel where a border rounds up. Read the shadow. */
+      chk(rest.every((t) => t.sh && t.sh !== 'none' && /inset/.test(t.sh)),
+        `${T} every resting tab carries the inset hairline`);
+      chk(on.every((t) => t.sh === 'none'),
+        `${T} ...and the selected one does not (${on.map((t) => t.sh).join(',')})`);
+      /* THE RESTING FILL MUST BE OPAQUE, and this check exists because the first pass at
+         copying the login button was not. `.auth-btn` is a .06 white WASH — free on a page
+         with only black behind it, but shot over a bright photo the pills let the picture
+         straight through and the labels bled from dark grey to near-white. */
+      chk(rest.every((t) => !/rgba\([^)]*,\s*0?\.\d+\)/.test(t.bg)),
+        `${T} and it is OPAQUE — a photo can never show through a tab (${rest[0] ? rest[0].bg : '-'})`);
+      chk(rest.every((t) => /gradient/.test(t.img || '')),
+        `${T} with the login button's own wash lifting its lower edge`);
       chk(rest.every((t) => t.fg === r.ink),
         `${T} a resting label is full strength, not dimmed (${rest[0] ? rest[0].fg : '-'} for ${r.ink})`);
       if (r.addBg !== null) chk(r.addBg === 'rgba(0, 0, 0, 0)', `${T} "Add" stays a bare word, not a pill (${r.addBg})`);

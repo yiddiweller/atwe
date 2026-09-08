@@ -421,6 +421,46 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
     DECLARED, so on `:root` they would freeze at the Black theme's `--s3` and Light would never
     flip. No underline anywhere: the fill says it, and an underline could drift a pixel while the
     row scrolls.
+> **AT REST, A TAB IS THE SIGN-IN PAGE'S OWN GREY BUTTON.** The founder sent their login
+> screen as the reference — *"I really love that grey buttons in the login pages… maybe
+> the outline is thinner or more 3-D"* — so the recipe is measured off `.auth-btn` rather
+> than invented, and it has THREE parts, not one:
+>
+> | | login button | tab pill was | tab pill now |
+> |---|---|---|---|
+> | fill | .06 white → renders **15** on black | solid `--s3` = **28** | **#0F0F0F** = 15 |
+> | rim | **.5px** `--divider` → **58** | 1px `rgba(255,255,255,.16)` → 41 | **.5px** `--divider` |
+> | wash | accent at 50% **120%** — below the button | none | same, in % |
+>
+> **The third part is the one the founder could see but not name** — *"the outline is a
+> drop different on the sides on the bottom, it's like shadow"*. It is real and it is in
+> `.auth-btn`: a soft accent radial centred BELOW the button, so it lifts and goes faintly
+> blue toward its lower edge. Their screenshot reads **15,15,16 at the top and 14,25,35 at
+> the bottom**. Sized in percentages here because a tab is a third of the button's width.
+> A `--tab-hi` top-edge highlight and a `--tab-shade` drop shadow finish it; both are far
+> below the rim's strength on purpose — a bevel you can point at is too strong.
+>
+> **Darkening the fill is what makes the rim work.** 41-over-28 is a fainter line around a
+> lighter box (1.5×); 58-over-15 is **3.8×**, and that ratio is the whole reason the login
+> button reads as a raised object rather than a painted rectangle.
+>
+> **THE FILL IS SOLID, AND THAT IS THE ONE PLACE THIS PARTS FROM THE LOGIN BUTTON.**
+> `.auth-btn` is a translucent WASH, which is free on a page with only black behind it.
+> The first attempt copied it literally, and shot over a bright photo the pills let the
+> picture straight through — the labels bled from dark grey to near-white and the row
+> stopped reading as buttons at all. `#0F0F0F` is exactly what .06 white composites to
+> over black, so on the sign-in page's own ground the two are pixel-identical; over a
+> photo this one stays a button. `tabpills.js` asserts the resting fill is opaque, and
+> restoring the wash fails it on six rows.
+>
+> **THE RIM IS A BOX-SHADOW, NOT A BORDER**, for the same reason the login button's is: an
+> inset shadow can be half a pixel — one physical pixel on a phone — where a border rounds
+> up, and it costs no layout, so nothing shifts when a tab is picked. It shipped for one
+> build as a full CSS pixel of `rgba(255,255,255,.16)`, measured off Apple Fitness+ (whose
+> own rim really is one physical pixel) because the founder had asked for it thicker; they
+> then asked for thinner, which is Apple's width and ours now. A solid `--divider` rather
+> than a white alpha is what makes it flip cleanly in Light (`#D1D1D6`).
+>
 > **The rim, and the label strength — both measured off Apple Fitness+**, which the
 > founder sent as the reference. Its unselected pill is a `#1D1D1D` fill with a
 > **one-physical-pixel** hairline compositing to grey 65 (white at **.16** over that
@@ -2012,6 +2052,28 @@ there were zero `<form>` elements in the app.
   plus a before/after capture): every sign-in screen is byte-identical except one ~90×90 box on
   desktop that **also differs between two runs of unchanged code** — an animated mark. Run the
   control before believing any diff on these screens.
+### The sign-in footer button sits where the nav bar sits
+
+Every wizard step's Continue/Next button floated well clear of the bottom: measured on the
+founder's own screenshot it was **14pt from each side and 82pt from the bottom**, which is
+what they photographed. Two things added up to it — `.auth-step`'s own
+`28px + env(safe-area-inset-bottom)` (62pt on an iPhone) and the overlay's `padding:20px`,
+which the `:has(> .auth-step)` rule only zeroed on the INLINE sides.
+
+The step now uses **the floating nav pill's own expression**,
+`max(--nav-inset, safe-area − 16px, --kb + 16px)`, so it stops level with every other
+floating thing in the app. Measured after: **14 / 14 / 23**.
+
+**It is NOT the 14pt of the sides, and that is deliberate.** The home indicator occupies
+roughly the bottom 21pt, and a 56pt button ending 14pt up would have its lower third
+fighting the system's swipe-up gesture. 23 is the smallest inset that clears it — which is
+exactly why the nav bar uses it. The keyboard arm of the `max()` is unchanged: with `--kb`
+set the field must clear the keyboard and that always wins.
+
+**`env()` cannot be simulated in a headless browser**, so a probe must re-declare the app's
+OWN expression with a known inset rather than hard-coding a final number — the same
+technique `sbfoot.js` uses.
+
 - **Not done yet:** sign-up. The same treatment would let a browser offer to save a password on
   account creation, but that flow is multi-step with an email code and is the most fragile path
   in the app, so it deserves its own pass with a real end-to-end test.
