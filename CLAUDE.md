@@ -318,23 +318,41 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
 > **Where it lives.** `.tb-glass` is one child (`<i>×4`) inside `.topbar` and `#notifHead`;
 > the bars themselves paint no fill.
 >
-> **THE BAND IS THE BAR'S *VISIBLE* HEIGHT, AND `--tb-tail` IS ZERO.** It shipped as a
-> fixed 102px + a 26px tail, and the founder caught it at once: with the brand row
-> collapsed the bar is only ~47px on screen, so the band kept dissolving content for
-> another ~80px — posts went dark and blurry *before they had reached the menu*. The
-> height subtracts `--tb-hide` so the effect stops exactly where the bar stops, and the
-> tail is gone: the tint already eases to fully transparent at the band's bottom, so
-> there was never an edge for a tail to hide. Both collapse writers set `--tb-hide` —
+> **THE BAND IS THE BAR'S *VISIBLE* HEIGHT plus a 26px `--tb-tail`.** It shipped as a
+> FIXED 102px + a tail, and the founder caught it at once: with the brand row collapsed
+> the bar is only ~47px on screen, so the band kept dissolving content for another ~80px
+> — posts went dark and blurry *before they had reached the menu*. The height subtracts
+> `--tb-hide` so the band tracks the bar. Both collapse writers set `--tb-hide` —
 > `_onListScroll` for the installed app and `_onWinScroll` for a browser — on the same
 > line that writes the transform, so the two cannot drift.
 >
-> **THE TINT HOLDS ACROSS THE BAR AND FALLS ONLY IN THE LAST FIFTH**, and that is a
-> second correction from the same review. An even ease from top to bottom looked right on
-> Home, where the brand row had collapsed and the band was short — but on Beam and Engine,
-> with the lockup still showing, the tab row sat where the ease had already reached nearly
-> zero and names and avatars showed through beside the pills. It now runs .93 → .83 over
-> the first 78% and dissolves to 0 across the rest: never opaque, never flat, always
-> falling, and content behind the bar stays veiled wherever the bar happens to be.
+> **THE CURVE IS ONE CONTINUOUS DECAY, AND THERE IS NO LANDMARK ANYWHERE.** It held ~.83
+> until 78% of the band and then dumped to nothing across the last fifth — about 10px on
+> a collapsed bar, i.e. **.083 of opacity per pixel**, which the founder saw instantly:
+> *"it turns black very fast… it should be much smoother."* Measured off their own
+> screenshot: .87 at the pills' bottom edge and fully clear 7px later. The number that
+> decides whether a fade is SEEN is the slope at the boundary, so it is now a raised
+> cosine — `peak · (½ + ½cos πt)^1.15` over the whole band, peaking at **.88** (dark) /
+> **.90** (light), easing out of the peak, steepest around the middle and approaching
+> zero asymptotically. Max **.019/px**, **.002/px** at the very bottom.
+>
+> **THE TAIL IS NOT OPTIONAL AND THAT IS ARITHMETIC, NOT TASTE.** Dissolving a .88 tint
+> to nothing inside a 45px bar cannot be done at less than ~.02/px whatever the shape —
+> the drop and the distance are both fixed — and the gentler you make one end the
+> steeper the other gets. The tail buys the room. It is NOT the mistake above: that band
+> sat at ~.85 for 80px BELOW the bar; this one is **.22 at the bar's own edge, 8% ten
+> pixels below it and 1% twenty below** — a soft shadow, not a band.
+>
+> **WHAT IT COSTS, deliberately** (founder: *"you don't need to make sure that it's gonna
+> be fully dark by the end"*): the lower half of the tab row is only lightly veiled, so
+> content passes behind the gaps BETWEEN the pills. That is survivable only because the
+> pills went solid in build 1819 — restore bare-word tabs and this is the wrong curve.
+>
+> **THE BLUR LAYERS' HEIGHTS ARE PERCENTAGES OF THE BAND, WHICH NOW OUTRUNS THE BAR.**
+> Layer 1 was `height:100%` when the band ended at the bar's edge; with a tail that
+> pushes a blur past the bar and straight back into "blurry too early". They are
+> 55/42/31/20%, which is inside the bar at both the collapsed (~39px of 45) and the
+> expanded (~67px of 96) height. Lengthen the tail and these come down too.
 >
 > **The frost is deliberately light** (1/2/4/8px, against 2/5/12/24 at first) — the
 > founder asked for the blurriness taken down. The tint is what hides content now; the
@@ -378,10 +396,15 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
 > carry the class — `.tb-brandrow` sets this header's own position and background at
 > (0,1,1,0) and a bare `#notifHead` loses to it.
 >
-> Covered by `scratchpad/topglass.js` (52 checks, both themes), which now guards the
-> over-reach directly: the glass's bottom may not sit more than a pixel below the bar's,
-> and its height must equal the bar's VISIBLE height. Restoring the fixed band fails 9. Its see-through test had to
-> be restricted to the bar's OWN box: the tail dissolves content whether or not the bar
+> Covered by `scratchpad/topglass.js` (55 checks, both themes). **The fall-off check is
+> the one that matters and it measures REAL PIXELS, not the CSS**: it hides everything in
+> the bar but the glass, puts a known white block under it and reads the opacity straight
+> down a column, then asserts the SLOPE — under .035/px anywhere and under .012/px in the
+> last fifth, where an edge would show. Only a slope can tell a dissolve from a step, and
+> a stop value cannot. Restoring the old curve reports **.157/px** and fails both. It also
+> guards the over-reach: the band may outrun the bar by at most the tail, and the tint
+> must already be under .35 at the bar's own edge, so a tail can never grow back into a
+> slab. Its see-through test had to be restricted to the bar's OWN box: the tail dissolves content whether or not the bar
 > itself is transparent, so a band that included it nearly passed with the black wall put
 > back (5287px against a 5990 bar). Restricted, the same revert gives 3817 against an
 > 18330 bar. Self-tested: restoring the wall or dropping the counter-translate fails 2.
