@@ -162,17 +162,27 @@ export default function Login() {
   const next = async () => {
     if (!ready || busy) return;
     if (onPassword) return submit();
-    if (step === 'username') { go('password'); return; }
-    // Email: does this account exist?
+    /* "Create an account" MEANS make one, and this has to come BEFORE the
+       per-step branches. Underneath them the username step returned first, so
+       the button reading "Create an account" walked into the password screen —
+       for an account that by definition does not exist. Only an email is worth
+       carrying into the wizard; a username is chosen there, at its own step. */
     if (createMode) {
-      router.push({ pathname: '/(auth)/signup', params: { email: identifier.trim() } });
+      router.push({
+        pathname: '/(auth)/signup',
+        params: step === 'email' ? { email: identifier.trim() } : {},
+      });
       return;
     }
+    /* Does this account exist? The server answers for a username or an email on
+       the same route — it strips a leading @ and matches either column — so both
+       steps ask the same question, and both can offer to create one. The username
+       step used to skip this entirely and go straight to a password screen. */
     setError(null);
     setBusy(true);
     try {
       const r = await api.post<{ exists: boolean }>(
-        '/api/auth/exists', { email: identifier.trim() }, { noAuth: true },
+        '/api/auth/exists', { identifier: identifier.trim() }, { noAuth: true },
       );
       if (r.exists) go('password');
       else setCreateMode(true);
@@ -288,7 +298,9 @@ export default function Login() {
           <View style={styles.grow} />
           {createMode && (
             <Text style={[styles.sub, { color: c.t3, marginTop: 0, marginBottom: 14 }]}>
-              No account yet with that email. Want to make one?
+              {step === 'username'
+                ? 'No account yet with that username. Want to make one?'
+                : 'No account yet with that email. Want to make one?'}
             </Text>
           )}
           <AuthButton

@@ -14,6 +14,43 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 > never been seen on a device. That section says what to do first, in order, and
 > names the two decisions of theirs not to reverse.
 
+## 8 Sep 2026 — "I can't create an account" was the PHONE app, not the website
+
+The founder reported that creating an account was impossible and sent two
+screenshots: **"What's your @username?"** → *"We couldn't find an Atwe account
+with that username."* → **Create an account** → **a blank black screen**.
+
+**That title exists only in `atwe-mobile/app/(auth)/login.tsx`.** It is not in
+the website at all. Two days had already been spent on the WEBSITE's signup (a
+route that claimed to send an email when none was sent) — a real bug, and a real
+fix, but **not the one they were hitting**. Check WHICH Atwe a screenshot is of
+before diagnosing: the two look almost identical by design.
+
+**The bug, and it was still live in 0.19.0.** In `next()`:
+
+```js
+if (step === 'username') { go('password'); return; }   // ← returned FIRST
+if (createMode) { router.push('/(auth)/signup', …); }  // ← never reached
+```
+
+So on the username step the button **labelled "Create an account" walked into the
+password screen** — for an account that by definition does not exist. Fixed by
+moving the `createMode` branch above the per-step branches.
+
+**A second thing was missing:** the username step never asked whether the account
+existed, so `createMode` could not become true there at all and nobody was ever
+offered the way out. `/api/auth/exists` has always answered for a username or an
+email on the one route (it strips a leading `@` and matches either column) — the
+app was just calling it from the email step only, and passing the value as
+`email`. Both steps ask now, via `identifier`. Verified against the live route:
+`atwe` → `exists:true`, `@atwe` → `exists:true`, `yehudaweller` → `exists:false`.
+The create-offer line reads "username" or "email" to match the step.
+
+**THE FOUNDER CANNOT SEE THIS FIX.** Their phone runs **0.13**; this is the
+seventh round of finished work they have never seen. Nothing here reaches a
+device without an EAS build, and **that trigger is theirs to give** — see
+"STOPPED HERE". Typechecked (`tsc --noEmit`, clean); not run on a device.
+
 ## Where we are (current)
 
 - **App:** `atwe-mobile/` — native iOS (and Android) client, **Expo SDK 54 +
