@@ -9297,6 +9297,25 @@ Optional, for full functionality:
 The committed `data/`, `dist/`, `.next/` ignores are defensive — none are produced
 today.
 
+### Object storage (`storage.js`) — `CDN_URL` is REQUIRED on R2, not cosmetic
+
+New media can go to an S3-compatible bucket instead of the database (optional, degrades
+like every other integration here). The trap: **what goes into the post is the address
+`publicUrl()` returns, and `mediaRef` passes any non-`data:` value straight to the
+browser** (`server.js:2988`) — so that address must be one a member's phone can actually
+fetch. With no `CDN_URL` on R2 it falls back to the **S3 API endpoint**
+(`*.r2.cloudflarestorage.com`), which only answers SIGNED requests: every upload succeeds
+and every photo renders as a broken image. The owner-facing guide said `CDN_URL` was
+"purely cosmetic, it can wait" for two builds; following it would have produced exactly
+that. The bucket needs **public read** (R2 → Settings → Public access → R2.dev subdomain)
+and `CDN_URL` pointed at the `pub-*.r2.dev` address it hands back. A custom domain
+(`media.atwe.com`) is the only genuinely optional part.
+
+`selfTest()` already reported this as `readable:false` — and the dashboard rendered it as
+a **pass with a footnote**, which is how it stayed invisible. It is now a distinct third
+outcome, "Photos would be broken", badged as a failure with the fix written out. **A
+health check with three real outcomes must not have two buttons' worth of UI.**
+
 ## Gotchas for AI assistants
 
 - **A refund is a TRANSFER, not a credit — never "make the payee whole" with a bare

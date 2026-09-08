@@ -17,8 +17,17 @@
    through the existing /api/media route, and new ones simply point at a URL.
 
    Set: S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, and either S3_ENDPOINT
-   (R2/B2/MinIO) or S3_REGION (AWS). CDN_URL is optional; without it the files
-   are served straight from the bucket's own public URL.
+   (R2/B2/MinIO) or S3_REGION (AWS).
+
+   CDN_URL IS NOT OPTIONAL ON R2, and this comment said it was for several
+   builds. What goes into the post is the URL publicUrl() returns, and mediaRef
+   passes any non-data: value straight to the browser — so that address has to be
+   one a member's phone can actually fetch. With no CDN_URL on R2 it falls back
+   to the S3 API endpoint (*.r2.cloudflarestorage.com), which only answers SIGNED
+   requests: every upload would succeed and every photo would render broken.
+   Point CDN_URL at the bucket's public address (pub-*.r2.dev, or a custom
+   domain). selfTest() reports this as `readable:false`, and the dashboard now
+   treats that as a failure rather than a pass with a footnote.
 ═══════════════════════════════════════════════ */
 const crypto = require('crypto');
 
@@ -46,8 +55,9 @@ function bucketHost() {
 function objectPath(key) {
   return ENDPOINT ? `/${BUCKET}/${key}` : `/${key}`;
 }
-// The address a browser fetches. A CDN in front is the whole point of this —
-// without one, the bucket's own URL still works.
+// The address a browser fetches — so it must be publicly readable. The fallback
+// below is only correct for AWS (virtual-host style + a public-read object); on
+// R2/B2/MinIO the endpoint is the private API host and CDN_URL is required.
 function publicUrl(key) {
   if (CDN) return `${CDN}/${key}`;
   return `https://${bucketHost()}${ENDPOINT ? '/' + BUCKET : ''}/${key}`;
