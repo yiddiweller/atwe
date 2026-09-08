@@ -1919,8 +1919,8 @@ const SETUP_GROUPS = [
     group: 'Reaching people',
     items: [
       { key: 'email', label: 'Email', on: () => mailer.isConfigured(), env: ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'],
-        gives: 'Verification links, password resets, order confirmations, shipping updates, sign-in alerts, your broadcasts.',
-        without: 'Every one of those is written to the server log instead of sent. Nobody can reset a password.',
+        gives: 'THE 6-DIGIT CODE THAT CREATES AN ACCOUNT — plus password resets, order confirmations, shipping updates, sign-in alerts, your broadcasts.',
+        without: 'NOBODY CAN CREATE AN ACCOUNT. Signing up needs a code emailed to the person, so without this the app refuses to start one — and nobody can reset a password either. Everything else is written to the server log instead of sent.',
         where: 'Any SMTP provider (Resend, Postmark, SendGrid, Gmail app password).' },
       { key: 'push', label: 'Push notifications', on: () => push.isConfigured(), env: ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'],
         gives: 'Alerts on a phone when the app is closed — messages, orders, money.',
@@ -5487,8 +5487,41 @@ async function sendVerifyEmail(user, rawToken) {
   });
 }
 
+/* ── A CODE ROUTE MAY NEVER SAY "WE SENT IT" WHEN NOTHING WAS SENT ──────────────
+   This is the bug that stopped anyone creating an account. `mailer.sendMail`
+   DEGRADES rather than throwing: with no SMTP configured it logs the message to
+   the server console and returns `{delivered:false}` — deliberate, so the flow is
+   testable in dev. But `/api/auth/signup/start` awaited it inside a try/catch that
+   only ever fired on a THROW, so the no-transport case sailed through and the route
+   answered `{ok:true}`. The app then said "we sent you a code" and showed the
+   code screen, while the only copy of that code sat in a log nobody outside the
+   team can read. Every stranger who tried to join hit a dead end, and nothing
+   anywhere reported a failure — no error, no red probe, no console line.
+
+   `mailCanDeliver(req)` is the pre-flight. It answers false when this deployment
+   has no mail transport at all AND the request did not come from a dev machine —
+   `req.hostname` is the honest signal (`app.set('trust proxy')` is on, so it
+   reflects the forwarded host), so a laptop keeps its console codes with no extra
+   configuration while a real deployment stops lying. It is checked BEFORE any
+   account lookup on purpose: the two enumeration-safe routes (resend, reset) must
+   not let a mail outage reveal whether an account exists. */
+const _LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
+function isLocalRequest(req) {
+  const h = String((req && req.hostname) || '').toLowerCase();
+  return _LOCAL_HOSTS.has(h) || h.endsWith('.local') || h.endsWith('.localhost');
+}
+function mailCanDeliver(req) { return mailer.isConfigured() || isLocalRequest(req); }
+/* One message, one shape, everywhere a code cannot be sent. `emailDown` lets the
+   client tell this apart from "you typed the wrong thing" without parsing prose. */
+function mailOutage(res) {
+  return res.status(503).json({
+    emailDown: true,
+    error: 'We can’t send verification emails right now, so we can’t finish creating your account. Please try again shortly.',
+  });
+}
+
 async function sendSignupCode(email, name, code) {
-  await mailer.sendMail({
+  return mailer.sendMail({
     from: ALERTS_FROM,
     to: email,
     subject: `${code} is your Atwe verification code`,
@@ -5527,7 +5560,7 @@ async function sendResetEmail(user, rawToken) {
 
 // Code-based reset: email a 6-digit code the user types in-app.
 async function sendResetCode(email, name, code) {
-  await mailer.sendMail({
+  return mailer.sendMail({
     from: ALERTS_FROM,
     to: email,
     subject: `${code} is your Atwe password reset code`,
@@ -5872,6 +5905,8 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
 // Re-send the signup code (no enumeration; always 200 when a pending signup exists).
 app.post('/api/auth/signup/resend', rateLimit(6, 60000, 'signup-resend'), async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
+  // BEFORE the lookup — a mail outage must not become an account-exists oracle.
+  if (!mailCanDeliver(req)) return mailOutage(res);
   try {
     const p = await db.query('SELECT name FROM pending_signups WHERE email = $1', [email]);
     if (p.rows[0]) {
@@ -5892,6 +5927,9 @@ app.post('/api/auth/signup/resend', rateLimit(6, 60000, 'signup-resend'), async 
 app.post('/api/auth/signup/start', rateLimit(10, 60000, 'signup-start'), async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+  // Before anything else: if we cannot mail the code, say so. Creating the pending
+  // row and answering ok would strand the person on a code screen forever.
+  if (!mailCanDeliver(req)) { console.error('SIGNUP BLOCKED: no mail transport — set SMTP_HOST/SMTP_USER/SMTP_PASS'); return mailOutage(res); }
   try {
     const exists = await db.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]);
     if (exists.rowCount) return res.status(409).json({ error: 'An account with that email already exists.' });
@@ -5902,7 +5940,10 @@ app.post('/api/auth/signup/start', rateLimit(10, 60000, 'signup-start'), async (
        ON CONFLICT (email) DO UPDATE SET
          code_hash = EXCLUDED.code_hash, attempts = 0, expires_at = EXCLUDED.expires_at, created_at = now()`,
       [email, auth.hashToken(code), new Date(Date.now() + SIGNUP_CODE_TTL)]);
-    try { await sendSignupCode(email, '', code); } catch (e) { console.error('Signup code email failed:', e.message); }
+    // A THROW here is a real outage too (bad credentials, provider refusing), and it
+    // used to be swallowed exactly like the case above.
+    try { await sendSignupCode(email, '', code); }
+    catch (e) { console.error('SIGNUP BLOCKED: sending the code failed:', e.message); return mailOutage(res); }
     res.json({ ok: true, email: maskEmail(email) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
@@ -7224,6 +7265,10 @@ app.post('/api/auth/reset', rateLimit(15, 60000), async (req, res) => {
 // ── In-app code-based reset (from the password step: send code → verify → set) ──
 // Send a 6-digit reset code to the account's email.
 app.post('/api/auth/reset/send', rateLimit(6, 60000, 'reset-send'), async (req, res) => {
+  // BEFORE findUserByIdentifier — see the note on mailCanDeliver: this route
+  // deliberately never reveals whether the account exists, and a 503 thrown only
+  // for real accounts would do exactly that.
+  if (!mailCanDeliver(req)) return mailOutage(res);
   try {
     const user = await findUserByIdentifier(req.body.identifier);
     if (user) {
