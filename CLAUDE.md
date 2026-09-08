@@ -2083,6 +2083,68 @@ names the properties these controls actually animate rather than `all`, so a str
 property can never get dragged into a 260ms ease, and it collapses under
 `prefers-reduced-motion`.
 
+### A CODE ROUTE MAY NEVER SAY "WE SENT IT" WHEN NOTHING WAS SENT — `scratchpad/signupflow.js`
+
+**Nobody could create an account, and every probe was green.** The founder's team found
+it: enter an email, and the code never arrives. Not a broken screen and not a broken
+route — a route that **lied**.
+
+`mailer.sendMail` DEGRADES rather than throwing. With no SMTP configured it logs the
+message to the server console and returns `{delivered:false}` — deliberate, and
+documented, so flows stay testable in dev. But `/api/auth/signup/start` awaited it inside
+
+```js
+try { await sendSignupCode(email, '', code); } catch (e) { console.error(...); }
+res.json({ ok: true, email: maskEmail(email) });
+```
+
+a catch that only ever fires on a **throw**. So the no-transport case sailed straight
+through, the route answered `ok`, the app said *"we sent you a code"* and showed the code
+screen — while the only copy of that code sat in a log no member can read. **Login was
+unaffected** (it needs no email), which is exactly why it looked like "only new people are
+broken" rather than "email is not configured".
+
+**`mailCanDeliver(req)` is the pre-flight.** It answers false when the deployment has no
+mail transport at all AND the request did not come from a dev machine. `req.hostname` is
+the honest signal — `app.set('trust proxy')` is on, so it reflects the forwarded host —
+which means **a laptop keeps its console codes with no extra configuration while a real
+deployment stops lying**, and no new env var was invented for it.
+
+**It is checked BEFORE any account lookup, and that ordering is load-bearing.**
+`signup/resend` and `reset/send` are deliberately always-200 so they cannot be used to
+discover who has an account. A 503 returned only on the branch where a user was found
+would be exactly that oracle. Checking mail health first makes the refusal identical for a
+real address and an invented one. `signup/start` has no such constraint (it already 409s on
+a known email), so it refuses loudly and logs `SIGNUP BLOCKED`.
+
+**The three swallowed sends are one bug in three places** (signup/start, signup/resend,
+reset/send). `sendSignupCode`/`sendResetCode` now RETURN what `sendMail` reports rather
+than discarding it.
+
+**The setup gap report understated this for a long time.** It said email's absence meant
+*"Nobody can reset a password"* — true, and far short of the truth. It now leads with
+**NOBODY CAN CREATE AN ACCOUNT**, because that is the actual cost and it is the line
+somebody reads while deciding what to configure first.
+
+**Two probe bugs worth knowing, both of which made it PASS on the broken code:**
+- **Node's `fetch` silently drops a `Host` header** (it is a forbidden header), so the
+  first version's "pretend to be production" sent nothing at all and every honesty check
+  passed against a server that still thought it was on a dev box. Use
+  **`X-Forwarded-Host`** — which is what a real proxy sends and what `trust proxy` reads.
+- **The end-state must be asked of the SERVER, not the page.** The last wizard step hands
+  off into onboarding, so `S.user` is legitimately null for a moment; reading it there
+  reported a failure on an account that had genuinely been created. The token is the
+  proof, and `/api/auth/me` settles what it proves.
+
+The probe owns the server it tests (like `cluster.js`) because on a box with no SMTP the
+6-digit code exists **only in that process's stdout** — the database stores a hash.
+Self-tested: restoring the swallow fails two checks by name.
+
+**The lesson generalises past email.** Every probe in this repo drove screens or called
+openers; not one asked the question a stranger asks — *can I actually join?* A journey
+test is a different kind of check from a surface test, and this is the second time in two
+days that gap has hidden a whole broken feature (the group Cloud was the first).
+
 ### NOTHING THE APP TRIES TO SHOW MAY BE HIDDEN BY A RULE — `scratchpad/reachable.js`
 
 **A whole feature went missing and nothing failed.** The founder's team went to use a
