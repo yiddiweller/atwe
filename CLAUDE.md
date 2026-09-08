@@ -68,6 +68,15 @@ from them; "go" is the whole instruction.
    was already built, what broke and how it was caught, and what is NOT done.
    Then wait for the next "go".
 
+**A full-app audit was run on 8 Sep 2026 (build 1825)** after two features were found
+unreachable in one week. `docs/AUDIT-SEPT-2026.md` is the record: what was checked, what
+was genuinely broken (a suspended member had no way to appeal; "Explain with Atwe AI" on
+a post had no menu row; four more mail routes claimed to have sent something), and the
+two things that are not bugs but the owner must know — with no card processor configured
+**anyone signed in can give themselves money**, and with no mail configured nobody can
+create an account. Both are visible at `<site>/api/config` (`billingEnabled`,
+`emailEnabled`). Read it before telling the owner the app is clean.
+
 **Apple Developer enrollment is APPROVED** (28 Aug 2026, Team `TH3FQ8FMKB`) — it is no
 longer a blocker, and `atwe-mobile/PROJECT-STATUS.md` carries the detail.
 
@@ -576,7 +585,19 @@ public/
 On every boot the server prints the optional integrations that are **not** configured
 and, in plain language, what each one costs — driven by the **same `SETUP_GROUPS`
 registry the admin Setup page reads**, so a new integration gets its boot warning for
-free and the two can never disagree. It exists because **TURN was the one thing with
+free and the two can never disagree. **Two of these warnings understated their own cost and were sharpened during the
+full-app audit, and the pattern is worth naming: the line somebody reads while deciding
+what to configure FIRST has to say the worst thing, not the tidiest thing.** Email's used
+to say only that passwords could not be reset — it now leads with *NOBODY CAN CREATE AN
+ACCOUNT*. Stripe's used to say payments were "a demo grant — the money is pretend", which
+is true and far short of the truth: with no card processor **`/api/wallet/topup` credits
+the wallet instantly**, so anyone signed in can give themselves money and then spend it,
+send it, or buy Pro with it. That is deliberate (every flow stays testable without
+Stripe) and it is fine on a laptop; on a site real people can reach it is an open till.
+Check a deployment with `<site>/api/config` — `billingEnabled` and `emailEnabled` are
+both in there.
+
+It exists because **TURN was the one thing with
 no warning anywhere**: without it, voice and video calls fall back to a free public
 relay and often fail to connect on 4G/5G — the most common "calls don't work" cause —
 and nothing in the logs ever said so, while SMTP, Stripe, push and storage all
@@ -2133,6 +2154,127 @@ Self-tested: restoring the swallow fails two checks by name.
 openers; not one asked the question a stranger asks — *can I actually join?* A journey
 test is a different kind of check from a surface test, and this is the second time in two
 days that gap has hidden a whole broken feature (the group Cloud was the first).
+
+**THE SAME LIE LIVED IN FOUR MORE ROUTES, and one of them could lock somebody out of
+their own account.** `signup/start` was the one that got reported; `mailCanDeliver` now
+guards every route that sends a person a code or a link:
+
+| route | what it used to do with no mail |
+|---|---|
+| `/api/auth/signup/start` · `/signup/resend` | said a code was sent (the reported bug) |
+| `/api/auth/reset/send` | said a reset code was sent |
+| **`/api/auth/forgot`** | the LEGACY link reset, still what Settings → Change password calls |
+| **`/api/auth/resend-verification`** | "Verification email sent." |
+| **`/api/auth/change-email`** | **moved the account to the new address, marked it UNVERIFIED, and claimed a link was sent** |
+
+**`change-email` is the one that mattered.** It writes
+`SET email = $new, email_verified = false` and only *then* sends. With no transport the
+member has moved to an address they can never verify — and on a deployment with
+`REQUIRE_EMAIL_VERIFICATION` that is a lockout from their own account. **Its refusal is
+the first line of the route, before any state changes at all**, and `journeys.js` asserts
+the address is UNCHANGED after the refusal, not merely that it refused.
+
+**Which of them may refuse loudly is decided by enumeration, not by convenience.** The two
+authed routes (`resend-verification`, `change-email`) may 503 however they like — you are
+already signed in, so there is nothing to discover. The two always-200 routes
+(`reset/send`, `forgot`) must check **before any account lookup**, so the refusal is
+byte-identical for a real address and an invented one; `signupflow.js` asserts that
+equality directly rather than only asserting a 503.
+
+**The invariant is checked in the SOURCE too, and that is deliberate.** A route test can
+only reach routes whose preconditions a probe can arrange — `resend-verification`
+legitimately answers "nothing to send" for an account made through signup, because the
+code already proved that address. So `signupflow.js` also reads `server.js` and requires
+every one of the six routes to mention `mailCanDeliver`. That check does not depend on
+account state, and it is what stops the SEVENTH code route shipping with the same lie.
+
+### THE JOURNEYS A PERSON HAS TO FINISH — `scratchpad/journeys.js`
+
+`signupflow.js` exists because nobody had ever asked "can a stranger join?". `journeys.js`
+asks the same kind of question about the other paths somebody must be able to complete,
+and it asks them **end to end** — a route answering 200 proves nothing if the next step
+cannot use what it returned. Five journeys, 35 checks, its own server (the 6-digit codes
+exist only in that process's stdout; the database stores a hash):
+
+1. **I forgot my password.** Ask, read the code, set a new one — and then the part a route
+   test never reaches: **the new password signs me in, the OLD one is dead, and the same
+   code cannot be used twice.** A reset that leaves the old password working is worse than
+   one that fails.
+2. **I wrote my first post**, and it is on my own profile afterwards.
+3. **I bought something.** Money in, money out, exactly the price leaves my wallet, the
+   seller is paid less Atwe's cut, the order is in Orders — and a **double-tap charges
+   once**.
+4. **I changed my email**, and the account really moved: the old address stops signing me
+   in and the new one starts.
+5. **I was suspended and I want to appeal**, driven through the REAL sign-in screen in a
+   real browser, because that is the only door a locked-out member has. Setup writes
+   `status='suspended'` straight to the database on purpose — the admin route that does
+   that has its own coverage, and what is under test is the member's way back.
+
+### A FEATURE CAN BE COMPLETE AND HAVE NO DOOR — `scratchpad/deadends.js`
+
+Two whole features were found unreachable in one week — a group's **Cloud** (hidden by a
+CSS rule) and **creating an account** (a route that said "sent" when nothing was sent) —
+and the founder's fair question was *"how do I know there isn't more?"* Every probe in
+this repo drove SCREENS or called openers by hand; not one asked the mechanical question
+**does every control in this file actually lead somewhere?**
+
+`deadends.js` asks it three ways over the WHOLE of `index.html` rather than screen by
+screen, and the second and third are what a surface test can never see:
+
+1. **DEAD HANDLER** — every `onclick`/`onchange`/`oninput`/`onsubmit` in the source names
+   a function; if that name does not exist in the running page, the control is dead.
+   Reading the **source**, not the DOM, is what makes this cover the ~90% of the app that
+   is rendered from template literals and only exists once a screen is open.
+   **1801 distinct names, all real.**
+2. **ORPHAN OVERLAY** — an `.overlay` whose id appears nowhere but on its own element is a
+   surface nothing can open. **440 overlays, all reachable.**
+3. **HIDDEN BY A RULE** — `reachable.js`'s fingerprint (inline `display` visible, computed
+   `display:none`) over twenty surfaces instead of six.
+
+**Comments must be stripped BEFORE scanning.** The app documents `jsAttr` with a `//` line
+reading ``onclick="fn(${jsAttr(name)})"``; read as markup that is a dead function, and the
+first run reported one on perfectly good code.
+
+**A FOURTH shape has no probe and needs a grep** (`function acOpenX(` where the name
+appears once in the file): a function that opens a real surface and nothing calls it.
+Run:
+
+```
+python3 - <<'EOF'
+import re, collections
+s=open('public/index.html').read()
+b='\n'.join(l for l in s.split('\n') if not re.match(r'\s*(//|\*|/\*)', l))
+d=re.findall(r'\nfunction\s+(ac[A-Za-z0-9_]*|open[A-Z][A-Za-z0-9_]*)\s*\(', b)
+c=collections.Counter(re.findall(r'\b[A-Za-z_$][A-Za-z0-9_$]*\b', b))
+print(sorted(n for n in set(d) if c[n] < 2))
+EOF
+```
+
+It reported **27** on 1727 functions. Twenty-four were superseded helpers (the newer path
+is wired and the old name simply survived) — but three were real, and two of those were a
+whole feature with the door removed:
+
+- **`openAppeal` — a suspended member could not contest it.** `doLogin`'s `accountBlocked`
+  branch reveals `#loginAppeal`; `openAppeal` reveals `#appealForm`, hides `#appealOpenBtn`
+  and focuses `#appealMsg`. **Not one of those four ids existed in the markup.** The server
+  route (`POST /api/auth/appeal`), the `appeals` table and the admin **Appeals** tab were
+  all real and working, and nobody could ever file one. Rebuilt; covered by `journeys.js`,
+  which drives the real sign-in screen as a real suspended account and reads the row back
+  out of the database.
+- **`acExplainPost` — "Explain with Atwe AI" on a post had no menu row anywhere.** The
+  endpoint, the overlay and the card were all built. A MESSAGE still reached it (the
+  message ⋯ menu's **Ask Atwe AI** → Explain), which is why it looked covered; a post
+  reached it nowhere. One row added to `#postActions`, shown only when the post has words
+  in it — there is nothing to explain about a caption-less photo.
+- **`acOpenGroupCallMenu` + `#groupCallPop`** — dead scaffolding created by build 1823,
+  when a group's video/Go live moved into the ⋯ menu and this popover lost its button.
+  Deleted, markup and CSS with it.
+
+**Do NOT delete "dead" CSS on the strength of a dead function.** `acLabelFilter` was
+genuinely orphaned, so its `.ac-label-bar` rule looked dead too — and the BOOKMARKS folder
+chip row (`.ac-bmk-bar`) borrows that exact class and has none of its own. Removing it
+unstyles a live row. A class is dead only when nothing renders it.
 
 ### NOTHING THE APP TRIES TO SHOW MAY BE HIDDEN BY A RULE — `scratchpad/reachable.js`
 

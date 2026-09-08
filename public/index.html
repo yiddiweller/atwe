@@ -792,6 +792,16 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
 .auth-error.is-ok{color:var(--green);}
 .auth-error:empty{display:none;}
 .auth-err-ic{width:16px;height:16px;flex-shrink:0;margin-top:1px;}
+/* Appealing a restriction, shown only on the blocked-sign-in branch. */
+.auth-appeal{margin-top:14px;}
+.auth-appeal-note{margin:0 0 6px;color:var(--t2);font-size:13.5px;line-height:1.45;}
+.auth-appeal-open{padding:0;height:auto;}
+.auth-appeal-form{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
+/* Solid, no outline — the app's own rule 3. The grey is the sign-in page's own. */
+.auth-appeal-msg{width:100%;background:var(--s2);border:none;outline:none;border-radius:18px;
+  color:#fff;font-family:inherit;font-size:15px;line-height:1.45;padding:13px 15px;resize:none;min-height:110px;}
+.auth-appeal-msg::placeholder{color:var(--t3);}
+.auth-appeal-send{height:46px;font-size:15px;}
 .auth-continue{margin-top:auto;background:var(--accent);color:var(--accent-tint);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
 .auth-skiplink{display:block;width:100%;margin-top:12px;background:none;border:none;color:var(--t3);
   font-size:14.5px;font-weight:600;font-family:inherit;cursor:pointer;padding:8px;text-align:center;transition:color var(--t-fast) var(--ease);}
@@ -1735,8 +1745,6 @@ body.reduce-motion .ai-menu-pop{animation-duration:.01s;}
   line-height:1.3;margin-top:2px;letter-spacing:0;}
 .aimp-item:has(small){align-items:flex-start;padding-top:11px;padding-bottom:11px;}
 .aimp-item:has(small) svg{margin-top:2px;}
-#groupCallPop{width:262px;}
-#groupCallPop .gcm-live{stroke:var(--green);}   /* live is green, the way it is everywhere else */
 /* The top ⋯ menus (Home AI helpers / Beam tools) + the profile menu share the BOTTOM
    NAV's exact material — same dark tint, same light blur, same thin hairline — and the
    same rounded corners, so they read as one family with the nav (founder request). */
@@ -6743,7 +6751,9 @@ body.light .fwd-ic .fwd-logo{filter:invert(1);}
 .mm-item.hl{background:var(--menu-hl);}
 @media(hover:hover){.mm-item:hover{background:var(--menu-hl);}}
 .mm-item svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;color:var(--t1);}
-.mm-item .mm-logo{width:20px;height:20px;flex-shrink:0;background:var(--t1);-webkit-mask:url('/logo-mark.png') center no-repeat;mask:url('/logo-mark.png') center no-repeat;-webkit-mask-size:16px;mask-size:16px;}
+.mm-item .mm-logo,.as-item .mm-logo{width:20px;height:20px;flex-shrink:0;background:var(--t1);-webkit-mask:url('/logo-mark.png') center no-repeat;mask:url('/logo-mark.png') center no-repeat;-webkit-mask-size:16px;mask-size:16px;}
+/* The action-sheet family sizes its icons at 19px, so the mark matches them there. */
+.as-item .mm-logo{width:19px;height:19px;-webkit-mask-size:15px;mask-size:15px;}
 .mm-item.danger{color:var(--red);}
 .mm-item.danger svg{color:var(--red);}
 /* A grouped FIRST section — used for Voice call / Video call at the top of the chat ⋯
@@ -11808,6 +11818,9 @@ body.light .ev-date .evd-m{color:var(--accent-hover);}
 .ac-srch-help-tip{font-size:12.5px;color:var(--t3);margin-top:6px;line-height:1.5;}
 .ac-srch-help-tip code{font-family:ui-monospace,Menlo,monospace;background:var(--s3);padding:1px 5px;border-radius:5px;color:var(--t2);}
 /* Chat labels */
+/* The horizontal chip row. It kept this name when the chat-label chips were replaced by
+   real tab pills in the top bar — the BOOKMARKS folder filter (.ac-bmk-bar) still uses
+   it, so this rule is live. Deleting it as "dead label CSS" silently unstyles that row. */
 .ac-label-bar{display:flex;gap:7px;overflow-x:auto;padding:8px 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch;border-bottom:1px solid var(--b1);}
 .ac-label-bar::-webkit-scrollbar{display:none;}
 .ac-lchip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:none;color:var(--t2);border-radius:var(--r-pill);font-family:inherit;font-size:13px;font-weight:600;padding:6px 12px;cursor:pointer;}
@@ -14524,6 +14537,26 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
       <input class="auth-pw-input" type="text" maxlength="20" id="login2fa" aria-label="Two-factor code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" oninput="authToggleContinue()"/>
     </div>
     <div class="auth-error" id="loginError"></div>
+    <!-- APPEALING A SUSPENSION. A locked-out member cannot sign in, so this is the only
+         door there is: doLogin's `accountBlocked` branch reveals #loginAppeal after
+         re-proving the password they just typed. All four of these ids were referenced
+         by openAppeal/submitAppeal and by that branch, and NONE of them existed in the
+         markup — so the server route, the admin Appeals queue and the JS were all real
+         and nobody could ever file one. Every button here is type="button": #authStep2
+         IS the sign-in form, and a bare <button> inside it would submit the login.
+         Nothing here is WHITE — Continue is this screen's one primary action, and the
+         way out of a restriction is an escape hatch, not the recommended thing to do. -->
+    <div class="auth-appeal hidden" id="loginAppeal">
+      <p class="auth-appeal-note">If you believe this is a mistake, you can ask our team to look at it again.</p>
+      <button type="button" class="auth-stepalt auth-appeal-open" id="appealOpenBtn" onclick="openAppeal()">Appeal this decision</button>
+      <div class="auth-appeal-form hidden" id="appealForm">
+        <textarea class="auth-appeal-msg" id="appealMsg" rows="4" maxlength="2000"
+          aria-label="Why should this be reviewed?"
+          placeholder="Tell us what happened, in your own words."></textarea>
+        <div class="auth-error" id="appealError"></div>
+        <button type="button" class="auth-btn auth-appeal-send" id="appealSubmitBtn" onclick="submitAppeal()">Send appeal</button>
+      </div>
+    </div>
     <!-- A submit button, so pressing it fires a real submit event — which is what Chrome,
          Safari and iOS Keychain watch for to decide a sign-in just happened. -->
     <button class="auth-btn auth-continue is-empty" id="loginBtn" type="submit">Continue</button>
@@ -18330,6 +18363,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     <button class="as-item" onclick="acCopyPostLink(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg> <span>Copy link</span></button>
     <button class="as-item hidden" id="paInfoBtn" onclick="acPostInfoFrom('other')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></svg> <span>Info</span></button>
     <button class="as-item hidden" id="paPostshotBtn" onclick="acPostshot(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.4-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.3"/></svg> <span>Postshot</span></button>
+    <button class="as-item hidden" id="paExplainBtn" onclick="closeOverlay('postActions');acExplainPost(AC._paPostId)"><span class="mm-logo"></span> <span>Explain with Atwe AI</span></button>
     <button class="as-item hidden" id="paNotInterestedBtn" onclick="paNotInterested()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/></svg> <span>Not interested in this post</span></button>
     <button class="as-item hidden" id="paReactionsBtn" onclick="closeOverlay('postActions');acOpenReactions(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg> <span>See who reacted</span></button>
     <button class="as-item hidden" id="paPinCommentBtn" onclick="acPinReplyTap(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M9 4h6M10 4l-.7 6.5-2.3 2v1.5h10V12.5l-2.3-2L14 4"/><path d="M12 16v4.5"/></svg> <span id="paPinCommentLabel">Pin comment</span></button>
@@ -20762,19 +20796,6 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
 <div class="ai-menu-pop hidden" id="sendMenuPop" role="menu" aria-label="Send options"></div>
 
 <!-- Chat tools popover — the small Apple-style menu the chat-tab ⋯ opens (Search / Starred / Unread only) -->
-<!-- Video, in a group: one button, two ways to use it. A call everyone joins,
-     or a broadcast everyone watches. Same frosted popover as the app's other
-     ⋯ menus, so it reads as the same object. -->
-<div class="ai-menu-scrim hidden" id="groupCallScrim" onclick="acCloseGroupCallMenu()"></div>
-<div class="ai-menu-pop hidden" id="groupCallPop" role="menu" aria-label="Video">
-  <button class="aimp-item" role="menuitem" onclick="acGroupCallPick('call')">
-    <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-    <span>Video call<small>Everyone in the group can join</small></span></button>
-  <div class="aimp-sep"></div>
-  <button class="aimp-item" role="menuitem" onclick="acGroupCallPick('live')">
-    <svg class="gcm-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg>
-    <span>Go live<small>You broadcast, the group watches</small></span></button>
-</div>
 <div class="ai-menu-scrim hidden" id="chatMenuScrim" onclick="acCloseChatMenu()"></div>
 <!-- The contact book: saved people by name + who saved you -->
 <div class="overlay hidden" id="smartLinkViewsView" onclick="if(event.target===this)closeOverlay('smartLinkViewsView')">
@@ -21308,7 +21329,6 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
         </div>
       </div>
       <!-- Chats pane -->
-      <div class="ac-label-bar hidden" id="acLabelBar"></div>
       <div class="ac-list" id="acList"></div>
       <!-- Message-content search results (WhatsApp-style "Messages" section under
            the matching chats; populated by acRunMsgSearch when the search box has a query) -->
@@ -22287,7 +22307,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1824'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1825'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -23932,7 +23952,13 @@ function setOk(id, msg) {
   el.classList.add('is-ok');
   el.innerHTML = '<svg class="auth-err-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="8 12.5 11 15.5 16 9.5"/></svg><span>' + escHtml(msg) + '</span>';
 }
-function setLoginError(msg) { setError('loginError', msg); }
+function setLoginError(msg) {
+  setError('loginError', msg);
+  /* Any OTHER login error means we are no longer looking at a restricted account —
+     put the appeal away, or it would sit under an unrelated "password is incorrect".
+     doLogin's blocked branch re-reveals it AFTER calling this. */
+  document.getElementById('loginAppeal')?.classList.add('hidden');
+}
 // A brief "welcome back" moment on login: the Atwe mark fades in soft, then the
 // member's own photo fades through it, then the app is revealed underneath.
 function playWelcomeSplash(user) {
@@ -26022,7 +26048,7 @@ async function changePassword() {
   try {
     await API.req('POST', '/api/auth/forgot', { email: S.user.email });
     showNotif('We emailed a password reset link to ' + S.user.email + '.');
-  } catch (e) { showNotif('Could not start password change. Please try again.'); }
+  } catch (e) { showNotif(e.message || 'Could not start password change. Please try again.'); }
 }
 
 /* ═══════════════════════════════════════════════
@@ -36932,7 +36958,6 @@ async function acToggleJoin(id, btn) {
   btn._busy = false;
 }
 // Pin ONE circle so it shows as its own feed tab after Collections (blueprint §Home).
-function acTogglePinCircle(id) { /* removed: circles are no longer pinnable as home-feed tabs */ }
 // ── Pinned tabs (circles + lists the user pinned to the Home tab row via the "+") ──
 // Persisted locally as [{type:'circle'|'list', id, name}], rendered as extra tabs
 // between "Collections" and the "+" add button. Tapping one loads that circle's/list's
@@ -40039,27 +40064,6 @@ function acFeedAiPick(which) {
 }
 // The chat-tab ⋯ opens the same Apple-style popover with the chat tools that used
 // to be top-bar icons: Search chats · Starred messages · Unread only (toggle).
-/* The group header's video button. One icon, two things behind it: a call the
-   group joins, or a broadcast the group watches. Reuses the app's popover
-   material and its shared positioner, so it sits and animates exactly like the
-   ⋯ menus. */
-function acOpenGroupCallMenu(btn) {
-  const pop = document.getElementById('groupCallPop');
-  const scrim = document.getElementById('groupCallScrim');
-  if (!btn || !pop || !scrim) return;
-  if (!pop.classList.contains('hidden')) { acCloseGroupCallMenu(); return; }  // toggle
-  scrim.classList.remove('hidden');
-  pop.classList.remove('hidden');
-  _acAnchorPopover(btn, pop);
-}
-function acCloseGroupCallMenu() {
-  _animateMenuPopClose(document.getElementById('groupCallPop'), document.getElementById('groupCallScrim'));
-}
-function acGroupCallPick(what) {
-  acCloseGroupCallMenu();
-  // Let the menu finish closing before the call UI takes the screen.
-  setTimeout(() => { if (what === 'live') acGroupGoLive(); else acStartGroupCall('video'); }, 160);
-}
 function acOpenChatMenu(e) {
   if (e) { e.stopPropagation(); }
   const btn = document.getElementById('tbBrandMore');
@@ -55993,10 +55997,9 @@ async function acLoadLabels() {
 // The custom lists (WhatsApp-style) now live as pills IN the Beam tab row (between
 // Contacts and the "+"), not in the old separate label bar — keep that bar hidden and
 // render the pills in the tab row instead. Function name kept (called from several spots).
-function acRenderLabelBar() {
-  const bar = document.getElementById('acLabelBar'); if (bar) { bar.classList.add('hidden'); bar.innerHTML = ''; }
-  acRenderChatLists();
-}
+/* Kept as the name every caller already uses; the chip row it once drew was replaced
+   by real tab pills in the top bar, and filtering goes through acChatTab('list:<id>'). */
+function acRenderLabelBar() { acRenderChatLists(); }
 // Insert/refresh the custom-list tab pills before the "+" (acChatTabAdd) in #tbChatTabs.
 function acRenderChatLists() {
   const row = document.getElementById('tbChatTabs'); if (!row) return;
@@ -56128,10 +56131,6 @@ async function acSaveEditedList(name) {
     showNotif('List saved.');
   } catch (e) { showNotif((e && e.message) || 'Could not save the list.'); }
   finally { AC._nlEditId = null; }
-}
-function acLabelFilter(id) {
-  AC._labelFilter = AC._labelFilter === id ? null : id;
-  acRenderLabelBar(); acRenderChats();
 }
 function acManageLabels() { acOpenLabelManage(); }
 /** Every list you have, with a way to change each one. The same screen WhatsApp
@@ -58735,6 +58734,13 @@ function acOpenUserActions(anchor, id, showFollow, postId) {
   AC._paPostId = (postId != null) ? postId : null; // "Not interested" / "Save to folder" only apply to a post
   const niBtn = document.getElementById('paNotInterestedBtn');
   if (niBtn) niBtn.classList.toggle('hidden', AC._paPostId == null);
+  /* "Explain with Atwe AI" needs a post that has WORDS in it — there is nothing to
+     explain about a picture with no caption, and offering it would open an empty card. */
+  const exBtn = document.getElementById('paExplainBtn');
+  if (exBtn) {
+    const post = AC._paPostId == null ? null : acFindPost(AC._paPostId);
+    exBtn.classList.toggle('hidden', !(post && post.body && post.body.trim()));
+  }
   const acxBtn = document.getElementById('paAddContextBtn');
   if (acxBtn) acxBtn.classList.toggle('hidden', AC._paPostId == null); // "Add context" applies to a post
   const rxBtn = document.getElementById('paReactionsBtn');
