@@ -8491,16 +8491,27 @@ async function renderStorageView(){
     </div>
     ${d.configured ? '' : `<div class="card"><div class="card-h">Switching it on</div>
       <div class="muted">Set <code>S3_BUCKET</code>, <code>S3_ACCESS_KEY</code> and <code>S3_SECRET_KEY</code> — plus
-      <code>S3_ENDPOINT</code> for Cloudflare R2 or Backblaze, or <code>S3_REGION</code> for Amazon. A
-      <code>CDN_URL</code> in front is optional. Restart, then come back and press Test.</div></div>`}`;
+      <code>S3_ENDPOINT</code> for Cloudflare R2 or Backblaze, or <code>S3_REGION</code> for Amazon. The bucket must be
+      <b>publicly readable</b> and <code>CDN_URL</code> must point at that public address — phones fetch photos from it
+      directly, so without it every new photo shows as a broken image. Restart, then come back and press Test.</div></div>`}`;
 }
 async function testStorage(){
   const el = document.getElementById('storageTest');
   el.innerHTML = '<div class="muted" style="margin-top:10px;">Writing a small file, reading it back, deleting it…</div>';
   try {
     const r = await api('/api/admin/storage/test', 'POST', {});
+    /* THREE outcomes, not two. A write that succeeds but cannot be READ BACK
+       used to render as a pass with a note — and it is not a pass: Atwe puts the
+       bucket's own address into the post and the member's phone fetches it
+       directly (see mediaRef in server.js, which passes a non-data: URL straight
+       through), so a private bucket means every new photo uploads happily and
+       then shows as a broken image. That is worse than storage being off. */
+    if (r.ok && !r.readable) {
+      el.innerHTML = `<div class="ad-row" style="margin-top:10px;"><div><b>Photos would be broken.</b><div class="muted">The file was written to <code>${jstr(r.bucket)}</code> and deleted again, so the keys are right — but it could not be read back from <code>${jstr(r.url||'')}</code>. Members' phones fetch that address directly, so new photos would upload and then show as broken images. Turn on public access for the bucket in Cloudflare (Settings → Public access → R2.dev subdomain) and set <code>CDN_URL</code> to the <code>pub-….r2.dev</code> address it gives you. Nothing is broken meanwhile — photos keep going into the database until this passes.</div></div><span class="ad-badge bad">fix this</span></div>`;
+      return;
+    }
     el.innerHTML = r.ok
-      ? `<div class="ad-row" style="margin-top:10px;"><div><b>It works.</b><div class="muted">Wrote and deleted a test file in <code>${jstr(r.bucket)}</code>${r.readable ? ' and read it back over the public URL' : ' — but could NOT read it back, so the bucket may not be public'}.</div></div><span class="ad-badge ok">pass</span></div>`
+      ? `<div class="ad-row" style="margin-top:10px;"><div><b>It works.</b><div class="muted">Wrote a test file to <code>${jstr(r.bucket)}</code>, read it back over the public address, and deleted it.</div></div><span class="ad-badge ok">pass</span></div>`
       : `<div class="ad-row" style="margin-top:10px;"><div><b>It did not work.</b><div class="muted">${jstr(r.reason||'')}</div></div><span class="ad-badge bad">fail</span></div>`;
   } catch(e){ el.innerHTML = '<div class="muted" style="margin-top:10px;">The test could not run.</div>'; }
 }
