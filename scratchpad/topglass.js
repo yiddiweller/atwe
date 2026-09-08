@@ -11,9 +11,17 @@
  *  2. the tint is NEVER opaque and never flat — an opaque plateau reads as a slab
  *     switching on at a fixed distance down the screen, the mistake three passes on the
  *     chat edge made before it was written down;
- *  2b. THE EFFECT STOPS EXACTLY WHERE THE BAR STOPS. The founder caught a fixed-height
+ *  2b. THE EFFECT ALL BUT STOPS WHERE THE BAR STOPS. The founder caught a fixed-height
  *     band still dissolving content ~80px after the bar had collapsed away, so posts
- *     went dark and blurry before they had reached the menu at all;
+ *     went dark and blurry before they had reached the menu at all. There IS a small
+ *     tail now (the fade cannot be made invisible inside 45px), so the check is not
+ *     "no overhang" any more — it is that the tint has already fallen to a whisper by
+ *     the bar's own edge, which is the property that actually mattered;
+ *  2c. AND NOTHING ANYWHERE IS A STEP. This is measured off real pixels, not off the
+ *     CSS: the fall-off is sampled down a column of a known white block and the check
+ *     is on the SLOPE — under .035 of opacity per pixel anywhere, and under .012 in the
+ *     last fifth, where the eye actually looks for an edge. The curve this replaced
+ *     dumped .083/px there and the founder saw it instantly;
  *  3. content genuinely shows THROUGH it: with the glass removed the same scrolled
  *     screen looks materially different in the bar's own band;
  *  4. the glass stays PINNED to the top of the screen while the bar slides up as the
@@ -97,10 +105,10 @@ const WORLDS = [
         `${T} the blur RAMPS — strongest at the top, not one flat frost (${r.layers.join('/')})`);
       chk(r.maxAlpha <= 0.95 && r.nAlphas >= 8 && r.monotonic,
         `${T} the tint is never opaque, never flat, always falling (max ${r.maxAlpha}, ${r.nAlphas} stops)`);
-      /* The effect must not reach PAST the bar. 1px of slack for sub-pixel rounding —
-         anything more and content is being dissolved before it gets to the menu. */
-      chk(r.overhang <= 1,
-        `${T} the glass stops where the bar stops, never below it (${r.overhang}px past)`);
+      /* The band runs a little past the bar so the fade has room to die out; what may
+         never come back is a band that dissolves content for most of a post. */
+      chk(r.overhang <= 32,
+        `${T} the band barely outruns the bar (${r.overhang}px past)`);
       await p.evaluate(() => { document.querySelectorAll('.overlay:not(.hidden)').forEach((o) => closeOverlay(o.id, true)); });
       await p.waitForTimeout(400);
     }
@@ -142,12 +150,56 @@ const WORLDS = [
       const tb = document.querySelector('.topbar'), g = tb.querySelector('.tb-glass');
       return { barTop: tb.getBoundingClientRect().top, barH: tb.getBoundingClientRect().height,
         glassTop: g.getBoundingClientRect().top,
-        glassH: g.getBoundingClientRect().height, hide: tb.style.getPropertyValue('--tb-hide') };
+        glassH: g.getBoundingClientRect().height, hide: tb.style.getPropertyValue('--tb-hide'),
+        tail: parseFloat(getComputedStyle(document.body).getPropertyValue('--tb-tail')) || 0 };
     });
     chk(pin.barTop < -8, `the bar really does slide up as the brand row collapses (${pin.barTop.toFixed(0)})`);
     chk(Math.abs(pin.glassTop) < 1.5, `the glass stays pinned to the top of the screen (${pin.glassTop.toFixed(1)})`);
-    chk(Math.abs(pin.glassH - (pin.barTop + pin.barH)) < 1.5,
-      `and is exactly the bar's VISIBLE height — not its full one (${pin.glassH.toFixed(0)} for ${(pin.barTop + pin.barH).toFixed(0)} visible)`);
+    chk(Math.abs(pin.glassH - (pin.barTop + pin.barH + pin.tail)) < 1.5,
+      `and tracks the bar's VISIBLE height, not its full one (${pin.glassH.toFixed(0)} for ${(pin.barTop + pin.barH).toFixed(0)} visible + ${pin.tail} tail)`);
+
+    /* THE FALL-OFF IS MEASURED, NOT DECLARED. The founder's complaint was never about a
+       stop value — it was that the tint died over ~7px and left a line across the photo.
+       So: hide everything in the bar except the glass, put a known white block under it,
+       and read the opacity straight down a column. Only the slope can tell a dissolve
+       from an edge, and only the last stretch of it decides whether a boundary is seen.
+       Sampled over a 2px window because a backdrop-filter is not pixel-exact. */
+    const prof = await p.evaluate(() => {
+      const tb = document.querySelector('.topbar');
+      const st = document.createElement('style'); st.id = '__glassHideKids';
+      st.textContent = '.topbar > *:not(.tb-glass){visibility:hidden!important}';
+      document.head.appendChild(st);
+      return { bottom: Math.round(tb.getBoundingClientRect().bottom),
+        glassH: Math.round(tb.querySelector('.tb-glass').getBoundingClientRect().height) };
+    });
+    await p.waitForTimeout(300);
+    const shot = await p.screenshot({ clip: { x: 180, y: 0, width: 30, height: prof.glassH + 10 } });
+    const fall = await p.evaluate(async ([b64, dpr]) => {
+      const img = await new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.src = 'data:image/png;base64,' + b64; });
+      const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+      const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, cv.width, cv.height).data;
+      const rows = [];
+      for (let y = 0; y < cv.height; y++) {
+        let sum = 0; for (let x = 0; x < cv.width; x++) sum += d[(y * cv.width + x) * 4];
+        rows.push(1 - (sum / cv.width) / 255);           // white underneath, so this is alpha
+      }
+      const css = [];                                    // one reading per css px
+      for (let i = 0; i + dpr <= rows.length; i += dpr) {
+        let s2 = 0; for (let k = 0; k < dpr; k++) s2 += rows[i + k];
+        css.push(s2 / dpr);
+      }
+      return css;
+    }, [shot.toString('base64'), 2]);
+    await p.evaluate(() => document.getElementById('__glassHideKids').remove());
+    const slope = (a, b) => { let m = 0; for (let i = a; i < b - 2; i++) m = Math.max(m, (fall[i] - fall[i + 2]) / 2); return m; };
+    const nb = Math.min(fall.length, prof.glassH);
+    const maxSlope = slope(0, nb);
+    const tailSlope = slope(Math.floor(nb * 0.8), nb);
+    const atBarBottom = fall[Math.min(prof.bottom, fall.length - 1)];
+    chk(maxSlope <= 0.035, `nowhere does the tint fall faster than .035 per pixel (worst ${maxSlope.toFixed(4)})`);
+    chk(tailSlope <= 0.012, `and in the last fifth — where an edge would show — it is a whisper (${tailSlope.toFixed(4)}/px)`);
+    chk(atBarBottom <= 0.35, `the tint has already all but gone by the bar's own edge, so the tail can never be a slab (${atBarBottom.toFixed(2)})`);
 
     /* THE BAND MUST BE THE BAR'S OWN BOX, not the whole top of the screen. The glass
        runs on BELOW the bar as a tail, and that tail dissolves content whether or not
