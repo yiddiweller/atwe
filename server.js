@@ -1881,7 +1881,7 @@ const SETUP_GROUPS = [
       { key: 'stripe', label: 'Card payments (Stripe)', on: () => billing.isConfigured(),
         env: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_ID'],
         gives: 'Real card payments: topping up a wallet, Atwe Pro, event tickets, paid subscriptions, boosts.',
-        without: 'Every payment is a DEMO grant — the money is pretend. Fine for testing, never for real members.',
+        without: 'ANYONE SIGNED IN CAN GIVE THEMSELVES MONEY. With no card processor every payment is a DEMO grant, and that includes "Add money" — a member can top their own wallet up for nothing, then spend it, send it to somebody, or buy Pro with it. Deliberate, so every flow is testable without Stripe; never leave it this way on a site real people can reach.',
         where: 'stripe.com → Developers → API keys. Then add a webhook to /api/billing/webhook and paste its signing secret. Turn Connect on in the same dashboard for cash-out to bank.' },
       { key: 'connect', label: 'Cash out to a bank (Stripe Connect)', on: () => billing.isConnectConfigured && billing.isConnectConfigured(),
         env: ['STRIPE_SECRET_KEY'],
@@ -1920,7 +1920,7 @@ const SETUP_GROUPS = [
     items: [
       { key: 'email', label: 'Email', on: () => mailer.isConfigured(), env: ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'],
         gives: 'THE 6-DIGIT CODE THAT CREATES AN ACCOUNT — plus password resets, order confirmations, shipping updates, sign-in alerts, your broadcasts.',
-        without: 'NOBODY CAN CREATE AN ACCOUNT. Signing up needs a code emailed to the person, so without this the app refuses to start one — and nobody can reset a password either. Everything else is written to the server log instead of sent.',
+        without: 'NOBODY CAN CREATE AN ACCOUNT. Signing up needs a code emailed to the person, so without this the app refuses to start one. Nobody can reset a forgotten password, re-send a verification email, or change the email on their account either — all four now refuse honestly rather than claiming to have sent something. Everything else is written to the server log instead of sent.',
         where: 'Any SMTP provider (Resend, Postmark, SendGrid, Gmail app password).' },
       { key: 'push', label: 'Push notifications', on: () => push.isConfigured(), env: ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'],
         gives: 'Alerts on a phone when the app is closed — messages, orders, money.',
@@ -7027,6 +7027,8 @@ app.post('/api/auth/resend-verification', auth.requireAuth, async (req, res) => 
     const user = rows[0];
     if (!user) return res.status(404).json({ error: 'Account not found.' });
     if (user.email_verified) return res.json({ ok: true, alreadyVerified: true });
+    // Same rule as the signup code: never answer "sent" when nothing was sent.
+    if (!mailCanDeliver(req)) return mailOutage(res);
     const raw = await issueToken(user.id, 'verify', 24 * 60 * 60 * 1000);
     await sendVerifyEmail(user, raw);
     res.json({ ok: true });
@@ -7042,6 +7044,12 @@ app.post('/api/auth/change-email', auth.requireAuth, blockImpersonation, rateLim
   const newEmail = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  /* REFUSE BEFORE ANY STATE CHANGES. This route moves the account to the new address
+     and marks it UNVERIFIED, then sends the link. With no way to deliver mail that
+     ordering strands somebody on an address they can never verify — and on a
+     deployment with REQUIRE_EMAIL_VERIFICATION it locks them out of their own
+     account. Nothing is written until we know the link can actually arrive. */
+  if (!mailCanDeliver(req)) return mailOutage(res);
   try {
     const { rows } = await db.query('SELECT id, email, password_hash, has_password FROM users WHERE id = $1', [req.user.id]);
     const u = rows[0];
@@ -7224,6 +7232,10 @@ app.post('/api/intro-seen', auth.requireAuth, async (req, res) => {
 // Start a password reset. Always 200 — never reveal whether the email exists.
 app.post('/api/auth/forgot', rateLimit(5, 60000), async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
+  /* BEFORE the lookup, exactly as /reset/send does: this route is deliberately
+     always-200 so it can't be used to discover who has an account, and a 503 raised
+     only on the branch where a user was found would be precisely that oracle. */
+  if (!mailCanDeliver(req)) return mailOutage(res);
   try {
     if (email) {
       const { rows } = await db.query('SELECT id, email FROM users WHERE lower(email) = $1', [email]);

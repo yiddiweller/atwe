@@ -206,6 +206,79 @@ const waitUp = async () => {
   ok(realReset.status === fakeReset.status && JSON.stringify(realReset.body) === JSON.stringify(fakeReset.body),
     '...and refuses identically for a real and an invented account, so it leaks nothing');
 
+  /* The legacy link-based reset, still what Settings -> Change password calls. Also
+     always-200 by design, so its check runs before any lookup for the same reason. */
+  const realForgot = await api('/api/auth/forgot', { email: 'atwe@atwe.internal' }, H);
+  const fakeForgot = await api('/api/auth/forgot', { email: 'no-such-' + Date.now() + '@example.com' }, H);
+  ok(realForgot.status === 503 && fakeForgot.status === 503, 'the emailed reset LINK refuses too',
+    realForgot.status + '/' + fakeForgot.status);
+  ok(JSON.stringify(realForgot.body) === JSON.stringify(fakeForgot.body),
+    '...identically, so it leaks nothing either');
+
+  /* The two AUTHED routes. No enumeration concern here — you are already signed in —
+     so they may refuse loudly. change-email matters most: it moves the account to the
+     new address and marks it UNVERIFIED before sending the link, so a refusal that
+     came after the write would strand somebody on an address they can never verify. */
+  const tok = (() => { try { return require('fs').readFileSync('/tmp/tok.txt', 'utf8').trim(); } catch (e) { return ''; } })();
+  if (tok) {
+    const authed = async (p, body) => {
+      const r = await fetch(`http://localhost:${PORT}${p}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-Host': H, Authorization: 'Bearer ' + tok },
+        body: JSON.stringify(body || {}),
+      });
+      let j = null; try { j = await r.json(); } catch (e) {}
+      return { status: r.status, body: j || {} };
+    };
+    const beforeEmail = (await (async () => {
+      const r = await fetch(`http://localhost:${PORT}/api/auth/me`, { headers: { Authorization: 'Bearer ' + tok } });
+      const j = await r.json().catch(() => ({}));
+      return (j.user || {}).email;
+    })());
+    /* An account made through signup/finish is ALREADY verified — the code proved the
+       address — so this route legitimately answers "nothing to send" for it. Assert the
+       honest outcome for whichever account /tmp/tok.txt happens to hold rather than
+       demanding a 503 it has no reason to give; the guard itself is proved for all four
+       routes by the source check below, which does not depend on account state. */
+    const rv = await authed('/api/auth/resend-verification');
+    ok(rv.status === 503 ? !!rv.body.emailDown : rv.body.alreadyVerified === true,
+      're-sending a verification email either refuses, or has nothing to send',
+      rv.status + ' ' + JSON.stringify(rv.body));
+    const ce = await authed('/api/auth/change-email', { email: 'moved-' + Date.now() + '@example.com', password: 'not-the-password' });
+    ok(ce.status === 503 && ce.body.emailDown, 'changing your email refuses', ce.status + ' ' + JSON.stringify(ce.body));
+    const afterEmail = (await (async () => {
+      const r = await fetch(`http://localhost:${PORT}/api/auth/me`, { headers: { Authorization: 'Bearer ' + tok } });
+      const j = await r.json().catch(() => ({}));
+      return (j.user || {}).email;
+    })());
+    ok(beforeEmail === afterEmail, '...BEFORE it changes anything, so nobody is stranded on an unverifiable address',
+      beforeEmail + ' -> ' + afterEmail);
+  }
+
+  /* THE INVARIANT, checked in the source rather than over the wire: every route that
+     sends somebody a code or a link must consult mailCanDeliver. A route test can only
+     reach the ones whose preconditions the probe can arrange; this reaches all of them,
+     and is what stops a NEW code route shipping with the same lie. */
+  {
+    const src = require('fs').readFileSync(require('path').join(ROOT, 'server.js'), 'utf8');
+    const MUST_GUARD = [
+      '/api/auth/signup/start',
+      '/api/auth/signup/resend',
+      '/api/auth/reset/send',
+      '/api/auth/forgot',
+      '/api/auth/resend-verification',
+      '/api/auth/change-email',
+    ];
+    for (const route of MUST_GUARD) {
+      const at = src.indexOf(`'${route}'`);
+      /* The route's own body: from its handler to the next app.<verb>( after it. */
+      const next = src.slice(at + 1).search(/\napp\.(get|post|put|patch|delete)\(/);
+      const bodyText = at < 0 ? '' : src.slice(at, next < 0 ? at + 4000 : at + 1 + next);
+      ok(at >= 0 && /mailCanDeliver\s*\(/.test(bodyText),
+        `${route} refuses when mail cannot be delivered`);
+    }
+  }
+
   stop();
   if (fails.length) console.log('== FAILS ==\n' + fails.map((f) => '  FAIL ' + f).join('\n'));
   console.log(`ok checks: ${pass}`);
