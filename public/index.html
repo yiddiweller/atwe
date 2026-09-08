@@ -861,7 +861,7 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
   background:var(--s1);border:none;border-radius:18px;padding:16px 16px;margin-bottom:12px;
   transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
 .acct-choice:hover{border-color:var(--b3);background:var(--s2);}
-.acct-choice:active{transform:scale(.99);}
+.acct-choice:active{transform:scale(1.01);}
 .acct-choice-ic{flex:0 0 auto;width:48px;height:48px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;}
 .acct-choice-ic.biz{border-radius:14px;} /* app-shape, mirroring the business avatar */
 .acct-choice-ic svg{width:24px;height:24px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round;}
@@ -1019,7 +1019,7 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
   background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;overflow:hidden;
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);background-size:cover;background-position:center;}
 .su-photo-ring.biz{border-radius:50%;} /* business signup picture is a full circle too (owner) */
-.su-photo-ring:active{transform:scale(.98);}
+.su-photo-ring:active{transform:scale(1.02);}
 .su-photo-ph{width:64px;height:64px;color:rgba(255,255,255,.22);}
 .su-photo-ring.has-photo .su-photo-ph{display:none;}
 
@@ -1106,7 +1106,7 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
 .su-prem-cta::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;transform:skewX(-18deg);pointer-events:none;
   background:linear-gradient(100deg,transparent,rgba(255,255,255,.6),transparent);animation:premSheen 3.4s ease-in-out infinite;}
 @keyframes premSheen{0%{left:-60%;}55%,100%{left:130%;}}
-.su-prem-cta:active{transform:scale(.98);}
+.su-prem-cta:active{transform:scale(1.02);}
 .su-prem-later{margin-top:14px;background:none;border:none;color:var(--t2);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;padding:8px;-webkit-tap-highlight-color:transparent;}
 .su-prem-later:active{opacity:.6;}
 @media(prefers-reduced-motion:reduce){.su-prem-glow,.su-prem-stars,.su-prem-emblem,.su-prem-halo,.su-prem-title,.su-prem-cta,.su-prem-cta::after,.su-splash-bar span,.su-splash-logo{animation:none;}}
@@ -1262,7 +1262,7 @@ body.rtl .intro-benefits{text-align:end;}
   background:radial-gradient(100px 76px at var(--mx,50%) var(--my,120%),
     rgba(0,0,0,.06),transparent 72%);
   opacity:calc(.10*var(--boost,0));transition:opacity var(--t-slow) var(--ease);}
-.ac-pill-btn.accent:active{transform:scale(.97);filter:brightness(.92);}
+.ac-pill-btn.accent:active{transform:scale(1.03);filter:brightness(.92);}
 /* Excludes .auth-btn-primary/.auth-continue: those get a flat white/blue
    fill (see below) — this wash is only for the grey-glass secondary button. */
 .auth-btn:not(.auth-btn-primary):not(.auth-continue){
@@ -1451,7 +1451,7 @@ body.light .auth-danger,body.light .auth-input{box-shadow:none;}
   padding:13px;font-size:15.5px;font-weight:700;font-family:inherit;cursor:pointer;margin:8px 0 4px;
   transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .sb-post:hover{opacity:.9;}
-.sb-post:active{transform:scale(.98);}
+.sb-post:active{transform:scale(1.02);}
 .sb-post svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round;flex-shrink:0;}
 .sidebar.collapsed .sb-post{width:46px;height:46px;padding:0;border-radius:50%;margin:8px auto 4px;}
 .sidebar.collapsed .sb-post span{display:none;}
@@ -1599,7 +1599,7 @@ body.light{
 .nc-item{display:flex;align-items:center;gap:14px;padding:11px 12px;border:none;background:none;color:var(--t1);
   font-family:inherit;text-align:start;width:100%;cursor:pointer;border-radius:17px;
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.nc-item:active{background:rgba(255,255,255,.08);transform:scale(.985);}
+.nc-item:active{background:rgba(255,255,255,.08);transform:scale(1.015);}
 @media(hover:hover){.nc-item:hover{background:rgba(255,255,255,.05);}}
 .nc-ic{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;
   box-shadow:0 4px 12px rgba(0,0,0,.28);}
@@ -1777,7 +1777,7 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
 /* Archived-view bulk actions (right side of the header) */
 .ac-arch-actions{margin-inline-start:auto;display:flex;gap:8px;}
 .ac-arch-act{border:none;background:var(--s2);color:var(--t1);border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
-.ac-arch-act:active{transform:scale(.96);}
+.ac-arch-act:active{transform:scale(1.04);}
 .ac-arch-act.danger{color:var(--rose);}
 /* Count on the ⋯ menu's Archived row */
 .aimp-count{margin-inline-start:auto;color:var(--t3);font-size:13px;font-weight:600;}
@@ -1813,7 +1813,7 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
 .me-hero{position:relative;display:flex;align-items:center;gap:15px;width:100%;padding:18px 17px;margin:2px 0 12px;
   border:none;border-radius:var(--set-card-r);cursor:pointer;text-align:start;font-family:inherit;overflow:hidden;
   background:var(--s2);-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
-.me-hero:active{transform:scale(.99);}
+.me-hero:active{transform:scale(1.01);}
 .me-hero-ava{flex:0 0 auto;}
 .me-hero-ava .user-avatar{width:62px;height:62px;font-size:24px;}
 .me-hero-main{flex:1;min-width:0;display:flex;flex-direction:column;}
@@ -1830,7 +1830,7 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
   background:none;border:none;padding:0;margin:0;font:inherit;color:inherit;text-align:start;cursor:pointer;
   -webkit-tap-highlight-color:transparent;}
 .me-hero{transition:transform var(--t-fast) var(--ease);}
-.me-hero:has(.me-hero-tap:active){transform:scale(.99);}
+.me-hero:has(.me-hero-tap:active){transform:scale(1.01);}
 .me-hero-switch{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:var(--s3);
   border:none;padding:0;display:grid;place-items:center;cursor:pointer;
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
@@ -1875,7 +1875,7 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
   margin:0 0 12px;padding:15px 18px 14px;border-radius:var(--set-card-r);
   background:linear-gradient(135deg,var(--accent) 0%,#123f96 100%);
   box-shadow:0 8px 24px rgba(0,0,0,.26);-webkit-tap-highlight-color:transparent;}
-.me-wallet:active{transform:scale(.99);}
+.me-wallet:active{transform:scale(1.01);}
 .me-wallet-head{display:flex;align-items:center;justify-content:space-between;}
 .me-wallet-cap{font-size:13px;font-weight:600;letter-spacing:.02em;opacity:.9;}
 .me-wallet-chev{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.75;}
@@ -1967,7 +1967,7 @@ body.reduce-motion .me-slide,body.reduce-motion .me-slide-back{animation:none;}
 .me-search-x{display:flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;
   border:none;border-radius:50%;background:var(--s4);cursor:pointer;
   transition:transform var(--t-fast) var(--ease);}
-.me-search-x:active{transform:scale(.96);}
+.me-search-x:active{transform:scale(1.04);}
 .me-search-x svg{width:11px;height:11px;stroke:var(--t1);stroke-width:2.4;fill:none;}
 /* A result row names its section underneath, the way the section rows do — otherwise
    "Orders" tells you nothing about where you are about to land. */
@@ -2127,14 +2127,14 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .ac-cd-stack{display:flex;flex-direction:column;align-items:stretch;width:fit-content;max-width:calc(100% - 32px);margin:8px auto 0;}
 .ac-cd-actbtn{width:100%;margin-top:22px;padding:13px;border-radius:999px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;
   background:transparent;border:none;color:var(--t1);-webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.ac-cd-actbtn:active{transform:scale(.98);background:var(--s2);}
+.ac-cd-actbtn:active{transform:scale(1.02);background:var(--s2);}
 .ac-cd-actbtn.danger{background:var(--red-soft);color:var(--red-txt);border-color:transparent;}
 .ac-cd-actbtn + .ac-cd-actbtn{margin-top:12px;}
 /* Contact page: three round icon buttons (Message / Call / Video), iOS-style. */
 .ac-cd-iconrow{display:flex;justify-content:center;gap:34px;padding:6px 0 0;}
 .ac-cd-icbtn{display:flex;flex-direction:column;align-items:center;gap:7px;background:none;border:none;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
 .ac-cd-icbtn .ic{width:56px;height:56px;border-radius:50%;background:var(--s2);color:var(--t1);display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.ac-cd-icbtn:active .ic{transform:scale(.92);}
+.ac-cd-icbtn:active .ic{transform:scale(1.06);}
 @media(hover:hover){.ac-cd-icbtn:hover .ic{background:var(--s3);}}
 .ac-cd-icbtn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 .ac-cd-icbtn .lbl{font-size:12.5px;color:var(--t2);font-weight:500;}
@@ -2307,7 +2307,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .cloud-item{position:relative;display:flex;flex-direction:column;gap:8px;padding:13px;border:none;border-radius:var(--r-md);
   background:var(--s2);cursor:pointer;transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);min-width:0;}
 @media(hover:hover){.cloud-item:hover{background:var(--s3);border-color:var(--b3);}}
-.cloud-item:active{transform:scale(.99);}
+.cloud-item:active{transform:scale(1.01);}
 .cloud-ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--s3);color:var(--t2);}
 .cloud-ic svg{width:21px;height:21px;stroke:currentColor;stroke-width:1.8;fill:none;}
 .cloud-ic.folder{background:rgba(var(--accent-rgb),.16);color:var(--accent);}
@@ -2868,7 +2868,7 @@ body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand
 .tb-ico svg{width:17px;height:17px;stroke:currentColor;stroke-width:2.5;fill:none;stroke-linecap:round;}
 .tb-ico svg circle{stroke-width:3;} /* the Engine ring reads thicker, like the nav glyph */
 @media(hover:hover){.tb-ico:hover{background:var(--s2);}}
-.tb-ico:active{transform:scale(.9);}
+.tb-ico:active{transform:scale(1.06);}
 @media(min-width:769px) and (min-height:501px){.tb-ico.tb-ico-menu{display:none;}} /* desktop has the sidebar */
 /* Beam tabs match the home row's scrollable rhythm in solo mode (they were
    space-between across the full width, which fights the icon cluster). */
@@ -2931,7 +2931,7 @@ body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand
   display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 @media(hover:hover){.tb-home-act:hover{background:var(--s2);}}
-.tb-home-act:active{transform:scale(.92);}
+.tb-home-act:active{transform:scale(1.06);}
 .tb-home-act svg{width:23px;height:23px;}
 .tb-home-dot{position:absolute;top:6px;right:7px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);}
 body.light .tb-home-dot{border-color:#fff;}
@@ -2959,7 +2959,7 @@ body.light .tb-home-dot{border-color:#fff;}
 .tb-homeava{width:26px;height:26px;border-radius:50%;padding:0;border:none;background:none;cursor:pointer;flex-shrink:0;
   -webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;transition:transform var(--t-fast) var(--ease);}
 .tb-homeava .user-avatar{width:26px;height:26px;font-size:11px;}
-.tb-homeava:active{transform:scale(.92);}
+.tb-homeava:active{transform:scale(1.06);}
 /* Keep the home avatar button at the post-avatar column width (42px) so the
    feed tabs line up with the post display names; the smaller 26px avatar is
    centered within it (centered with the post avatars). */
@@ -3017,7 +3017,7 @@ body.light .tb-home-dot{border-color:#fff;}
   padding:7px 15px;white-space:nowrap;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 @media(hover:hover){.tb-feedtab:not(.tb-feedtab-add):hover{background:var(--tab-fill-hv);color:var(--t1);}}
-.tb-feedtab:not(.tb-feedtab-add):active{transform:scale(.96);}
+.tb-feedtab:not(.tb-feedtab-add):active{transform:scale(1.04);}
 /* Selected = the white pill. No underline: it could drift a pixel while the row
    scrolls, and the fill says it far more plainly. */
 .tb-feedtab.active:not(.tb-feedtab-add){background:var(--tab-fill-on);color:var(--tab-ink-on);font-weight:700;}
@@ -3779,7 +3779,7 @@ textarea#inp::placeholder{color:var(--t3);}
   background:#fff;border:4px solid rgba(255,255,255,.35);cursor:pointer;
   transition:transform var(--t-fast) var(--ease);
 }
-.cam-shoot:active{transform:scale(.93);}
+.cam-shoot:active{transform:scale(1.06);}
 .cam-cancel{background:transparent;border:none;color:#fff;font-size:15px;font-weight:600;cursor:pointer;}
 /* Image preview inside input */
 .inp-image-preview{
@@ -3880,7 +3880,7 @@ textarea#inp::placeholder{color:var(--t3);}
   transform:scale(1.07);
   box-shadow:0 0 28px var(--accent-glow);
 }
-.send-btn:active{transform:scale(0.94);}
+.send-btn:active{transform:scale(1.06);}
 .send-btn:disabled{
   background:var(--s3);color:var(--t4);
   cursor:not-allowed;transform:none;box-shadow:none;
@@ -4253,7 +4253,7 @@ body.reduce-motion .iset-search{animation:none;}
 .iset-search-x{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
   border:none;background:var(--s4);flex-shrink:0;cursor:pointer;
   transition:transform var(--t-fast) var(--ease);}
-.iset-search-x:active{transform:scale(.96);}
+.iset-search-x:active{transform:scale(1.04);}
 .iset-search-x svg{width:11px;height:11px;stroke:var(--t1);stroke-width:2.4;fill:none;}
 /* Page panels + slide */
 /* iOS-style push/pop between the hub and sub-pages. GPU-composited (will-change +
@@ -4279,7 +4279,7 @@ body.reduce-motion .iset-body{animation:none;}
 /* Push-snooze chips: grey solid pills; the active "paused" state is amber (heads-up). */
 .snz-chips{display:flex;gap:6px;flex-shrink:0;}
 .snz-chip{border:none;border-radius:var(--r-pill);background:var(--s3);color:var(--t1);font-size:13px;font-weight:700;padding:7px 13px;cursor:pointer;font-family:inherit;}
-.snz-chip:active{transform:scale(.95);}
+.snz-chip:active{transform:scale(1.05);}
 .snz-chip.paused{background:var(--amber);color:#3a2c00;}
 .iset-row{position:relative;display:flex;align-items:center;gap:13px;padding:12px 15px;min-height:var(--row-h);
   cursor:pointer;transition:background var(--t-fast) var(--ease);background:none;width:100%;text-align:start;}
@@ -4359,12 +4359,12 @@ body.light .iset-signout{border:1px solid var(--b1);}
 .iset-row:active{background:var(--s3);transition-duration:0s;}
 .iset-row[data-static]:active{background:none;}
 
-.iset-back:active{transform:scale(.88);background:var(--s2);}
-.iset-signout:active{transform:scale(.985);background:rgba(255,0,51,.12);}
+.iset-back:active{transform:scale(1.06);background:var(--s2);}
+.iset-signout:active{transform:scale(1.015);background:rgba(255,0,51,.12);}
 .iset-select:active{border-color:var(--accent);}
-.ac-ptab:active{transform:scale(.96);}
+.ac-ptab:active{transform:scale(1.04);}
 .iset-back,.iset-signout{transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.ac-pill-btn:active,.iset-search-x:active{transform:scale(.96);}
+.ac-pill-btn:active,.iset-search-x:active{transform:scale(1.04);}
 .iset-search-x{transition:transform var(--t-fast) var(--ease);}
 /* iOS-style present: full-screen settings sheets fade + settle in (no
    horizontal transform, so a full-width fixed overlay can't flash a scrollbar). */
@@ -4442,7 +4442,7 @@ body.light .overlay.ob-screen{background:var(--bg);backdrop-filter:none;-webkit-
 .ob-sub{font-size:15px;color:var(--t3);line-height:1.5;margin:0 0 20px;}
 .ob-goals{display:flex;flex-direction:column;gap:11px;}
 .ob-goal{display:flex;align-items:center;gap:14px;width:100%;text-align:start;background:var(--s1);border:none;border-radius:16px;padding:14px 15px;cursor:pointer;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.ob-goal:active{transform:scale(.985);background:var(--s2);}
+.ob-goal:active{transform:scale(1.015);background:var(--s2);}
 @media(hover:hover){.ob-goal:hover{background:var(--s2);}}
 .ob-goal-ic{flex-shrink:0;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--t1);background:var(--s3);}
 .ob-goal-ic svg{width:23px;height:23px;stroke:var(--t1);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
@@ -4451,7 +4451,7 @@ body.light .overlay.ob-screen{background:var(--bg);backdrop-filter:none;-webkit-
 .ob-goal-tx i{font-size:13px;font-style:normal;color:var(--t3);margin-top:1px;}
 .ob-chips{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:8px;}
 .ob-chip{padding:9px 15px;border-radius:var(--r-pill);background:var(--s1);border:1.5px solid var(--b2);color:var(--t1);font-size:14px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
-.ob-chip:active{transform:scale(.95);}
+.ob-chip:active{transform:scale(1.05);}
 .ob-chip.on{background:var(--accent-dim);border-color:var(--accent);color:var(--t1);}
 .ob-people{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
 .ob-prow{display:flex;align-items:center;gap:12px;padding:9px 2px;}
@@ -4460,12 +4460,12 @@ body.light .overlay.ob-screen{background:var(--bg);backdrop-filter:none;-webkit-
 .ob-pname{font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ob-phandle{font-size:13px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ob-follow{flex-shrink:0;padding:8px 18px;border-radius:var(--r-pill);background:#fff;color:#000;border:none;font-size:13.5px;font-weight:700;cursor:pointer;transition:all var(--t-fast) var(--ease);}
-.ob-follow:active{transform:scale(.95);}
+.ob-follow:active{transform:scale(1.05);}
 .ob-follow.on{background:transparent;color:var(--t1);}
 body.light .ob-follow{background:var(--accent);color:var(--accent-tint);}
 body.light .ob-follow.on{background:transparent;color:var(--t1);}
 .ob-next{width:100%;margin-top:18px;padding:14px;border-radius:var(--r-pill);background:var(--primary);color:var(--on-primary);font-size:15.5px;font-weight:700;cursor:pointer;border:none;transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
-.ob-next:active{transform:scale(.98);}
+.ob-next:active{transform:scale(1.02);}
 /* First-run auth is a black brand moment in EVERY theme (like the app icon):
    pin the Black palette inside the gate so Light-theme tokens never leak
    near-black text onto the black surface. The moment you're signed in, the
@@ -4822,7 +4822,7 @@ body.nav-mini .sb-divider{width:38px;margin-inline-start:auto;margin-inline-end:
 .accent-custom-wrap input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0;}
 .theme-card{flex:1;min-width:0;background:none;border:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px;font-family:inherit;-webkit-tap-highlight-color:transparent;}
 .theme-swatch{position:relative;width:100%;aspect-ratio:16/11;border-radius:15px;border:2px solid transparent;transition:border-color var(--t-base) var(--ease),transform var(--t-fast) var(--ease);background:var(--sw-bg);overflow:hidden;}
-.theme-card:active .theme-swatch{transform:scale(.97);}
+.theme-card:active .theme-swatch{transform:scale(1.03);}
 .theme-card.sel .theme-swatch{border-color:var(--accent);}
 /* A smaller card floats inside the swatch (offset to upper-left) so the theme's
    background colour shows around it — conveying "bg + card" at a glance. */
@@ -4871,13 +4871,18 @@ body{
      pill was a solid --s3 (28) behind a 1px .16 rim (41): a lighter box behind a fainter
      line. Darkening the fill and brightening the rim takes the rim from 1.5x the fill to
      3.8x, which is the whole reason the login button reads as a raised object.
-     THE FILL IS SOLID, AND THAT IS THE ONE PLACE THIS PARTS FROM THE LOGIN BUTTON.
-     `.auth-btn` is a .06 white WASH, which is free on the sign-in page because there is
-     only black behind it — but a tab pill floats over the feed, and shot over a bright
-     photo the translucent version let the picture straight through: the labels bled from
-     dark grey to near-white and the row stopped reading as buttons at all. #0F0F0F is
-     exactly what .06 white composites to over black, so on the sign-in page's own ground
-     the two are pixel-identical; over a photo this one stays a button.
+     THE FILL IS THE BOTTOM NAV BAR'S OWN MATERIAL, exactly (founder: "make the grey
+     button a drop see-through just like the navigation bar… it should be on the same
+     level"). `rgba(18,18,21,.90)` + `blur(2px) saturate(150%)` is copied from
+     `.bottom-nav`, so the two cannot drift and a pill really is the same glass as the bar.
+     Over black it renders 16 — within a pixel of the login button's 15, so the sign-in
+     page's look is kept as well.
+     THE 90% IS WHAT MAKES IT SAFE, and it took a failure to learn. `.auth-btn` is a .06
+     white wash — 94% see-through — free on the sign-in page because there is only black
+     behind it, but shot over a bright photo the pills let the picture straight through:
+     the labels bled from dark grey to near-white and the row stopped reading as buttons.
+     At 10% see-through, blurred, a photo behind is a hint of tone and nothing more.
+     `tabpills.js` holds the line at .85, so nobody can quietly make it airier again.
      THE THIRD INGREDIENT IS THE ONE THE FOUNDER COULD SEE BUT NOT NAME: `.auth-btn`
      carries a soft accent wash centred BELOW the button (at 50% 120%), so it lifts and
      goes faintly blue toward its bottom edge — "the outline is a drop different on the
@@ -4886,7 +4891,7 @@ body{
      than the login button's fixed 120x86px, because a tab is a third of its width. */
   --tab-fill:    radial-gradient(90% 130% at 50% 128%,
                    rgba(var(--accent-rgb),.11), transparent 72%),
-                 #0F0F0F;
+                 rgba(18,18,21,.90);
   /* A RESTING LABEL IS FULL STRENGTH, not a dimmed one — measured off the same Apple
      screenshot, where the unselected labels read 247-254 (essentially white) and only
      the FILL says which tab you are on. Ours were --t2 (142) and visibly receded beside
@@ -4897,7 +4902,7 @@ body{
   --tab-ink-on:  var(--on-primary);
   --tab-fill-hv: radial-gradient(90% 130% at 50% 128%,
                    rgba(var(--accent-rgb),.14), transparent 72%),
-                 #1E1E1F;
+                 rgba(34,34,38,.92);
   /* The rim, and it is the login button's exactly: --divider at HALF a pixel, which is
      one physical pixel on a 2x/3x phone. It shipped for one build as a full CSS pixel of
      rgba(255,255,255,.16) — measured off Apple Fitness+, whose own rim really is one
@@ -4918,10 +4923,10 @@ body.light{
      for the same reason as Black. */
   --tab-fill:    radial-gradient(90% 130% at 50% 128%,
                    rgba(var(--accent-rgb),.09), transparent 72%),
-                 #F2F2F4;
+                 rgba(242,242,245,.90);
   --tab-fill-hv: radial-gradient(90% 130% at 50% 128%,
                    rgba(var(--accent-rgb),.12), transparent 72%),
-                 #E8E8EC;
+                 rgba(232,232,237,.92);
   --tab-hi:      rgba(255,255,255,.7);
   --tab-shade:   rgba(0,0,0,.10);
 }
@@ -5037,7 +5042,7 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ac-h3-btn svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.1;fill:none;
   stroke-linecap:round;stroke-linejoin:round;}
-.ac-h3-btn:active{transform:scale(.94);}
+.ac-h3-btn:active{transform:scale(1.06);}
 @media(hover:hover){.ac-h3-btn:hover{background:var(--s3);}}
 /* The pill fills whatever is left between the two circles. Its radius is half its own
    height, so it is a true capsule at any --h3-size. */
@@ -5083,8 +5088,10 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
 /* The name no longer turns blue when they are online — the dot says it now, and two
    signals for one fact is one too many. */
 #acThreadScreen .ac-h3-txt .msg-name.live{color:var(--t1);}
-/* Calling lives in the ⋯ menu. The buttons stay in the DOM because other code shows and
-   hides them by id; only the ⋯ is drawn. */
+/* Calling and the Cloud live in the ⋯ menu, and the buttons they replaced are DELETED
+   rather than hidden — see the note in the markup. This rule stays as a guard: it costs
+   nothing and it means a stray .ac-callbtn dropped into this header can never quietly
+   reappear beside the three shapes. Nothing in the app relies on it any more. */
 #acThreadScreen .ac-head-acts .ac-callbtn:not(.ac-head-more){display:none!important;}
 #acThreadScreen .ac-head-acts{gap:0;}
 #acThreadScreen .ac-head-more{width:var(--h3-size);height:var(--h3-size);border-radius:50%;
@@ -5195,7 +5202,7 @@ body.light #acThreadScreen::before{background:linear-gradient(to bottom,
 .msg-sub2{font-size:12px;color:var(--t3);}
 /* Conversation header: avatar (→ profile) · name+subline (tap name → @username) · actions */
 .ac-head-ava{background:none;border:none;padding:0;cursor:pointer;flex-shrink:0;line-height:0;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
-.ac-head-ava:active{transform:scale(.93);}
+.ac-head-ava:active{transform:scale(1.06);}
 .ac-head-name{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;
   background:none;border:none;padding:0;margin:0;cursor:pointer;text-align:start;-webkit-tap-highlight-color:transparent;}
 .ac-head-name .msg-name{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t1);}
@@ -5229,7 +5236,7 @@ body.light #acThreadScreen::before{background:linear-gradient(to bottom,
 .pinlist-body{font-size:14.5px;color:var(--t1);line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
 .pinlist-unpin{flex-shrink:0;width:34px;height:34px;border:none;background:var(--s2);color:var(--t2);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .pinlist-unpin svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;}
-.pinlist-unpin:active{transform:scale(.92);}
+.pinlist-unpin:active{transform:scale(1.06);}
 /* In-chat message search bar */
 .ac-search-bar{display:flex;align-items:center;gap:8px;padding:7px 10px 7px 12px;background:var(--s1);border-bottom:1px solid var(--b2);flex-shrink:0;}
 .ac-search-bar.hidden{display:none;}
@@ -5441,7 +5448,7 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
 .msg-undo.going{animation:undoOut var(--t-base) var(--ease) forwards;pointer-events:none;}
 @keyframes undoOut{to{opacity:0;transform:translateY(-50%) translateX(6px) scale(.9);}}
 @media(hover:hover){.msg-undo:hover{background:var(--s3);color:var(--t1);}}
-.msg-undo:active{transform:translateY(-50%) scale(.94);}
+.msg-undo:active{transform:translateY(-50%) scale(1.06);}
 /* …and the message itself does not blink out. It shrinks away and the gap closes behind
    it — the height is animated from a measured value because `auto` cannot be. */
 .msg-row.retracting{overflow:hidden;pointer-events:none;
@@ -5771,7 +5778,7 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
   -webkit-tap-highlight-color:transparent;transition:transform var(--t-slow) cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease);}
 .msg-row.me .vn-play{background:rgba(255,255,255,.34);}
 .msg-row.team .vn-play{color:var(--t1);background:rgba(255,255,255,.14);} /* distinct disc, NOT the same grey as the dim bars */
-.vn-play:active{transform:scale(.82);transition:transform var(--t-fast) ease;}
+.vn-play:active{transform:scale(1.06);transition:transform var(--t-fast) ease;}
 .vn-play svg{width:17px;height:17px;fill:currentColor;stroke:none;}
 .vn-ic-pause{display:none;}
 .msg-voice.playing .vn-ic-play{display:none;}
@@ -5783,7 +5790,7 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
   align-items:center;justify-content:center;
   font-family:inherit;font-size:12px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
   -webkit-tap-highlight-color:transparent;transition:transform var(--t-slow) cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease);font-variant-numeric:tabular-nums;}
-.vn-speed:active{transform:scale(.82);transition:transform var(--t-fast) ease;}
+.vn-speed:active{transform:scale(1.06);transition:transform var(--t-fast) ease;}
 .msg-voice.started .vn-speed{display:inline-flex;animation:vnSpeedIn .26s cubic-bezier(.34,1.56,.64,1);}
 @keyframes vnSpeedIn{from{opacity:0;transform:scale(.3);}to{opacity:1;transform:scale(1);}}
 .msg-row.me .vn-speed{background:rgba(255,255,255,.22);color:#fff;}
@@ -5970,7 +5977,7 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
 .mc-rsvp button{flex:1;border:none;border-radius:11px;padding:9px 0;font-size:12px;font-weight:700;cursor:pointer;
   background:rgba(255,255,255,.1);color:inherit;font-family:inherit;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.mc-rsvp button:active{transform:scale(.94);}
+.mc-rsvp button:active{transform:scale(1.06);}
 .mc-rsvp button.on.going{background:var(--green);color:var(--on-green);}
 .mc-rsvp button.on.maybe{background:var(--amber);color:var(--text-black);}
 .mc-rsvp button.on.no{background:var(--red);color:#fff;}
@@ -6045,7 +6052,7 @@ body.reduce-motion .mc-loc-pin.pulse{animation:none;}
 .mk-toggle input:checked + .mk-sw::after{transform:translateX(18px);}
 .mk-submit{width:100%;margin-top:20px;border:none;border-radius:var(--r-pill);padding:15px;background:var(--primary);color:var(--on-primary);
   font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.mk-submit:active{transform:scale(.98);}
+.mk-submit:active{transform:scale(1.02);}
 .mk-submit:disabled{opacity:.38;cursor:default;}
 
 /* Voice-note recording bar */
@@ -6160,7 +6167,7 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
   opacity:0;transform:translateY(8px) scale(.92);pointer-events:none;
   transition:opacity var(--t-base) var(--ease),transform var(--t-base) var(--ease),padding var(--t-slow) var(--ease);}
 .ac-scrolldown.show{opacity:1;transform:none;pointer-events:auto;}
-.ac-scrolldown:active{transform:scale(.94);}
+.ac-scrolldown:active{transform:scale(1.06);}
 .ac-scrolldown svg{width:19px;height:19px;flex-shrink:0;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .acsd-label{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;font-size:13px;font-weight:600;color:var(--t1);margin:0;
   transition:max-width var(--t-slow) var(--ease),opacity var(--t-base) var(--ease),margin var(--t-slow) var(--ease);}
@@ -6304,7 +6311,7 @@ body.light .ac-item-unread.muted{background:var(--t3);}
   transition:opacity var(--t-base) var(--ease),transform var(--t-base) cubic-bezier(.2,.85,.3,1.3),
              width var(--t-base) var(--ease),margin var(--t-base) var(--ease),background var(--t-fast) var(--ease);}
 .ac-fixbtn.show{opacity:1;transform:none;width:32px;margin-inline-end:2px;pointer-events:auto;}
-.ac-fixbtn:active{transform:scale(.92);}
+.ac-fixbtn:active{transform:scale(1.06);}
 /* The mark itself — WHITE, the same white as the + beside it, and no disc behind it, and
    drawn much smaller than the blue send it sits next to (owner, twice). The BOX stays 36 so
    every alignment and spacing rule around it is untouched and the tap target stays a full
@@ -6722,7 +6729,7 @@ body.light .fwd-ic .fwd-logo{filter:invert(1);}
 .fwd-sendbar.hidden{display:none;}
 .fwd-sendcount{flex:1;font-size:15px;font-weight:600;color:var(--t1);}
 .fwd-sendbtn{flex:0 0 auto;width:44px;height:44px;border-radius:50%;background:var(--primary);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
-.fwd-sendbtn:active{transform:scale(.94);}
+.fwd-sendbtn:active{transform:scale(1.06);}
 .fwd-sendbtn svg{width:20px;height:20px;stroke:var(--on-primary);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 /* Glide-menu rows: label on the left, icon on the right (iOS context-menu
    style). The grey highlight (.hl) follows the finger as it drags over the menu;
@@ -6826,7 +6833,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ax-ask textarea::placeholder{color:var(--t4);}
 .ax-send{flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--primary);border:none;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:opacity var(--t-fast) ease,transform var(--t-fast) ease;}
-.ax-send:hover{transform:scale(1.05);}.ax-send:active{transform:scale(.92);}
+.ax-send:hover{transform:scale(1.05);}.ax-send:active{transform:scale(1.06);}
 .ax-send svg{width:18px;height:18px;stroke:var(--on-primary);stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 /* Overlays that open ON TOP of others (AtChat/Help) must stack above them. */
 #supportAiOverlay{z-index:1500;}
@@ -6949,7 +6956,7 @@ body.reduce-motion #tbRefreshBeam.sweep::before{animation:none;}
 /* Draft-waiting dot on the compose FAB (accent, ringed against the FAB fill). */
 .fab-draft-dot{position:absolute;top:3px;right:3px;width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg);pointer-events:none;}
 .ac-fab:hover{transform:translateY(-1px) scale(1.04);filter:brightness(.96);}
-.ac-fab:active{transform:scale(.95);filter:brightness(.92);}
+.ac-fab:active{transform:scale(1.05);filter:brightness(.92);}
 .ac-fab svg{width:26px;height:26px;stroke:var(--on-primary);stroke-width:2.6;fill:none;stroke-linecap:round;}
 /* Custom nav-bar icon inside a FAB (= for chat, target for calls): mask +
    currentColor so it matches the FAB's icon color and can't be force-darked. */
@@ -6965,7 +6972,7 @@ body.reduce-motion #tbRefreshBeam.sweep::before{animation:none;}
   background:var(--accent);color:#fff;font-size:14px;font-weight:700;font-family:inherit;
   box-shadow:0 6px 20px rgba(var(--accent-rgb),.4);animation:acNewPop .28s var(--ease);}
 .ac-newposts svg{width:16px;height:16px;}
-.ac-newposts:active{transform:translateX(-50%) scale(.95);}
+.ac-newposts:active{transform:translateX(-50%) scale(1.05);}
 @keyframes acNewPop{from{opacity:0;transform:translateX(-50%) translateY(-8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 body.reduce-motion .ac-newposts{animation:none;}
 .ac-screen.hidden{display:none;}
@@ -7166,7 +7173,7 @@ body.reduce-motion .ac-newposts{animation:none;}
   background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:6px 12px 6px 9px;
   font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.4);}
 .ac-prodtag svg{width:15px;height:15px;}
-.ac-prodtag:active{transform:scale(.95);}
+.ac-prodtag:active{transform:scale(1.05);}
 /* Selected-product chip inside the composer. */
 .ac-compose-prodchip{display:flex;align-items:center;gap:10px;margin:10px 0 0;padding:8px 10px;background:var(--s2);border-radius:var(--r-md);}
 .ac-compose-prodchip img{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;}
@@ -7347,7 +7354,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
    search bar, the row cards) is --s2, and measured pixels put this one at 11,11,13
    against their 20,20,22 — visibly darker, which read as a different material. */
 .me-status{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;margin:0 0 12px;background:var(--s2);border:none;border-radius:var(--set-card-r);cursor:pointer;color:var(--t1);text-align:left;transition:transform var(--t-fast) var(--ease);}
-.me-status:active{transform:scale(.99);}
+.me-status:active{transform:scale(1.01);}
 .me-status-em{font-size:19px;line-height:1;flex-shrink:0;}
 .me-status-tx{font-size:14.5px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .me-status-tx.me-status-empty{color:var(--t3);font-weight:500;}
@@ -7374,7 +7381,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .ac-prodtag-check.on{background:var(--accent);border-color:var(--accent);}
 .ac-prodtag-check svg{width:14px;height:14px;fill:none;stroke:var(--accent-tint,#fff);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;}
 .ac-compose-prodadd{margin:10px 0 0;padding:8px 14px;background:var(--s2);border:1px dashed var(--b2);border-radius:var(--r-md);color:var(--accent);font-weight:700;font-size:13.5px;cursor:pointer;}
-.ac-compose-prodadd:active{transform:scale(.97);}
+.ac-compose-prodadd:active{transform:scale(1.03);}
 /* Quick-buy preview sheet (tap a tagged product). */
 .qb-modal{max-width:420px;}
 .qb-head{display:flex;gap:14px;align-items:center;margin:2px 0 12px;}
@@ -7400,7 +7407,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .feed-prodtag{position:absolute;left:14px;bottom:calc(var(--nav-bottom, 84px) + 8px);z-index:4;display:inline-flex;align-items:center;gap:6px;
   background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:8px 14px 8px 11px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.5);}
 .feed-prodtag svg{width:16px;height:16px;}
-.feed-prodtag:active{transform:scale(.95);}
+.feed-prodtag:active{transform:scale(1.05);}
 /* Who-viewed-your-profile screen. */
 .pv-teaser{font-size:14px;color:var(--t2);padding:2px 2px 12px;}
 .pv-teaser b{color:var(--t1);font-weight:800;}
@@ -7555,7 +7562,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .ac-post .ac-post-actions>* svg{stroke:currentColor;}
 .ac-post .ac-post-actions>.ac-views{cursor:default;}
 @media(hover:hover){.ac-post .ac-post-actions>*:hover{filter:brightness(1.22);}}
-.ac-post .ac-post-actions>*:active{transform:scale(.94);}
+.ac-post .ac-post-actions>*:active{transform:scale(1.06);}
 @keyframes acLikePop{0%{transform:scale(1);}38%{transform:scale(1.34);}68%{transform:scale(.92);}100%{transform:scale(1);}}
 .ac-like.pop svg{animation:acLikePop .42s cubic-bezier(.2,.8,.25,1);}
 /* Postshot preview — a rendered PNG of a post to save/share */
@@ -7730,7 +7737,7 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .mr-acts .ac-pill-btn{flex:0 0 auto;padding:7px 16px;}
 /* ── Premium Atwe card (gift card + Atwe Card) — compact, solid, vertical flip ── */
 .atwe-card{position:relative;width:100%;max-width:340px;margin:2px auto 0;aspect-ratio:1.6/1;perspective:1400px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--t-base) var(--ease);}
-.atwe-card:active{transform:scale(.98);}
+.atwe-card:active{transform:scale(1.02);}
 .atwe-card-inner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform var(--t-slow) cubic-bezier(.25,.8,.25,1);will-change:transform;}
 /* flip UP from the bottom edge (vertical) */
 .atwe-card.flipped .atwe-card-inner{transform:rotateX(180deg);}
@@ -8089,7 +8096,7 @@ body.light .order-success{background:rgba(255,255,255,.82);}
 /* Jobs hub AI-match card: near-black card, blue sparkle disc, Living-Light rim. */
 .ac-jobmatch{position:relative;display:flex;align-items:center;gap:12px;width:100%;text-align:start;font-family:inherit;cursor:pointer;
   background:var(--s1);border:none;border-radius:16px;padding:14px;margin:4px 0 10px;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
-.ac-jobmatch:active{transform:scale(.99);}
+.ac-jobmatch:active{transform:scale(1.01);}
 .jm-ic{flex:0 0 auto;width:40px;height:40px;border-radius:12px;background:rgba(var(--accent-rgb),.16);display:flex;align-items:center;justify-content:center;}
 .jm-ic svg{width:22px;height:22px;fill:var(--accent);stroke:none;}
 .jm-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
@@ -8156,7 +8163,7 @@ body.light .ac-annbar,body.light.feed-cover #acFeed>.ac-annbar{background:#f0f2f
 .ac-annbar .aab-msg{flex:1;min-width:0;font-size:14px;line-height:1.4;color:var(--t1);}
 .ac-annbar .aab-cta{flex-shrink:0;background:var(--primary);color:var(--on-primary);border:none;border-radius:999px;
   padding:8px 15px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:transform var(--t-fast) var(--ease),filter var(--t-fast) var(--ease);}
-.ac-annbar .aab-cta:active{transform:scale(.97);filter:brightness(.92);}
+.ac-annbar .aab-cta:active{transform:scale(1.03);filter:brightness(.92);}
 .ac-annbar .aab-x{flex-shrink:0;width:26px;height:26px;border:none;background:none;color:var(--t3);cursor:pointer;
   display:flex;align-items:center;justify-content:center;border-radius:50%;align-self:flex-start;}
 .ac-annbar .aab-x svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
@@ -8254,7 +8261,7 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .story-sound{position:absolute;right:14px;bottom:78px;width:40px;height:40px;border-radius:50%;border:none;z-index:4;
   background:rgba(0,0,0,.42);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:transform var(--t-fast) var(--ease);}
-.story-sound:active{transform:scale(.9);}
+.story-sound:active{transform:scale(1.06);}
 .story-sound svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 /* Composer video preview */
 .st-pick-vid{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;}
@@ -8289,14 +8296,14 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .st-men-chip button{background:none;border:none;color:inherit;font-size:15px;cursor:pointer;padding:0 3px;line-height:1;}
 .story-mentions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px;pointer-events:none;}
 .story-mention{pointer-events:auto;background:rgba(255,255,255,.92);color:#111114;border:none;border-radius:var(--r-pill);font-size:13.5px;font-weight:800;padding:8px 14px;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.25);}
-.story-mention:active{transform:scale(.95);}
+.story-mention:active{transform:scale(1.05);}
 /* Daily poll + question stickers in the viewer (centered cards on the story) */
 .story-sticker-wrap{position:absolute;left:0;right:0;bottom:150px;z-index:3;display:flex;justify-content:center;padding:0 20px;pointer-events:none;}
 .story-poll,.story-qbox{pointer-events:auto;width:100%;max-width:320px;background:rgba(255,255,255,.14);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:22px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.32);}
 .story-poll-q,.story-qbox-q{color:#fff;font-size:16px;font-weight:800;text-align:center;margin-bottom:12px;text-shadow:0 1px 3px rgba(0,0,0,.35);word-break:break-word;}
 .story-poll-opts{display:flex;flex-direction:column;gap:9px;}
 .story-poll-opt{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.95);color:#111114;font-size:15px;font-weight:700;padding:12px 16px;border:none;border-radius:14px;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
-.story-poll-opt:active{transform:scale(.98);}
+.story-poll-opt:active{transform:scale(1.02);}
 .story-poll-opt.voted{cursor:default;}
 .story-poll-opt.mine{box-shadow:inset 0 0 0 2px var(--accent);}
 .story-poll-fill{position:absolute;left:0;top:0;bottom:0;background:rgba(0,136,255,.22);z-index:0;transition:width var(--t-slow) var(--ease);}
@@ -8320,14 +8327,14 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .story-link-chip{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;max-width:80%;background:rgba(255,255,255,.94);color:#111114;font-size:14.5px;font-weight:700;padding:11px 18px;border-radius:var(--r-pill);cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.3);}
 .story-link-chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
 .story-link-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.story-link-chip:active{transform:scale(.96);}
+.story-link-chip:active{transform:scale(1.04);}
 /* Shoppable story: a tagged-product pill (its own pointer-events, since .story-cap is inert). */
 .story-prodtag{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;margin-top:10px;max-width:100%;
   background:rgba(255,255,255,.96);color:#111;border:none;border-radius:var(--r-pill);padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.4);}
 .story-prodtag svg{width:17px;height:17px;flex-shrink:0;stroke:#111;}
 .story-prodtag .sp-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .story-prodtag .sp-price{color:var(--accent);font-weight:800;flex-shrink:0;}
-.story-prodtag:active{transform:scale(.96);}
+.story-prodtag:active{transform:scale(1.04);}
 .story-nav{position:absolute;top:60px;bottom:60px;width:35%;background:none;border:none;cursor:pointer;z-index:2;}
 .story-nav.left{left:0;}
 .story-nav.right{right:0;width:65%;}
@@ -8570,7 +8577,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .sell-sortbar::-webkit-scrollbar{display:none;}
 .sell-sortchip{flex:0 0 auto;background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;}
 .sell-sortchip.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
-.sell-sortchip:active{transform:scale(.96);}
+.sell-sortchip:active{transform:scale(1.04);}
 /* Recently visited profiles row (Engine empty state) */
 .rp-head{display:flex;align-items:center;justify-content:space-between;margin:10px 10px 6px;}
 .rp-title{font-size:14px;font-weight:800;color:var(--t1);}
@@ -8586,7 +8593,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .biz-starters{display:flex;flex-direction:column;align-items:center;gap:9px;padding:26px 20px;}
 .biz-starters-h{font-size:13.5px;color:var(--t3);font-weight:600;margin-bottom:2px;}
 .biz-starter{background:var(--s1);border:none;border-radius:var(--r-pill);color:var(--t1);font-size:14.5px;font-weight:600;padding:11px 18px;cursor:pointer;font-family:inherit;max-width:100%;}
-.biz-starter:active{transform:scale(.97);background:var(--s2);}
+.biz-starter:active{transform:scale(1.03);background:var(--s2);}
 /* Double-tap heart burst */
 .dbl-heart{position:fixed;z-index:2000;font-size:34px;pointer-events:none;transform:translate(-50%,-50%) scale(.4);animation:dblHeart .65s cubic-bezier(.2,.85,.3,1.1) forwards;}
 @keyframes dblHeart{20%{transform:translate(-50%,-50%) scale(1.25);opacity:1;}100%{transform:translate(-50%,-110%) scale(1);opacity:0;}}
@@ -9315,7 +9322,7 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .rev-report svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;}
 .rev-helpful svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 .rev-helpful.on{background:var(--accent-dim);color:var(--accent);}
-.rev-helpful:active{transform:scale(.96);}
+.rev-helpful:active{transform:scale(1.04);}
 .rev-mine{font-size:13px;color:var(--t2);display:flex;align-items:center;gap:8px;margin:8px 0;}
 .rev-star-pick{display:flex;gap:6px;justify-content:center;margin:6px 0;}
 .rev-star-btn{background:none;border:none;cursor:pointer;padding:2px;}
@@ -9399,7 +9406,7 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .mkt-fsel:focus,.mkt-fprice:focus{border-color:var(--accent);outline:none;}
 .addr-acts button{padding:7px 8px;border-radius:8px;transition:background var(--t-fast);}
 .mkt-save svg,.mkt-card-save svg{transition:fill var(--t-fast),stroke var(--t-fast),transform var(--t-fast);}
-.mkt-save:active,.mkt-card-save:active{transform:scale(.86);}
+.mkt-save:active,.mkt-card-save:active{transform:scale(1.06);}
 .mkt-save.on svg,.mkt-card-save.on svg{transform:scale(1.08);}
 .mkt-qty-step button{transition:background var(--t-fast);}
 .mkt-foot{flex-wrap:wrap;gap:8px;}
@@ -9411,12 +9418,12 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
   .sa-card:hover,.mkt-more-card:hover,.addr-card[onclick]:hover{border-color:var(--accent);}
   .mkt-buy:hover,.shop-buy:hover{filter:brightness(1.06);}
 }
-.mkt-buy:active,.shop-buy:active,.mkt-cart:active,.sa-card:active,.mkt-more-card:active{transform:scale(.97);}
+.mkt-buy:active,.shop-buy:active,.mkt-cart:active,.sa-card:active,.mkt-more-card:active{transform:scale(1.03);}
 .mkt-buy,.shop-buy,.mkt-cart,.sa-card,.mkt-more-card,.addr-card{transition:transform var(--t-fast),border-color var(--t-fast),filter var(--t-fast);}
 /* Showcase / portfolio */
 .sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 14px;}
 .sc-card{background:var(--s1);border:none;border-radius:13px;overflow:hidden;cursor:pointer;transition:transform var(--t-fast),border-color var(--t-fast);}
-.sc-card:active{transform:scale(.98);}
+.sc-card:active{transform:scale(1.02);}
 @media(hover:hover){.sc-card:hover{border-color:var(--accent);}}
 .sc-card-img{height:120px;background:var(--s2) center/cover;}
 .sc-card-img.noimg{display:grid;place-items:center;}
@@ -9432,7 +9439,7 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .sc-cat{display:inline-block;font-size:11px;font-weight:700;background:var(--s2);color:var(--t2);padding:2px 9px;border-radius:8px;margin:2px 0;}
 .sc-actions{display:flex;align-items:center;gap:10px;margin:12px 0 2px;}
 .sc-like{display:flex;align-items:center;gap:7px;background:var(--s2);border:none;border-radius:var(--r-pill);padding:8px 16px;cursor:pointer;color:var(--t1);font-weight:600;transition:transform var(--t-fast);}
-.sc-like:active{transform:scale(.95);}
+.sc-like:active{transform:scale(1.05);}
 .sc-like svg{width:18px;height:18px;fill:none;stroke:var(--t2);stroke-width:2;transition:fill var(--t-fast),stroke var(--t-fast);}
 .sc-like.on svg{fill:var(--red);stroke:var(--red);}
 .sc-comment-box{display:flex;gap:8px;align-items:center;margin:8px 0;}
@@ -9772,7 +9779,7 @@ body.reduce-motion .live-gift-float{animation:none;opacity:0;}
 .ac-sgc-bio{font-size:13px;color:var(--t2);line-height:1.38;padding:7px 12px 14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.76em;}
 /* AI "catch me up" digest card */
 .ac-digest{display:flex;align-items:center;gap:12px;width:100%;text-align:start;background:var(--s2);border:none;border-radius:14px;padding:13px 14px;margin:10px 0;cursor:pointer;font-family:inherit;}
-.ac-digest:active{transform:scale(.99);}
+.ac-digest:active{transform:scale(1.01);}
 .ac-digest-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--s3);display:flex;align-items:center;justify-content:center;}
 .ac-digest-ic img{width:22px;height:22px;border-radius:6px;}
 .ac-digest-t{flex:1;display:flex;flex-direction:column;color:var(--t1);font-weight:700;font-size:14.5px;}
@@ -10238,7 +10245,7 @@ body.light .ac-post-toolbar .msg-attach:active{background:rgba(0,0,0,.1);}
 .ac-conn-btn.pending_out{background:transparent;color:var(--t2);border-color:var(--b3);}
 .ac-conn-btn.pending_in{background:var(--green);border-color:var(--green);color:var(--on-green);}
 .ac-conn-btn.connected{background:transparent;color:var(--t1);border-color:var(--b3);}
-.ac-conn-btn:active{transform:scale(.96);}
+.ac-conn-btn:active{transform:scale(1.04);}
 .ac-prof-actions .ac-conn-btn{height:38px;padding:0 16px;display:flex;align-items:center;justify-content:center;}
 .ac-conn-item .ac-item-last{color:var(--t3);}
 /* Compact follow button inside a "Who to follow" row */
@@ -10268,7 +10275,7 @@ body.light .ac-post-toolbar .msg-attach:active{background:rgba(0,0,0,.1);}
 .ac-hiring-banner span{flex:1;min-width:0;}
 .ac-hiring-banner svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
 .ac-hiring-banner .ac-hiring-chev{width:16px;height:16px;opacity:.7;}
-.ac-hiring-banner:active{transform:scale(.99);filter:brightness(.97);}
+.ac-hiring-banner:active{transform:scale(1.01);filter:brightness(.97);}
 .ac-prof-stats{display:flex;gap:22px;margin-top:16px;}
 .ac-stat{font-size:13.5px;color:var(--t3);cursor:default;}
 .ac-stat b{color:var(--t1);font-weight:700;}
@@ -10293,7 +10300,7 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
   display:flex;align-items:center;justify-content:center;
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ac-prof-back svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.4;fill:none;}
-.ac-prof-back:active{transform:scale(.92);}
+.ac-prof-back:active{transform:scale(1.06);}
 @media(hover:hover){.ac-prof-back:hover{background:var(--s3);}}
 /* X-style profile tab bar (sticky under the banner/header) */
 /* Pills, like every other tab row — so they scroll rather than squeeze six words
@@ -10416,7 +10423,7 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-postfocus .ac-pf-actions>* .ac-rp-n{color:inherit;}
 .ac-postfocus .ac-pf-actions>* svg{stroke:currentColor;}
 @media(hover:hover){.ac-postfocus .ac-pf-actions>*:hover{filter:brightness(1.22);}}
-.ac-postfocus .ac-pf-actions>*:active{transform:scale(.94);}
+.ac-postfocus .ac-pf-actions>*:active{transform:scale(1.06);}
 /* Reply / comment button on a post */
 .ac-reply{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--t3);
   font-size:13px;font-weight:600;padding:8px 0;margin:-8px 0;transition:color var(--t-fast) var(--ease);}
@@ -10471,7 +10478,7 @@ body.light .ac-brand-logo{filter:invert(1);}
   display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
   transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .eng-ai-btn:hover{background:var(--s3,var(--s2));border-color:var(--b3);}
-.eng-ai-btn:active{transform:scale(.93);}
+.eng-ai-btn:active{transform:scale(1.06);}
 /* The swirl is the brand mark masked in currentColor, so it follows the theme and
    never ships a second copy of the logo. */
 .eng-ai-mark{width:24px;height:24px;display:block;background:var(--t1);
@@ -10545,7 +10552,7 @@ body.light .ac-chatsel{background:rgba(245,245,247,.82);border-color:rgba(0,0,0,
   background:rgba(255,255,255,.06);border:none;border-radius:13px;padding:8px 4px;cursor:pointer;
   color:var(--t1);font-size:11px;font-weight:600;transition:background var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease);}
 body.light .ac-chatsel-acts button{background:rgba(0,0,0,.05);}
-.ac-chatsel-acts button:active{transform:scale(.95);}
+.ac-chatsel-acts button:active{transform:scale(1.05);}
 .ac-chatsel-acts button svg{width:20px;height:20px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .ac-chatsel-acts button.danger{color:var(--red);}
 .ac-chatsel.none .ac-chatsel-acts button{opacity:.4;pointer-events:none;} /* nothing selected → actions inert */
@@ -10578,7 +10585,7 @@ body.light .ac-chatsel-acts button{background:rgba(0,0,0,.05);}
 .feed-sound{position:absolute;right:14px;bottom:22px;width:40px;height:40px;border-radius:50%;border:none;z-index:3;
   background:rgba(0,0,0,.42);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:transform var(--t-fast) var(--ease);}
-.feed-sound:active{transform:scale(.9);}
+.feed-sound:active{transform:scale(1.06);}
 .feed-sound svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .feed-head{position:absolute;left:16px;bottom:20px;right:62px;display:flex;align-items:center;gap:10px;cursor:pointer;z-index:2;}
 .feed-head .feed-ava{width:40px;height:40px;flex-shrink:0;border:1.5px solid rgba(255,255,255,.55);}
@@ -10592,7 +10599,7 @@ body.light .ac-chatsel-acts button{background:rgba(0,0,0,.05);}
 /* Vertical engagement rail (like / dislike / comment / share / save / more). */
 .feed-rail{position:absolute;right:6px;bottom:78px;z-index:3;display:flex;flex-direction:column;align-items:center;gap:15px;}
 .frail-btn{background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
-.frail-btn:active{transform:scale(.86);}
+.frail-btn:active{transform:scale(1.06);}
 .frail-ic{width:33px;height:33px;display:grid;place-items:center;}
 .frail-ic svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 1px 5px rgba(0,0,0,.55));}
 .frail-n,.frail-lbl{font-size:12px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.7);min-height:13px;line-height:1;}
@@ -10701,7 +10708,7 @@ body.feeds-immersive #acFeed:not(.feeds-mode){position:fixed;inset:0;height:100d
 .pv-rail button{background:none;border:none;padding:0;cursor:pointer;color:#fff;
   display:flex;flex-direction:column;align-items:center;gap:3px;-webkit-tap-highlight-color:transparent;
   transition:transform var(--t-fast) var(--ease);}
-.pv-rail button:active{transform:scale(.86);}
+.pv-rail button:active{transform:scale(1.06);}
 .pv-rail button svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 5px rgba(0,0,0,.55));}
 .pv-rail .ac-act-n{font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.7);min-height:13px;line-height:1;}
@@ -10716,7 +10723,7 @@ body.feeds-immersive #acFeed:not(.feeds-mode){position:fixed;inset:0;height:100d
 .ac-vid-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:50%;
   background:rgba(0,0,0,.5);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
   display:grid;place-items:center;pointer-events:none;transition:transform var(--t-fast) var(--ease);}
-.ac-vid-wrap:active .ac-vid-play{transform:translate(-50%,-50%) scale(.9);}
+.ac-vid-wrap:active .ac-vid-play{transform:translate(-50%,-50%) scale(1.06);}
 .ac-vid-play svg{width:24px;height:24px;fill:#fff;stroke:none;margin-left:3px;}
 
 /* Group/Channel join sheet (non-member view of a shared link) — Telegram/
@@ -10743,7 +10750,7 @@ body.light .gp-card{background:#fff;}
   background:var(--accent);color:var(--accent-tint);font-size:15.5px;font-weight:700;font-family:inherit;
   transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .gp-join:hover{opacity:.9;}
-.gp-join:active{transform:scale(.98);}
+.gp-join:active{transform:scale(1.02);}
 .gp-join.requested{background:transparent;color:var(--t1);border:none;}
 .gp-note{font-size:12.5px;color:var(--t4);margin-top:14px;line-height:1.5;max-width:340px;margin-inline-start:auto;margin-inline-end:auto;}
 @media(min-width:600px) and (min-height:501px){
@@ -10783,7 +10790,7 @@ body.light .gp-card{background:#fff;}
 .feed-c-prodrow .ac-compose-prodchip{background:rgba(255,255,255,.1);}
 .feed-c-prodrow .cpc-name{color:#fff;}
 .feed-c-tagbtn{align-self:flex-start;padding:8px 14px;background:rgba(255,255,255,.1);border:1px dashed rgba(255,255,255,.3);border-radius:var(--r-md);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;}
-.feed-c-tagbtn:active{transform:scale(.97);}
+.feed-c-tagbtn:active{transform:scale(1.03);}
 .feed-c-stage{flex:1;position:relative;min-height:0;display:flex;}
 .feed-c-text{flex:1;display:flex;align-items:center;justify-content:center;padding:30px;transition:background var(--t-base) var(--ease);}
 .feed-c-text textarea{width:100%;max-width:680px;background:none;border:none;outline:none;resize:none;color:#fff;
@@ -10978,7 +10985,7 @@ body.light #acListScreen .ac-item-inner::before{background:rgba(0,0,0,.07);}
   background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ac-call-back svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
-.ac-call-back:active{transform:scale(.9);}
+.ac-call-back:active{transform:scale(1.06);}
 @media(hover:hover){.ac-call-back:hover{background:var(--accent);color:var(--accent-tint);}}
 /* Call links (WhatsApp-style shareable call link) */
 .ac-calllink-ic{flex-shrink:0;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-tint);}
@@ -11037,7 +11044,7 @@ body:not(.nav-mini) .sidebar #sbHelp2.sb-foot svg{transform:scale(.870);stroke-w
 .ac-err-btn{margin-top:14px;background:var(--s2);color:var(--t1);border:none;
   border-radius:var(--r-pill);padding:9px 20px;font-size:13.5px;font-weight:700;cursor:pointer;transition:all var(--t-fast) var(--ease);}
 .ac-err-btn:hover{background:var(--s3);}
-.ac-err-btn:active{transform:scale(.96);}
+.ac-err-btn:active{transform:scale(1.04);}
 /* Empty-search "Discover" panel */
 /* On-screen search-scope chips (mobile — sidebar scopes are inside the drawer) */
 /* Search scope row = word-only tabs, matching the home/chat top bars: roomy
@@ -11053,7 +11060,7 @@ body:not(.nav-mini) .sidebar #sbHelp2.sb-foot svg{transform:scale(.870);stroke-w
   transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 @media(hover:hover){.ac-scope-chip:not(.active):hover{background:var(--tab-fill-hv);color:var(--t1);}}
 .ac-scope-chip.active{background:var(--tab-fill-on);color:var(--tab-ink-on);font-weight:700;}
-.ac-scope-chip:active{transform:scale(.96);}
+.ac-scope-chip:active{transform:scale(1.04);}
 /* Recent searches (empty search page) */
 /* Demo-mode floating pill (admin showcase) — non-blocking, never shifts layout */
 .demo-banner{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%) translateY(-10px);z-index:99999;
@@ -11086,7 +11093,7 @@ body.light{
 .st-btn{margin-top:24px;background:var(--primary);color:var(--on-primary);border:none;
   border-radius:var(--r-pill);padding:13px 30px;font-size:15.5px;font-weight:600;cursor:pointer;
   transition:filter var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.st-btn:active{filter:brightness(.92);transform:scale(.97);}
+.st-btn:active{filter:brightness(.92);transform:scale(1.03);}
 /* A slow drift, not a hop — the calm motion the owner picked. */
 @keyframes stDrift{0%,100%{transform:translateY(-6px) rotate(3deg)}50%{transform:translateY(6px) rotate(-3deg)}}
 @keyframes stShad{0%,100%{transform:scaleX(1);opacity:.5}50%{transform:scaleX(.86);opacity:.3}}
@@ -11156,7 +11163,7 @@ body.light .upd-banner{background:rgba(28,28,30,.98);}
   padding:7px 16px;cursor:pointer;font-family:inherit;border-radius:999px;-webkit-tap-highlight-color:transparent;
   transition:filter var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 @media(hover:hover){.undo-toast .ut-btn:hover{filter:brightness(1.12);}}
-.undo-toast .ut-btn:active{transform:scale(.95);}
+.undo-toast .ut-btn:active{transform:scale(1.05);}
 body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
 @media(prefers-reduced-motion:reduce){.undo-toast{transition:opacity var(--t-base) linear;}}
 /* Advertise (promote) day picker */
@@ -11173,7 +11180,7 @@ body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
 .dshort-row::-webkit-scrollbar{display:none;}
 .dshort-cell{flex:0 0 122px;height:204px;border-radius:14px;overflow:hidden;position:relative;background:var(--s2);border:none;padding:0;cursor:pointer;}
 .dshort-cell img,.dshort-cell video{width:100%;height:100%;object-fit:cover;display:block;}
-.dshort-cell:active{transform:scale(.97);}
+.dshort-cell:active{transform:scale(1.03);}
 .dshort-play{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.45);display:grid;place-items:center;}
 .dshort-play svg{width:12px;height:12px;fill:#fff;stroke:none;}
 .dshort-by{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:6px;padding:16px 8px 7px;font-size:12px;font-weight:600;color:#fff;text-align:start;background:linear-gradient(transparent,rgba(0,0,0,.72));}
@@ -11183,7 +11190,7 @@ body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
 .ac-recent-chip{display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:none;color:var(--t1);border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;max-width:100%;}
 .ac-recent-chip svg{width:14px;height:14px;stroke:var(--t3);stroke-width:2;fill:none;flex:0 0 auto;}
 .ac-recent-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.ac-recent-chip:active{transform:scale(.97);}
+.ac-recent-chip:active{transform:scale(1.03);}
 @media(min-width:769px) and (min-height:501px){.ac-search-scopes{display:none;}}
 .ac-search-discover{display:flex;flex-direction:column;align-items:center;text-align:center;padding:44px 24px;gap:8px;}
 .ac-sd-ic{width:58px;height:58px;border-radius:50%;background:var(--accent-dim);color:var(--accent);
@@ -11216,7 +11223,7 @@ body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
 .ac-ind-card{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:start;padding:13px 14px;
   background:var(--s1);border:none;border-radius:15px;cursor:pointer;font-family:inherit;
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);}
-.ac-ind-card:active{transform:scale(.97);}
+.ac-ind-card:active{transform:scale(1.03);}
 @media(hover:hover){.ac-ind-card:hover{background:var(--s2);border-color:var(--b3);}}
 .ac-ind-card.joined{border-color:var(--accent);}
 .ac-ind-ava{width:36px;height:36px;margin-bottom:8px;}
@@ -11449,7 +11456,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .simjob-feat{color:var(--amber);font-size:12px;}
 .simjob-sub{font-size:12.5px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .simjob-chev{width:16px;height:16px;flex-shrink:0;fill:none;stroke:var(--t3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-.simjob-row:active{transform:scale(.99);}
+.simjob-row:active{transform:scale(1.01);}
 .ac-job-report:active{color:var(--red);}
 .ac-prof-mutual{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:8px;flex-wrap:wrap;}
   /* Overlapping faces, then the names — the names are the point, so they read
@@ -11518,7 +11525,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
   background:linear-gradient(135deg,rgba(var(--accent-rgb),.16),rgba(var(--accent-rgb),.12));border:none;border-radius:18px;padding:15px 16px;
   transition:border-color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ac-aimatch-card:hover{border-color:var(--accent);}
-.ac-aimatch-card:active{transform:scale(.99);}
+.ac-aimatch-card:active{transform:scale(1.01);}
 .ac-aimatch-ic{flex:0 0 auto;width:44px;height:44px;border-radius:13px;background:var(--accent);color:var(--accent-tint);display:flex;align-items:center;justify-content:center;}
 .ac-aimatch-ic svg{width:24px;height:24px;fill:currentColor;}
 .ac-aimatch-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
@@ -11531,7 +11538,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
   background:var(--s1);border:none;border-radius:15px;padding:13px 6px;color:var(--t1);font-size:12px;font-weight:650;
   transition:border-color var(--t-fast) var(--ease);}
 .ac-disc-actions button:hover{border-color:var(--b3);}
-.ac-disc-actions button:active{transform:scale(.97);}
+.ac-disc-actions button:active{transform:scale(1.03);}
 .ac-disc-actions button svg{width:22px;height:22px;stroke:var(--accent);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .ac-disc-actions button span{text-align:center;line-height:1.2;}
 /* ── Explore (search empty state) — clean, X-style discover ── */
@@ -11550,7 +11557,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
   border:none;border-radius:var(--set-card-r);padding:17px 16px;margin:10px 0 8px;overflow:hidden;
   background:linear-gradient(135deg,var(--accent),var(--accent) 54%,var(--accent));color:#fff;
   box-shadow:0 14px 36px rgba(var(--accent-rgb),.32);-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
-.xp-ai:active{transform:scale(.985);}
+.xp-ai:active{transform:scale(1.015);}
 .xp-ai::after{content:"";position:absolute;top:-60%;left:-30%;width:55%;height:220%;pointer-events:none;
   background:linear-gradient(100deg,transparent,rgba(255,255,255,.22),transparent);transform:rotate(8deg);animation:xpSheen 5.5s ease-in-out infinite;}
 @keyframes xpSheen{0%,100%{left:-35%}55%{left:130%}}
@@ -11571,7 +11578,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .xp-tile{flex:0 0 auto;width:80px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;font-family:inherit;position:relative;
   background:none;border:none;padding:10px 3px;border-radius:14px;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.xp-tile:active{transform:scale(.93);}
+.xp-tile:active{transform:scale(1.06);}
 @media(hover:hover){.xp-tile:hover{background:var(--s1);}}
 .xp-tile-ic{width:52px;height:52px;border-radius:16px;background:var(--s1);display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease);}
 .xp-tile-ic svg{width:23px;height:23px;stroke:var(--t1);stroke-width:1.85;fill:none;stroke-linecap:round;stroke-linejoin:round;}
@@ -11613,7 +11620,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .ev-seg-btn.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .ev-lbl{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--t3);font-weight:600;}
 .ev-card{display:flex;gap:12px;padding:12px;border:none;border-radius:14px;margin-bottom:10px;cursor:pointer;background:var(--s2);}
-.ev-card:active{transform:scale(.99);}
+.ev-card:active{transform:scale(1.01);}
 .ev-date{flex-shrink:0;width:54px;text-align:center;background:var(--s3);border-radius:10px;padding:7px 0;}
 .ev-date .evd-m{font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;}
 body.light .ev-date .evd-m{color:var(--accent-hover);}
@@ -11779,7 +11786,7 @@ body.light .ev-date .evd-m{color:var(--accent-hover);}
 .feat-row{display:flex;gap:10px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .feat-row::-webkit-scrollbar{display:none;}
 .feat-card{position:relative;flex:0 0 200px;background:var(--s2);border:none;border-radius:14px;overflow:hidden;cursor:pointer;text-decoration:none;color:inherit;display:flex;flex-direction:column;}
-.feat-card:active{transform:scale(.99);}
+.feat-card:active{transform:scale(1.01);}
 .feat-thumb{height:104px;background-size:cover;background-position:center;background-color:var(--s3);display:flex;align-items:center;justify-content:center;}
 .feat-thumb.feat-link svg,.feat-thumb.feat-vid svg{width:30px;height:30px;stroke:var(--t3);stroke-width:2;fill:none;}
 .feat-thumb.feat-vid svg{fill:var(--t2);stroke:none;}
@@ -11795,7 +11802,7 @@ body.light .ev-date .evd-m{color:var(--accent-hover);}
 .ac-srch-help{padding:14px 4px;}
 .ac-srch-help-h{font-size:12px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;}
 .ac-srch-op{display:flex;align-items:center;gap:10px;width:100%;background:var(--s2);border:none;border-radius:12px;padding:10px 13px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:start;}
-.ac-srch-op:active{transform:scale(.99);}
+.ac-srch-op:active{transform:scale(1.01);}
 .ac-srch-op code{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--accent);background:var(--s3);padding:2px 7px;border-radius:6px;flex:0 0 auto;}
 .ac-srch-op span{font-size:13px;color:var(--t3);}
 .ac-srch-help-tip{font-size:12.5px;color:var(--t3);margin-top:6px;line-height:1.5;}
@@ -11825,7 +11832,7 @@ body.light .ev-date .evd-m{color:var(--accent-hover);}
 .ac-job-board{display:flex;gap:6px;padding:8px 12px 4px;}
 .ac-jbtab{flex:1;background:var(--tab-fill);border:none;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;color:var(--tab-ink);cursor:pointer;transition:all var(--t-fast) var(--ease);}
 .ac-jbtab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
-.ac-jbtab:active{transform:scale(.98);}
+.ac-jbtab:active{transform:scale(1.02);}
 .ac-ai-thinking{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:14px;padding:14px 4px;}
 .ac-ai-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;animation:aiPulse 1s infinite ease-in-out;}
 .ac-ai-dot:nth-child(2){animation-delay:.15s;}.ac-ai-dot:nth-child(3){animation-delay:.3s;}
@@ -12346,7 +12353,7 @@ button:focus-visible,a:focus-visible,
 
 /* Press feedback — a subtle, consistent tap-down across primary controls */
 .ac-pill-btn:active,.ac-follow-btn:active,.ac-post-btn:active,.msg-send:active,
-.cf-ok:active,.cf-cancel:active,.ac-x:active,.msg-back:active,.ac-info-act:active{transform:scale(.96);}
+.cf-ok:active,.cf-cancel:active,.ac-x:active,.msg-back:active,.ac-info-act:active{transform:scale(1.04);}
 /* Touch feedback on list rows (desktop keeps hover). Feed posts intentionally
    have no active tint, so touching to scroll stays fully black. */
 .ac-item:active{background:rgba(255,255,255,.06);}
@@ -12506,8 +12513,6 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
      Size its box up so the glyph's visual weight matches the others. */
   #snav-profile svg{width:19px;height:19px;}
 }
-/* The old AtChat entry is replaced by the nav */
-#sbAtChat{display:none!important;}
 #sbContext{display:flex;flex-direction:column;gap:2px;}
 #sbContext.hidden,#sbAITools.hidden{display:none;}
 
@@ -12888,7 +12893,7 @@ body.notif-tab #notifOverlay .notif-scroll,body.notif-tab #notifOverlay #notifLi
   background:var(--primary);color:var(--on-primary);border:none;border-radius:999px;
   padding:12px 28px;cursor:pointer;transition:transform var(--t-fast) var(--ease),filter var(--t-fast) var(--ease);}
 .ai-empty-btn:hover{filter:brightness(.94);}
-.ai-empty-btn:active{transform:scale(.96);}
+.ai-empty-btn:active{transform:scale(1.04);}
 /* "Open …" buttons under an Atwe AI answer. Secondary actions, so grey pills —
    the one white primary per screen is not spent here. */
 .ai-open-row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 2px;}
@@ -12896,7 +12901,7 @@ body.notif-tab #notifOverlay .notif-scroll,body.notif-tab #notifOverlay #notifLi
   border:1px solid var(--b2);border-radius:999px;padding:9px 16px;cursor:pointer;
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ai-open-btn:hover{background:var(--s3,var(--s2));}
-.ai-open-btn:active{transform:scale(.96);}
+.ai-open-btn:active{transform:scale(1.04);}
 /* The Alerts count, sized and placed like the Beam dot it sits beside. BLUE, not
    red: in this bar blue already means "something new" (see .bn-dot), and red is
    reserved for destructive actions everywhere else in Atwe. */
@@ -13188,7 +13193,7 @@ body.nav-ball #navBackdrop{opacity:0;}
   border:none;background:#fff;color:#000;transition:all var(--t-fast) var(--ease);white-space:nowrap;}
 .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .ac-join-btn.joined:hover{background:var(--rose-bg);border-color:var(--rose-line);color:var(--rose);}
-.ac-join-btn:active{transform:scale(.96);}
+.ac-join-btn:active{transform:scale(1.04);}
 body.light .ac-join-btn{background:var(--primary);color:var(--on-primary);}
 body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 /* A joined circle shows a red "Unjoin" (the .unjoin modifier, both themes). */
@@ -13206,7 +13211,7 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .ac-circ-join{flex:0 0 auto;border:none;border-radius:var(--r-pill);padding:8px 18px;font-size:14px;font-weight:700;
   cursor:pointer;white-space:nowrap;background:var(--primary);color:var(--on-primary);
   transition:transform var(--t-fast) var(--ease),filter var(--t-fast) var(--ease);}
-.ac-circ-join:active{transform:scale(.95);}
+.ac-circ-join:active{transform:scale(1.05);}
 .ac-circ-join:hover{filter:brightness(.96);}
 .ac-circ-join.joined{background:var(--s3);color:var(--t2);}
 body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
@@ -13246,7 +13251,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
   background:var(--s2);border:none;color:var(--t1);font-weight:750;font-size:14px;
   border-radius:var(--r-pill);padding:7px 20px;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;
   transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
-.circ2-join:active{transform:scale(.95);background:var(--s1);}
+.circ2-join:active{transform:scale(1.05);background:var(--s1);}
 .circ2-join.joined{border-color:var(--b2);color:var(--t2);}
 /* Sector header (whole-industry): tappable row + a "Follow all" pill (accent = the special
    one-tap whole-industry follow, distinct from a row's calm grey Join). */
@@ -13261,7 +13266,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
   background:var(--s2);border:none;color:var(--accent);font-weight:750;
   font-size:12.5px;letter-spacing:0;text-transform:none;border-radius:var(--r-pill);padding:5px 15px;cursor:pointer;
   white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
-.circ2-gjoin:active{transform:scale(.94);}
+.circ2-gjoin:active{transform:scale(1.06);}
 .circ2-gjoin.joined{border-color:var(--b2);color:var(--t2);background:var(--s2);}
 .circ2-gicon{flex:0 0 auto;width:38px;height:38px;border-radius:12px;background:var(--s2);display:flex;align-items:center;justify-content:center;}
 .circ2-gicon .circ2-secic{width:19px;height:19px;color:var(--t1);}
@@ -13316,7 +13321,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .ac-req-yes svg,.ac-req-no svg{width:16px;height:16px;stroke-width:2.4;fill:none;}
 .ac-req-yes{color:var(--green);}.ac-req-yes:hover{background:rgba(48,209,88,.14);border-color:rgba(48,209,88,.5);}
 .ac-req-no{color:var(--rose);}.ac-req-no:hover{background:var(--rose-bg);border-color:var(--rose-line);}
-.ac-req-yes:active,.ac-req-no:active{transform:scale(.92);}
+.ac-req-yes:active,.ac-req-no:active{transform:scale(1.06);}
 
 /* Post targeting chips */
 .ac-targets{display:flex;flex-wrap:wrap;gap:8px;padding:11px 16px;border-top:1px solid var(--b1);flex-shrink:0;align-items:center;}
@@ -13365,7 +13370,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
   display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);-webkit-tap-highlight-color:transparent;}
 .ac-callbtn svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 @media(hover:hover){.ac-callbtn:hover{opacity:.6;}}
-.ac-callbtn:active{transform:scale(.88);opacity:.6;}
+.ac-callbtn:active{transform:scale(1.06);opacity:.6;}
 /* The dots run top-to-bottom, and like every other header icon they carry no
    disc behind them. */
 .ac-callbtn.ac-head-more{background:none;}
@@ -13438,7 +13443,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .call-btn{width:62px;height:62px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
   background:rgba(255,255,255,.16);color:#fff;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:all var(--t-fast) var(--ease);}
 .call-btn:hover{background:rgba(255,255,255,.26);}
-.call-btn:active{transform:scale(.93);}
+.call-btn:active{transform:scale(1.06);}
 .call-btn svg{width:26px;height:26px;stroke:currentColor;stroke-width:2;fill:none;}
 .call-btn.end,.call-btn.decline{background:var(--red);}
 .call-btn.end svg,.call-btn.decline svg{transform:rotate(135deg);}
@@ -13501,7 +13506,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .gc-banner-sub{font-size:11.5px;font-weight:500;color:var(--t3);margin-top:1px;}
 .gc-banner-join{flex:0 0 auto;background:var(--accent);color:var(--accent-tint);border:none;border-radius:var(--r-pill);
   padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
-.gc-banner-join:active{transform:scale(.94);}
+.gc-banner-join:active{transform:scale(1.06);}
 /* Live broadcast banner (a member is live in the group) — GREEN (owner), with a Watch CTA. */
 .live-banner{background:rgba(48,209,88,.12);border-color:rgba(48,209,88,.4);}
 .live-banner:hover{background:rgba(48,209,88,.2);}
@@ -13526,7 +13531,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .gc-toast-sub{font-size:12.5px;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gc-toast-join{flex-shrink:0;background:var(--green);color:var(--on-green);border:none;border-radius:var(--r-pill);
   padding:8px 16px;font-size:13.5px;font-weight:700;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
-.gc-toast-join:active{transform:scale(.94);}
+.gc-toast-join:active{transform:scale(1.06);}
 .gc-toast-x{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:none;border:none;color:rgba(255,255,255,.6);
   cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .gc-toast-x svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;}
@@ -13585,7 +13590,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .live-top{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;align-items:center;gap:10px;z-index:2;}
 .live-badge{background:var(--green);color:var(--on-green);font-size:12px;font-weight:800;letter-spacing:.06em;padding:4px 9px;border-radius:6px;}
 .live-count{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.5);color:#fff;font-size:13px;font-weight:700;padding:5px 11px;border-radius:var(--r-pill);border:none;cursor:pointer;font-family:inherit;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background var(--t-fast) var(--ease);}
-.live-count:active{transform:scale(.95);}
+.live-count:active{transform:scale(1.05);}
 .live-count svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
 .live-info{position:absolute;left:14px;bottom:max(106px,calc(env(safe-area-inset-bottom) + 96px));z-index:2;color:#fff;font-size:15px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.6);max-width:80%;}
 .live-wait{position:relative;z-index:1;color:rgba(255,255,255,.8);font-size:15px;}
@@ -13681,7 +13686,7 @@ body.reduce-motion .notif-detail{transition:none;}
 .nd-card{background:var(--s2);border:none;border-radius:var(--set-card-r);padding:15px 16px;}
 .nd-msg{font-size:14.5px;line-height:1.5;color:var(--t2);}
 .nd-action{display:block;width:100%;margin-top:14px;padding:14px;border-radius:14px;border:none;background:var(--primary);color:var(--on-primary);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:transform var(--t-fast) var(--ease);}
-.nd-action:active{transform:scale(.98);}
+.nd-action:active{transform:scale(1.02);}
 .notif-head{display:flex;align-items:center;gap:4px;padding:max(14px,env(safe-area-inset-top)) 12px 12px;flex-shrink:0;}
 /* Notifications is a world, so its bar is glass like the other three: the list scrolls
    UNDER the lockup and dissolves into it. That needs the header to OVERLAY the list
@@ -13698,7 +13703,7 @@ body.reduce-motion .notif-detail{transition:none;}
 .notif-back{width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:none;border:none;
   cursor:pointer;color:var(--t1);border-radius:50%;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
 .notif-back svg{width:23px;height:23px;stroke:currentColor;stroke-width:2.2;fill:none;}
-.notif-back:active{transform:scale(.9);}
+.notif-back:active{transform:scale(1.06);}
 .notif-title{font-size:20px;font-weight:800;letter-spacing:-.02em;}
 /* The ⋯ tools trigger sits plain on the background (no box) at the head's far end —
    same 34px target as the back arrow, same muted dots as the Beam/Home tab ⋯. */
@@ -13706,7 +13711,7 @@ body.reduce-motion .notif-detail{transition:none;}
   background:none;border:none;cursor:pointer;border-radius:50%;-webkit-tap-highlight-color:transparent;
   transition:transform var(--t-fast) var(--ease);}
 .notif-more svg{width:20px;height:20px;fill:var(--t2);stroke:none;}
-.notif-more:active{transform:scale(.9);}
+.notif-more:active{transform:scale(1.06);}
 .notif-list{overflow-y:auto;-webkit-overflow-scrolling:touch;}
 /* X-style rows: gutter-aligned, no card, no divider lines, no heavy block. Build 1765 put
    them in a grey card to match the Account page and the founder rejected it on sight — the
@@ -13773,7 +13778,7 @@ body.reduce-motion .notif-detail{transition:none;}
 .ac-icon-btn.on .ic-plus{display:none;}
 .ac-icon-btn.on .ic-check{display:inline-block;}
 .ac-icon-btn.on:hover{filter:brightness(1.08);background:var(--accent);}
-.ac-icon-btn:active{transform:scale(.94);}
+.ac-icon-btn:active{transform:scale(1.06);}
 .ac-icon-btn2{width:36px;height:36px;border-radius:50%;background:none;border:none;color:var(--t2);cursor:pointer;
   display:flex;align-items:center;justify-content:center;flex:0 0 auto;transition:background var(--t-fast) var(--ease);}
 .ac-icon-btn2 svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
@@ -13863,7 +13868,7 @@ body.light #signupDob{color-scheme:light;}
 .voice-orb.on{background:rgba(0,136,255,.12);}
 .voice-orb.on .voice-orb-in{background:var(--accent);animation:voicePulse 1.5s ease-in-out infinite;}
 .voice-orb.talk .voice-orb-in{background:var(--green);}
-.voice-orb:active{transform:scale(.96);}
+.voice-orb:active{transform:scale(1.04);}
 @keyframes voicePulse{0%,100%{transform:scale(1);}50%{transform:scale(1.22);}}
 .voice-state{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);}
 .voice-said{font-size:15px;color:var(--t2);margin-top:12px;min-height:20px;}
@@ -14210,11 +14215,81 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 .tb-feedtab:not(.tb-feedtab-add),.ac-scope-chip,.ac-ptab,.ntf-tab,.ev-tab,.bk-tab,
 .ac-jv,.wf-chip,.sell-sortchip,.fb-cat,.ac-jbtab,.ja-fchip,.dir-ind,.svc-cat,
 .rx-tab,.rev-chip,.stt-chip,.ev-seg-btn,.cash-stab,.cash-range{border:none;
-  box-shadow:0 0 0 .5px var(--tab-edge) inset, 0 .5px 0 var(--tab-hi) inset, 0 1px 2px var(--tab-shade);}
+  box-shadow:0 0 0 .5px var(--tab-edge) inset, 0 .5px 0 var(--tab-hi) inset, 0 1px 2px var(--tab-shade);
+  /* The nav bar's own frost, so a pill and the bar are literally the same material.
+     2px is deliberately small — it is the value .bottom-nav ships, and what little shows
+     through a 90%-opaque fill only needs softening, not hiding. */
+  -webkit-backdrop-filter:blur(2px) saturate(150%);backdrop-filter:blur(2px) saturate(150%);}
+/* Somebody who asked for less transparency gets a solid pill, exactly as the top bar's
+   glass does. The RIGHT query is prefers-reduced-transparency, never the motion one. */
+@media (prefers-reduced-transparency:reduce){
+  .tb-feedtab:not(.tb-feedtab-add),.ac-scope-chip,.ac-ptab,.ntf-tab,.ev-tab,.bk-tab,
+  .ac-jv,.wf-chip,.sell-sortchip,.fb-cat,.ac-jbtab,.ja-fchip,.dir-ind,.svc-cat,
+  .rx-tab,.rev-chip,.stt-chip,.ev-seg-btn,.cash-stab,.cash-range{
+    -webkit-backdrop-filter:none;backdrop-filter:none;background:var(--s1);}
+}
 .tb-feedtab.active:not(.tb-feedtab-add),.ac-scope-chip.active,.ac-ptab.on,.ntf-tab.on,
 .ev-tab.on,.bk-tab.on,.ac-jv.on,.wf-chip.on,.sell-sortchip.on,.fb-cat.on,.ac-jbtab.on,
 .ja-fchip.on,.dir-ind.on,.svc-cat.on,.rx-tab.on,.rev-chip.on,.stt-chip.on,
 .ev-seg-btn.on,.cash-stab.on,.cash-range.on{box-shadow:none;}
+/* -- A press GROWS, and eases both ways (founder) ----------------------------
+   "Every time I click on an option it gets smaller. I want it to rather go smoothly
+   bigger, just like the navigation icon." There were 113 :active rules across the app
+   shrinking their element by between 1% and 12%; every one is now the MIRROR of what it
+   was (2 minus x, capped at 1.06), so a big card still moves 1% and a small round button
+   still moves more -- one direction, each element's own magnitude.
+
+   THE DIRECTION IS ONLY HALF OF IT. A grow with no transition SNAPS, which is not what
+   they asked for -- and many of these families transition only `background` and `color`,
+   so `transform` was never eased at all (.tb-feedtab, the one they press most, is
+   exactly that case). This block gives them all the same soft press curve, matching the
+   bottom nav's own bn-hold release. It is declared here, after every family's own rule,
+   and names the properties these controls actually animate rather than `all`, so a stray
+   layout property can never get dragged into a 260ms ease. */
+:root{ --press-dur:.26s; --press-ease:cubic-bezier(.4,.02,.28,1); }
+.acct-choice,.su-photo-ring,.su-prem-cta,.ac-pill-btn.accent,.sb-post,.nc-item,.ac-arch-act,.me-
+hero,.me-hero:has(.me-hero-tap),.me-wallet,.me-search-x,.ac-cd-actbtn,.ac-cd-icbtn .ic,.cloud-
+item,.tb-ico,.tb-home-act,.tb-homeava,.tb-feedtab:not(.tb-feedtab-add),.cam-shoot,.send-
+btn,.iset-search-x,.snz-chip,.iset-back,.iset-signout,.ac-ptab,.ac-pill-btn,.ob-goal,.ob-
+chip,.ob-follow,.ob-next,.theme-card .theme-swatch,.ac-h3-btn,.ac-head-ava,.pinlist-unpin,.msg-
+undo,.vn-play,.vn-speed,.mc-rsvp button,.mk-submit,.ac-scrolldown,.ac-fixbtn,.mm-reax-
+btn,.emoji-btn,.fwd-sendbtn,.ac-fab,.ac-newposts,.ac-prodtag,.me-status,.ac-compose-
+prodadd,.feed-prodtag,.ac-post .ac-post-actions>*,.ac-like svg,.ac-like .ac-react-emoji,.ac-rb-
+btn,.atwe-card,.ac-jobmatch,.ac-annbar .aab-cta,.story-sound,.story-mention,.story-poll-
+opt,.story-link-chip,.story-prodtag,.story-react,.sell-sortchip,.biz-starter,.rev-helpful,.mkt-
+save,.mkt-card-save,.mkt-buy,.shop-buy,.mkt-cart,.sa-card,.mkt-more-card,.sc-card,.sc-like,.ac-
+digest,.ac-conn-btn,.ac-hiring-banner,.ac-prof-back,.ac-postfocus .ac-pf-actions>*,.eng-ai-
+btn,.ac-chatsel-acts button,.feed-sound,.frail-btn,.pv-rail button,.ac-vid-wrap .ac-vid-
+play,.gp-join,.feed-c-tagbtn,.ac-call-back,.ac-err-btn,.ac-scope-chip,.st-btn,.undo-toast .ut-
+btn,.dshort-cell,.ac-recent-chip,.ac-ind-card,.simjob-row,.ac-aimatch-card,.ac-disc-actions
+button,.xp-ai,.xp-tile,.ev-card,.feat-card,.ac-srch-op,.ac-jbtab,.cf-ok,.cf-cancel,.ac-x,.msg-
+back,.ac-info-act,.ai-empty-btn,.ai-open-btn,.ac-join-btn,.ac-circ-
+join,.circ2-join,.circ2-gjoin,.ac-req-yes,.ac-req-no,.ac-callbtn,.call-btn,.gc-banner-join,.gc-
+toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-orb{
+  transition-property:transform,scale,background-color,background,color,filter,opacity,box-shadow;
+  transition-duration:var(--press-dur);
+  transition-timing-function:var(--press-ease);}
+@media(prefers-reduced-motion:reduce){
+.acct-choice,.su-photo-ring,.su-prem-cta,.ac-pill-btn.accent,.sb-post,.nc-item,.ac-arch-act,.me-
+hero,.me-hero:has(.me-hero-tap),.me-wallet,.me-search-x,.ac-cd-actbtn,.ac-cd-icbtn .ic,.cloud-
+item,.tb-ico,.tb-home-act,.tb-homeava,.tb-feedtab:not(.tb-feedtab-add),.cam-shoot,.send-
+btn,.iset-search-x,.snz-chip,.iset-back,.iset-signout,.ac-ptab,.ac-pill-btn,.ob-goal,.ob-
+chip,.ob-follow,.ob-next,.theme-card .theme-swatch,.ac-h3-btn,.ac-head-ava,.pinlist-unpin,.msg-
+undo,.vn-play,.vn-speed,.mc-rsvp button,.mk-submit,.ac-scrolldown,.ac-fixbtn,.mm-reax-
+btn,.emoji-btn,.fwd-sendbtn,.ac-fab,.ac-newposts,.ac-prodtag,.me-status,.ac-compose-
+prodadd,.feed-prodtag,.ac-post .ac-post-actions>*,.ac-like svg,.ac-like .ac-react-emoji,.ac-rb-
+btn,.atwe-card,.ac-jobmatch,.ac-annbar .aab-cta,.story-sound,.story-mention,.story-poll-
+opt,.story-link-chip,.story-prodtag,.story-react,.sell-sortchip,.biz-starter,.rev-helpful,.mkt-
+save,.mkt-card-save,.mkt-buy,.shop-buy,.mkt-cart,.sa-card,.mkt-more-card,.sc-card,.sc-like,.ac-
+digest,.ac-conn-btn,.ac-hiring-banner,.ac-prof-back,.ac-postfocus .ac-pf-actions>*,.eng-ai-
+btn,.ac-chatsel-acts button,.feed-sound,.frail-btn,.pv-rail button,.ac-vid-wrap .ac-vid-
+play,.gp-join,.feed-c-tagbtn,.ac-call-back,.ac-err-btn,.ac-scope-chip,.st-btn,.undo-toast .ut-
+btn,.dshort-cell,.ac-recent-chip,.ac-ind-card,.simjob-row,.ac-aimatch-card,.ac-disc-actions
+button,.xp-ai,.xp-tile,.ev-card,.feat-card,.ac-srch-op,.ac-jbtab,.cf-ok,.cf-cancel,.ac-x,.msg-
+back,.ac-info-act,.ai-empty-btn,.ai-open-btn,.ac-join-btn,.ac-circ-
+join,.circ2-join,.circ2-gjoin,.ac-req-yes,.ac-req-no,.ac-callbtn,.call-btn,.gc-banner-join,.gc-
+toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-orb{transition-duration:.01ms;}
+}
 </style>
 </head>
 <body style="background:#000">
@@ -15385,12 +15460,13 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         Help
       </button>
-      <!-- Account: AtChat sits where Settings/Help were. -->
-      <button class="sb-settings" id="sbAtChat" onclick="openAtChat()" style="display:none;">
-        <svg viewBox="0 0 24 24"><path d="M7.5 19.5 4 21l1.2-3.4A8 8 0 1 1 8 19"/><circle cx="12" cy="12" r="2.6"/><path d="M14.6 12v1.3a2 2 0 0 0 4 0V12a6 6 0 1 0-2.6 4.9"/></svg>
-        AtChat
-        <span class="ac-badge hidden" id="acBadge">0</span>
-      </button>
+      <!-- The sidebar's old "AtChat" row is GONE, not hidden. It was retired when the
+           bottom nav took over (its opener was already just appTab('home')), but the row
+           stayed in the markup, a `#sbAtChat{display:none!important}` rule stayed in the
+           CSS, and a line of JS went on setting style.display='flex' on it every boot —
+           code fighting a stylesheet it could not beat, forever. That is the exact
+           fingerprint reachable.js hunts, and leaving it here would have been permanent
+           noise drowning the next real one. -->
       <!-- Guest: log in (text pill expanded; profile icon when collapsed) -->
       <button class="sb-login" id="sbLogin" onclick="openLogin()">
         <svg class="sb-login-ic" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
@@ -21527,18 +21603,14 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
           <span class="ac-h3-dot hidden" id="acPeerDot" aria-hidden="true"></span>
         </button>
         <div class="ac-head-acts">
-          <button class="ac-callbtn" id="acCallAudio" onclick="startCall('audio')" aria-label="Voice call" title="Voice call" style="display:none;">
-            <svg viewBox="0 0 24 24"><path d="M20.1 15.4c-1.2 0-2.4-.2-3.5-.6a1 1 0 0 0-1 .25l-2.1 2.1a15.2 15.2 0 0 1-6.65-6.65l2.1-2.1a1 1 0 0 0 .25-1c-.4-1.1-.6-2.3-.6-3.5a1 1 0 0 0-1-1H4.4a1 1 0 0 0-1 1c0 9.2 7.5 16.7 16.7 16.7a1 1 0 0 0 1-1v-3.2a1 1 0 0 0-1-1z"/></svg>
-          </button>
-          <button class="ac-callbtn" id="acCallVideo" onclick="startCall('video')" aria-label="Video call" title="Video call" style="display:none;">
-            <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-          </button>
-          <button class="ac-callbtn" id="acGroupCallBtn" onclick="acOpenGroupCallMenu(this)" aria-label="Video call or go live" title="Video" style="display:none;">
-            <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-          </button>
-          <button class="ac-callbtn" id="acCloudBtn" onclick="acOpenCloud()" aria-label="Group Cloud" title="Cloud" style="display:none;">
-            <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-          </button>
+          <!-- THE FOUR HEADER ACTIONS ARE GONE, not hidden. Voice call, Video call, the
+               group's call/Go-live menu and the Cloud all live in the ⋯ menu now (the
+               1779 redesign put the header on three shapes: back, the name pill, ⋯).
+               They used to stay here as invisible markup that JS kept setting
+               style.display='flex' on, against a CSS rule it could never beat — and that
+               is precisely how a group's Cloud went missing for several builds: it was
+               swept up by the rule and nobody noticed, because nothing errors when code
+               and stylesheet disagree. reachable.js fails on that shape now. -->
           <button class="ac-callbtn ac-head-more" id="acThreadMenuBtn" onclick="acThreadMenu(this)" aria-label="More options" title="More">
             <!-- Flat, not stacked (owner's drawing). -->
             <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/></svg>
@@ -22215,7 +22287,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1822'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1823'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -25974,7 +26046,6 @@ function initUI() {
   // menu and AtChat takes their place.
   document.getElementById('sbSettings').style.display = guest ? 'flex' : 'none';
   document.getElementById('sbHelp').style.display = guest ? 'flex' : 'none';
-  document.getElementById('sbAtChat').style.display = guest ? 'none' : 'flex';
   // Accounts get Notifications (above the profile) + Settings (below it).
   // Alerts has its own place in the nav now, so this older sidebar row would be the
   // same destination listed twice. Kept in the DOM (it owns #notifBadge) but hidden.
@@ -56810,8 +56881,6 @@ function acApplyDmData(id, d, firstPaint, fromCache) {
   ava.className = 'user-avatar ac-peer-ava'; ava.style.removeProperty('--avatar'); ava.innerHTML = '';
   renderAvatar(ava, d.peer.name, d.peer.avatar || null);
   document.getElementById('acThreadMenuBtn').style.display = 'flex';
-  document.getElementById('acGroupCallBtn').style.display = 'none';
-  document.getElementById('acCloudBtn').style.display = 'none';
   document.getElementById('acGroupCallBanner').classList.add('hidden');
   document.getElementById('acLiveBanner').classList.add('hidden');
   acClearTyping();
@@ -56865,12 +56934,6 @@ function acApplyChatPerms() {
   const inc = AC.incomingRequest;
   document.getElementById('acReqBar').classList.toggle('hidden', !inc);
   if (inc) document.getElementById('acReqBarTxt').textContent = 'Allow ' + (AC.peer?.name || 'this person') + ' to message you?';
-  // A one-to-one chat carries the two calls in the header: a phone and a camera,
-  // beside the dots. (They stay hidden in your own self-chat — there is nobody
-  // to ring.)
-  const canCall = !!(AC.peer && AC.peer.id !== S.user?.id);
-  document.getElementById('acCallAudio').style.display = canCall ? 'flex' : 'none';
-  document.getElementById('acCallVideo').style.display = canCall ? 'flex' : 'none';
 }
 // The request panel's button: Connect when the peer is connections-only, else
 // send a chat request.
@@ -57691,10 +57754,24 @@ function acThreadMenu(btn) {
     quote: '<svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
     xport: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
     media: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>',
+    cloud: '<svg viewBox="0 0 24 24"><path d="M17.5 10.5h-1.1A6.5 6.5 0 1 0 8.5 19h9a4.25 4.25 0 0 0 0-8.5z"/></svg>',
+    live: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4"/><path d="M16.2 16.2a6 6 0 0 0 0-8.4"/><path d="M4.9 4.9a10 10 0 0 0 0 14.2"/><path d="M19.1 19.1a10 10 0 0 0 0-14.2"/></svg>',
   };
   if (AC.mode === 'group') {
+    /* CALLING AND THE CLOUD LEAD THE GROUP MENU, and their absence was a real regression.
+       The 1779 header redesign hid every button in .ac-head-acts except the ⋯ and moved
+       calling into this menu — but only the 1:1 pair. #acGroupCallBtn and #acCloudBtn are
+       the same class, so they were hidden too and were never given a row here: for several
+       builds a group's video call, Go live and the whole shared Cloud were unreachable,
+       while the JS that shows those buttons went on running against a CSS rule it could
+       not beat. reachable.js now fails on exactly that shape of bug. */
     sheet.innerHTML =
-      `<button class="mm-item" onclick="acHeadAct('info')">${IC.info}<span class="mm-label">Group info</span></button>`
+      `<div class="mm-group">`
+      + `<button class="mm-item" onclick="acHeadAct('groupvideo')">${IC.video}<span class="mm-label">Video call</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('golive')">${IC.live}<span class="mm-label">Go live</span></button>`
+      + `</div>`
+      + `<button class="mm-item" onclick="acHeadAct('cloud')">${IC.cloud}<span class="mm-label">Cloud</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('info')">${IC.info}<span class="mm-label">Group info</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('topics')">${IC.info}<span class="mm-label">Topics</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('ai')"><span class="mm-logo"></span><span class="mm-label">Atwe AI</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('search')">${IC.search}<span class="mm-label">Search in chat</span></button>`
@@ -57789,6 +57866,9 @@ function acHeadAct(a) {
     else if (a === 'sound') acOpenChatSound();
     else if (a === 'silent') acToggleSilentMode();
     else if (a === 'topics') acOpenTopics();
+    else if (a === 'cloud') acOpenCloud();
+    else if (a === 'groupvideo') acStartGroupCall('video');
+    else if (a === 'golive') acGroupGoLive();
     else if (a === 'export') acExportChat();
     else if (a === 'invoice' && AC.peer) acInvoiceCreateOpen(AC.peer.id, AC.peer.name);
     else if (a === 'quote' && AC.peer) acQuoteCreateOpen(AC.peer.id, AC.peer.name);
@@ -61271,10 +61351,6 @@ function acApplyGroupData(id, d, firstPaint, fromCache) {
     ava.innerHTML = AC_GRP_GLYPH;
   }
   document.getElementById('acThreadMenuBtn').style.display = 'flex';
-  document.getElementById('acCallAudio').style.display = 'none';
-  document.getElementById('acCallVideo').style.display = 'none';
-  document.getElementById('acGroupCallBtn').style.display = 'flex';
-  document.getElementById('acCloudBtn').style.display = 'flex';
   acRenderThread();
   acRestoreDraft(); // bring back any half-typed message for this group
   // Scroll + fade only on the OPENING paint (see acApplyDmData) — a background

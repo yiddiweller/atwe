@@ -444,14 +444,17 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
 > lighter box (1.5×); 58-over-15 is **3.8×**, and that ratio is the whole reason the login
 > button reads as a raised object rather than a painted rectangle.
 >
-> **THE FILL IS SOLID, AND THAT IS THE ONE PLACE THIS PARTS FROM THE LOGIN BUTTON.**
-> `.auth-btn` is a translucent WASH, which is free on a page with only black behind it.
-> The first attempt copied it literally, and shot over a bright photo the pills let the
-> picture straight through — the labels bled from dark grey to near-white and the row
-> stopped reading as buttons at all. `#0F0F0F` is exactly what .06 white composites to
-> over black, so on the sign-in page's own ground the two are pixel-identical; over a
-> photo this one stays a button. `tabpills.js` asserts the resting fill is opaque, and
-> restoring the wash fails it on six rows.
+> **THE FILL IS THE BOTTOM NAV BAR'S OWN MATERIAL** — `rgba(18,18,21,.90)` +
+> `blur(2px) saturate(150%)`, copied from `.bottom-nav` so the two cannot drift (founder:
+> *"a drop see-through just like the navigation bar… on the same level"*). Over black it
+> renders **16**, within a pixel of the login button's 15, so the sign-in look survives too.
+>
+> **THE 90% IS WHAT MAKES IT SAFE, and it took a failure to learn.** `.auth-btn` is a .06
+> white wash — 94% see-through — free on a page with only black behind it, but shot over a
+> bright photo the pills let the picture straight through: the labels bled from dark grey to
+> near-white and the row stopped reading as buttons at all. At 10% see-through and blurred,
+> a photo behind is a hint of tone and nothing else. `tabpills.js` holds the floor at **.85**
+> and requires a real blur, so nobody can quietly make it airier again.
 >
 > **THE RIM IS A BOX-SHADOW, NOT A BORDER**, for the same reason the login button's is: an
 > inset shadow can be half a pixel — one physical pixel on a phone — where a border rounds
@@ -2052,6 +2055,64 @@ there were zero `<form>` elements in the app.
   plus a before/after capture): every sign-in screen is byte-identical except one ~90×90 box on
   desktop that **also differs between two runs of unchanged code** — an animated mark. Run the
   control before believing any diff on these screens.
+### A press GROWS, and eases both ways
+
+The founder: *"every time I click on an option it gets smaller. I want it to rather go
+smoothly bigger, just like the navigation icon."* There were **113** `:active` rules across
+the app shrinking their element by between 1% and 12%. Every one is now the **mirror** of
+what it was — `2 − x`, capped at **1.06** — so a full-width card still moves 1% and a small
+round button still moves more: one direction, each element's own magnitude.
+
+**The direction is only half of it.** A grow with no transition SNAPS, and many of these
+families transition only `background` and `color` — `transform` was never eased at all, and
+`.tb-feedtab` (the one they press most) is exactly that case. One block near the end of the
+stylesheet gives all 128 base selectors the same soft press curve (`--press-dur` .26s,
+`--press-ease` `cubic-bezier(.4,.02,.28,1)`, the bottom nav's own `bn-hold` release). It
+names the properties these controls actually animate rather than `all`, so a stray layout
+property can never get dragged into a 260ms ease, and it collapses under
+`prefers-reduced-motion`.
+
+### NOTHING THE APP TRIES TO SHOW MAY BE HIDDEN BY A RULE — `scratchpad/reachable.js`
+
+**A whole feature went missing and nothing failed.** The founder's team went to use a
+group's shared **Cloud** and found it gone. It had not been deleted — every line of it was
+still there and the JS that reveals its button was still running. Build 1779 moved calling
+into the ⋯ menu and added
+
+```css
+#acThreadScreen .ac-head-acts .ac-callbtn:not(.ac-head-more){display:none!important}
+```
+
+`#acCloudBtn` is the same class. It was hidden with the call buttons and **never given a row
+in that menu**, so for several builds a group's Cloud, its video call and Go live were all
+unreachable. No console error, no failing probe, no visual clue — the probes called opener
+FUNCTIONS and measured screens; none asked whether a person could get there.
+
+**The fingerprint is exact and mechanical:** the app sets an inline `style.display` to
+something visible and a CSS rule computes it back to `none`. That is always a bug — the code
+believes the control is on screen and the stylesheet disagrees. `reachable.js` walks Home,
+Beam, Engine, Account, a conversation and a real group looking for exactly that, and then
+positively checks that Cloud / Video call / Go live are in the group menu and that Cloud
+really opens with its ＋. **On its first run it found two more instances**, both since
+deleted rather than hidden:
+
+- **`#sbAtChat`** — the sidebar's retired "AtChat" row. Its opener had long since become
+  `appTab('home')`, a `display:none!important` rule kept it invisible, and a line of JS set
+  `display:flex` on it every boot. Harmless, but permanent noise that would drown the next
+  real one.
+- **the four chat-header buttons** (`acCallAudio`, `acCallVideo`, `acGroupCallBtn`,
+  `acCloudBtn`) — invisible markup that the JS went on showing against a rule it could never
+  beat. Their functions all live in the ⋯ menu now. The CSS rule stays as a guard so a stray
+  `.ac-callbtn` can never reappear beside the three shapes.
+
+**A switched-off thing whose JS still runs is a trap this file has now recorded four times**
+(the cursor glow, the media shield, the tap-to-open composer, and this). Delete it.
+
+Two setup traps the probe hit, both of which made it report a failed CHECK rather than a
+failed SETUP: a group needs a `contact: true` flag (the public kind demands a unique
+username) **and** at least one other member. Self-tested: removing the Cloud row fails it
+by name.
+
 ### The sign-in footer button sits where the nav bar sits
 
 Every wizard step's Continue/Next button floated well clear of the bottom: measured on the

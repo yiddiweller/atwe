@@ -80,6 +80,7 @@ const ROWS = [
           rows: tabs.map((e) => { const q = e.getBoundingClientRect(); const cs = getComputedStyle(e);
             return { bg: cs.backgroundColor, rad: parseFloat(cs.borderRadius) || 0, h: q.height,
               sh: cs.boxShadow, img: cs.backgroundImage, fg: cs.color,
+              bd: cs.backdropFilter || cs.webkitBackdropFilter,
               under: getComputedStyle(e, '::after').content !== 'none' && parseFloat(getComputedStyle(e, '::after').height) > 0 };
           }),
           addBg: add ? getComputedStyle(add).backgroundColor : null,
@@ -100,12 +101,15 @@ const ROWS = [
         `${T} every resting tab carries the inset hairline`);
       chk(on.every((t) => t.sh === 'none'),
         `${T} ...and the selected one does not (${on.map((t) => t.sh).join(',')})`);
-      /* THE RESTING FILL MUST BE OPAQUE, and this check exists because the first pass at
-         copying the login button was not. `.auth-btn` is a .06 white WASH — free on a page
-         with only black behind it, but shot over a bright photo the pills let the picture
-         straight through and the labels bled from dark grey to near-white. */
-      chk(rest.every((t) => !/rgba\([^)]*,\s*0?\.\d+\)/.test(t.bg)),
-        `${T} and it is OPAQUE — a photo can never show through a tab (${rest[0] ? rest[0].bg : '-'})`);
+      /* SEE-THROUGH, BUT ONLY AS MUCH AS THE NAV BAR. The founder wants the pill to be the
+         same glass as the bottom bar (.90), and an earlier pass copied the login button's
+         .06 wash literally — 94% see-through — which over a bright photo let the picture
+         straight through and bled the labels to near-white. .85 is the floor. */
+      const alphaOf = (c) => { const m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(c); return m ? parseFloat(m[1]) : 1; };
+      chk(rest.every((t) => alphaOf(t.bg) >= 0.85),
+        `${T} it is see-through only as far as the nav bar is (${rest[0] ? rest[0].bg : '-'})`);
+      chk(rest.every((t) => /blur/.test(t.bd || '')),
+        `${T} and frosted, so what shows through is soft (${rest[0] ? rest[0].bd : '-'})`);
       chk(rest.every((t) => /gradient/.test(t.img || '')),
         `${T} with the login button's own wash lifting its lower edge`);
       chk(rest.every((t) => t.fg === r.ink),
