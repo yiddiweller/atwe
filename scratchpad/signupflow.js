@@ -116,6 +116,26 @@ const waitUp = async () => {
   await p.waitForTimeout(1600);
   ok(await p.evaluate(step) === 'suTypeStep', 'and that opens the create-account wizard', await p.evaluate(step));
 
+  /* AND THAT A PERSON CAN ACTUALLY SEE IT. This probe walked the entire wizard and
+     created real accounts for weeks while every human saw a BLANK BLACK SCREEN: the
+     wizard's steps are children of <body>, not of #loginOverlay, and the overlay —
+     fixed, solid black, z-index 1000, still open — painted straight over them. A
+     `.click()` works perfectly on a buried element, so nothing failed. The only
+     question that could have caught it is "what is actually on top?", so ask it at
+     every step from here on. */
+  const seen = async (label) => {
+    const r = await p.evaluate(() => {
+      const cur = [...document.querySelectorAll('.auth-step')].find((s) => getComputedStyle(s).display !== 'none');
+      if (!cur) return { none: true };
+      const b = cur.getBoundingClientRect();
+      const at = document.elementFromPoint(Math.round(b.x + b.width / 2), Math.round(b.y + 90));
+      return { id: cur.id, top: at ? (at.id || at.tagName) : null, inStep: !!(at && cur.contains(at)) };
+    });
+    ok(r.inStep === true, `${label}: the step is what you SEE, not something painted over it`,
+      JSON.stringify(r));
+  };
+  await seen('the wizard opens');
+
   await p.evaluate(press, /For myself|Personal/i);
   await p.waitForTimeout(1500);
   const before = out.length;
@@ -171,6 +191,7 @@ const waitUp = async () => {
      is legitimately null for a moment — an earlier version read it there and reported a
      failure on an account that had genuinely been created. The token is the proof, and
      what it proves is settled by the server. */
+  await seen('the last step');
   const token = await p.evaluate(() => localStorage.getItem('atwe_token'));
   ok(!!token, 'the stranger ends up holding a real session');
   let me = null;

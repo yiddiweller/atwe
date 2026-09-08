@@ -710,6 +710,27 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
    fighting the system's swipe-up gesture. 23 is the smallest inset that clears it —
    which is why the nav bar uses it too. The keyboard arm of the max() is unchanged: with
    --kb set the field must clear the keyboard, and that always wins. */
+/* NOBODY COULD CREATE AN ACCOUNT, AND THIS IS WHY.
+   The seven sign-up wizard steps (#suTypeStep … #suUserStep) are children of
+   <body>, NOT of #loginOverlay — the login screen's own steps (#authLandingView,
+   #authStep1, #authStep2) are inside it, the wizard's are not. `.auth-step` is a
+   plain in-flow block, so the moment the wizard opened, #loginOverlay — fixed,
+   inset:0, SOLID BLACK, z-index:1000, and still open because suShow only hides
+   the overlay's own steps — painted straight over it. Measured: the step laid
+   out correctly at 0,0,390x844 with white text and opacity 1, and
+   elementFromPoint came back #loginOverlay. A BLANK BLACK SCREEN, on every route
+   into signup, not just the username one.
+   Every probe missed it for one reason: they press buttons with .click(), which
+   works perfectly on an element buried under something else. Only a SCREENSHOT
+   could see this — which is why signupflow.js could walk the whole wizard and
+   create a real account while a person saw nothing at all.
+   The fix keeps the markup where it is and gives the body-level steps their own
+   full-screen layer above the overlay, painting the same black the overlay does,
+   so they render exactly as the in-overlay steps always have. `margin:0 auto`
+   below still centres them: left:0/right:0 with a max-width is what auto margins
+   need. Steps INSIDE the overlay are untouched — this is scoped to `body >`. */
+body > .auth-step:not(.hidden){position:fixed;left:0;right:0;top:0;bottom:0;z-index:1001;
+  background:#000;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .auth-step{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
   padding:calc(env(safe-area-inset-top) + 8px) var(--feed-gutter)
           max(var(--nav-inset), calc(env(safe-area-inset-bottom, 0px) - 16px), calc(var(--kb, 0px) + 16px));
@@ -22307,7 +22328,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1825'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1826'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —

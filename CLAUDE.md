@@ -2222,6 +2222,95 @@ exist only in that process's stdout; the database stores a hash):
    `status='suspended'` straight to the database on purpose — the admin route that does
    that has its own coverage, and what is under test is the member's way back.
 
+### NOBODY COULD CREATE AN ACCOUNT: THE WIZARD WAS BURIED UNDER THE LOGIN OVERLAY
+
+The founder's screenshot: **"What's your @username?"** → *"We couldn't find an Atwe
+account with that username."* → **Create an account** → **a blank black screen**.
+
+**The seven sign-up steps are children of `<body>`, not of `#loginOverlay`.** The
+login screen's own steps (`#authLandingView`, `#authStep1`, `#authStep2`) are
+inside it; `#suTypeStep` … `#suUserStep` are not — proved by parsing the file with
+scripts OFF, so it is the markup, not something the JS moved. `.auth-step` is a
+plain in-flow block, and `suShow()` hides only the overlay's OWN steps, so the
+overlay stayed open: **fixed, `inset:0`, solid black, `z-index:1000`** — and painted
+straight over the wizard. Measured: the step laid out correctly at 0,0,390×844 with
+white text at opacity 1, `#suTypeStep` at body index 17 with `z-index:auto`,
+`#loginOverlay` at index 481 with `z-index:1000`, and `elementFromPoint(195,100)`
+returning `#loginOverlay`. **On every route into signup, not just the username one.**
+
+**EVERY PROBE PASSED, AND THE REASON IS THE LESSON.** They press buttons with
+`.click()`, which works perfectly on an element buried under something else — so
+`signupflow.js` walked the whole wizard and created real accounts while a person saw
+nothing at all. **A journey test that never asks "what is actually on top?" proves
+the code works, not that anybody can use it.** `signupflow.js` now asks, at the
+first wizard step and the last: `elementFromPoint` at the step's own centre must
+land INSIDE that step. Self-tested — reverting the fix fails both by name, reporting
+`top:"loginOverlay"`.
+
+**The fix keeps the markup where it is** (moving seven blocks into the overlay is
+the `</div>` trap waiting to happen) and gives body-level steps their own
+full-screen layer above it, painting the same black: `body > .auth-step:not(.hidden)
+{position:fixed;left:0;right:0;top:0;bottom:0;z-index:1001;background:#000;
+overflow-y:auto}`. `left:0;right:0` rather than `inset:0` is what lets the existing
+`margin:0 auto` still centre the 440px column. Scoped `body >`, so the steps INSIDE
+the overlay are untouched. `:not(.hidden)` matters too — a hidden step must not get
+a layer of its own, or it would cover the visible one (the self-test caught exactly
+that between `#suPhotoStep` and `#suPremium`).
+
+**Two days went the wrong way before this**, and both detours are worth naming: the
+mail-honesty work below (real, and shipped) was diagnosed from an earlier report,
+and then a `grep` for the screen's title missed it because the source says
+`What&rsquo;s`, not `What's`. **Grep the words as the FILE would spell them** — HTML
+entities, curly quotes — or use `tools/whichapp.sh`, which tries both.
+
+### THE WEBSITE AND THE PHONE APP LOOK ALIKE — CHECK WHICH ONE A SCREENSHOT IS OF
+
+The founder reported they could not create an account and sent a screenshot:
+**"What's your @username?"** → *"We couldn't find an Atwe account with that
+username."* → **Create an account** → **a blank black screen**. Two days had
+already gone into the WEBSITE's signup on the strength of an earlier report.
+
+**That title exists in exactly one file, and it is not the website.** `grep` put
+it in `atwe-mobile/app/(auth)/login.tsx` and nowhere in `public/index.html`. The
+two front doors are alike **by design** — the phone app was deliberately built to
+the web's screens, step for step — so a screenshot of one reads as the other.
+**Before diagnosing a report, grep the exact words on the screen.** One line of
+`grep -rn "<their words>" public/ atwe-mobile/` settles it, and it is cheaper
+than any amount of reasoning about which is more likely.
+
+**The bug itself was an ordering one, and it was still live in 0.19.0:**
+
+```js
+if (step === 'username') { go('password'); return; }   // returned FIRST
+if (createMode) { router.push('/(auth)/signup', …); }  // never reached
+```
+
+A button LABELLED "Create an account" walked into the password screen, for an
+account that by definition does not exist — hence the blank screen. `createMode`
+is a statement of INTENT and has to be read before any per-step branch. The
+username step also never asked `/api/auth/exists`, so `createMode` could not
+become true there at all; that route has always answered for a username or an
+email on the one call (it strips a leading `@` and matches either column) and the
+app was only calling it from the email step.
+
+**The wider lesson for the audit above: `deadends.js` and every other probe in
+this repo cover `public/index.html` only.** The native app has no probes at all,
+which is precisely why a whole-app audit that came back clean was followed within
+the hour by a real, reachable, blank-screen bug. A clean sweep of the web is not
+a clean sweep of Atwe.
+
+### A PROBE THAT CRASHES DOES NOT SAY "FAILED"
+
+`run-all.sh` prints each probe's last three lines, so a probe that THROWS shows a
+stack trace rather than the `N FAILED` line every check-counting probe ends with.
+A monitor grepping only for `failed|FAILED` reports a green run over a crashed
+one. Watch for `CRASH|TypeError|ReferenceError|MISSING` as well.
+
+(The one that surfaced this — `apperrors.js` — passes 19/19 run alone; it is the
+same batch-interaction flake already recorded for `skelgrey`, `sendundo`,
+`appsearch` and `voicenote`. Always re-run a batch failure ALONE before believing
+it.)
+
 ### A FEATURE CAN BE COMPLETE AND HAVE NO DOOR — `scratchpad/deadends.js`
 
 Two whole features were found unreachable in one week — a group's **Cloud** (hidden by a
