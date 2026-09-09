@@ -5863,6 +5863,25 @@ covered the whole nav: clicking Account did nothing and Notifications stayed lit
 is what the founder saw as the tab "popping back" to the wrong icon. `appTab()` also
 closes the panel when you switch worlds, or it would sit over the world you moved to.
 
+**OPEN, COSMETIC, PRE-EXISTING: the Notifications title sits ~3px lower than the other
+worlds.** Measured 9 Sep 2026 by pixel-scanning each title's own ink inside its own box
+(the method this section prescribes), on a 390x844 phone with the bar reset to the top:
+
+| | title box top | title INK top |
+|---|---|---|
+| Beam | 13 | 17 |
+| Engine | 13 | 16 |
+| **Notifications** | **17** | **20** |
+
+`notifhdr.js` fails on exactly this and is LEFT RED on purpose rather than relaxed — it is
+the one thing a sweep found that a person might see. It was NOT introduced by any recent
+work (`index.html` last changed for the signup-wizard fix in 1826, and the header last in
+1766). **Do not "fix" it by nudging `#notifHead`'s padding without measuring:** the 13px
+padding-top is itself a deliberate correction recorded above, and the numbers in that
+paragraph — "the title now starts at 19.75px, identical to Engine" — do not reconcile with
+either column here, so the intended target is genuinely unclear. It needs the founder's eye
+on a real screen, not another guess. Everything else about this header passes.
+
 **Testing note:** the notifications list GROUPS identical entries ("X and 39 others
 followed you"), so 40 seeded `follow` rows collapse to ONE row and there is nothing to
 scroll — which makes the retraction look broken when it is fine. Seed varied types AND
