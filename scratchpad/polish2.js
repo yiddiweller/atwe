@@ -51,13 +51,23 @@ const TYPES=['follow','like','reply','mention','connection','endorse','repost','
   ok(roll.word==='tbWordSpit', 'the word spits out to the right, same as Beam/Engine', roll.word);
   ok(roll.cleared, 'and the class is cleared afterwards (or it kills the tab-tap spin)');
 
-  /* ── the header does NOT retract on scroll ──
-     It used to, and this line used to assert that it did. Animating its 58px margin-top
-     reflows the whole list under the finger, which is what made the page scroll choppily;
-     the founder reported it twice. Measured on a throttled CPU it cost 5 dropped frames a
-     scroll, against zero with the header still — see scratchpad/notifscroll.js, which owns
-     the frame-pacing measurement. What is still checked here is that the page opens
-     showing its header, which is what a member sees. */
+  /* ── the header DOES retract on scroll again, and this check has now been wrong twice ──
+     Build 1766 froze it: it hid by animating a 58px margin-top while sitting IN FLOW above
+     the list, which reflowed every row under the finger — 5 dropped frames a scroll, and
+     the founder called it choppy twice. This line was then rewritten to assert it stays
+     PUT. Build 1827 restored the retraction on the terms that made it free: making the bar
+     glass had already moved the header to position:absolute OVER the list, so it is one
+     composited transform now and NOTHING below it reflows (re-measured at the same 6x CPU
+     throttle: p50 16.7ms both ways, and two live runs disagreed with each other by more
+     than either disagreed with off). notifscroll.js owns that bargain and asserts the
+     terms — it must MOVE, it must move by transform and not by margin, and nothing below
+     may reflow.
+     So this line asserted the OPPOSITE of the shipped, deliberate behaviour and failed on
+     correct code. That is the third time a probe here has gone stale against a decision it
+     did not know about (notifhdr on this very header, lastseen, and now this). The fix is
+     not to re-assert either direction from two places: the retraction's PACING belongs to
+     notifscroll.js alone, and what belongs HERE is only what a member sees — the page opens
+     showing its header, and reopening shows it again rather than leaving it retracted. */
   const rt = await p.evaluate(async()=>{
     const list=document.getElementById('notifList'), head=document.getElementById('notifHead');
     await new Promise(r=>setTimeout(r,600));
@@ -72,10 +82,14 @@ const TYPES=['follow','like','reply','mention','connection','endorse','repost','
       hid:document.getElementById('notifOverlay').classList.contains('nh-hide')};
   });
   console.log('  retraction:', JSON.stringify(rt));
-  ok(Math.abs(rt.after - rt.before) < 2, 'the header stays put while you scroll (that reflow WAS the jank)',
+  /* It must retract — but by TRANSFORM, so the old margin-top jank cannot come back by
+     another door. `.nh-hide` was that old mechanism and must stay gone. */
+  ok(rt.after < rt.before - 10, 'the header retracts on scroll, like the other three worlds',
      JSON.stringify(rt));
-  ok(!rt.hid, 'and nothing re-introduced the retract class', JSON.stringify(rt));
-  ok(!rt.hid && rt.reopened>=0, 'and reopening shows the header again (it used to stay hidden)', JSON.stringify(rt));
+  ok(!rt.hid, 'and the old margin-top retract class is still gone (that reflow WAS the jank)',
+     JSON.stringify(rt));
+  ok(rt.reopened >= -1, 'and reopening shows the header again (it used to stay hidden)',
+     JSON.stringify(rt));
 
   // ── 2. no comets on the AI page ──
   await p.evaluate(()=>{ if(document.body.classList.contains('notif-tab')){document.body.classList.remove('notif-tab');closeOverlay('notifOverlay');} appTab('ai'); });

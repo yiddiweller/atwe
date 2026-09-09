@@ -6168,6 +6168,18 @@ margin — that WAS the jank), **nothing below it may reflow**, and the pacing c
 unchanged. `notifhdr.js` asserts the movement and the title height; it had been left RED on
 this very title for months and is green for the first time.
 
+**A SECOND PROBE WAS ASSERTING THE OPPOSITE, and only a full regression found it.**
+`polish2.js` had been rewritten in build 1766 to assert the header **stays put**, with the
+jank measurement written out beside it. Build 1827 restored the retraction on better terms
+and updated `notifscroll.js` — but not this one, so it failed on correct code at the next
+full run. **That is the THIRD probe here to go stale against a decision it did not know
+about** (notifhdr on this very header, lastseen, now this), and the shape is always the
+same: two probes asserting the same behaviour, one of them updated. The fix is not to
+re-assert the new direction in both — **the retraction's pacing belongs to `notifscroll.js`
+alone**, and `polish2` keeps only what a member sees (it retracts at all, by transform not
+margin, and reopening shows it again). When you change a behaviour, `grep` the whole
+scratchpad for the OLD one before shipping.
+
 **`scratchpad/worldhdr.js` (129 checks) is the durable guard**, and every check is written
 as a RELATIONSHIP between the four worlds rather than as a number — which is the only shape
 that would have caught the original drift, since each of the three faults was a literal that
