@@ -118,6 +118,15 @@ stories at the time) is untouched and keeps serving through `/api/media`. The co
 that tab are the honest measure of whether it is working: they should hold steady rather
 than climb.
 
+**BILLING IS LIVE — STRIPE IS CONFIGURED AND WORKING (confirmed by the founder,
+9 Sep 2026).** `/api/config` reports `billingEnabled`. That closes the one thing standing
+between this and real members: with no card processor `POST /api/wallet/topup` credits the
+wallet instantly, so anyone signed in could give themselves money and then spend it, send it
+or buy Pro with it. **That is no longer the owner's deployment.** The audit record in
+`docs/AUDIT-SEPT-2026.md` and the `reportSetupGaps` warning further down both describe the
+NO-STRIPE case; they are correct as written and must not be read back to the owner as a
+live problem. Fourth time this file has held something as outstanding after it was done.
+
 **RAILWAY DATABASE BACKUPS ARE ON (confirmed by the founder, 9 Sep 2026)** — a daily and a
 weekly snapshot, kept for a month, on the Postgres service. **This entry used to list them
 as outstanding and that was simply STALE**: nothing here had ever been updated when they
@@ -162,12 +171,13 @@ all four:**
 1. **There is no feature finish line left on the web.** What remains is refinement — polish,
    speed, the next bug — which has no natural end. So "finish the web app" cannot be the
    gate on starting the phone app; a date or a short list has to be.
-2. **The real gate on opening to the public is STRIPE, not design.** With no card processor
-   configured, `POST /api/wallet/topup` credits the wallet instantly — **anyone signed in
-   can give themselves money**, then spend it, send it or buy Pro with it. Deliberate (every
-   flow stays testable without Stripe) and fine on a laptop; an open till on a site real
-   people can reach. **OPEN QUESTION, asked and not yet answered:** is `billingEnabled` true
-   at `atwe.com/api/config`? Ask before telling them the web app is ready for the public.
+2. **The Stripe gate is CLEARED (9 Sep 2026).** Billing is configured and working on the
+   live site — confirmed by the founder. So the open till is CLOSED: `/api/wallet/topup`
+   goes through Stripe Checkout, not the instant demo grant, and nobody can credit their own
+   wallet. **Do NOT tell the owner anyone can give themselves money** — the audit note and
+   the `reportSetupGaps` warning below describe the NO-STRIPE case, which is correct as
+   written and does not describe their deployment. This is the FOURTH item this file has
+   carried as outstanding after it was already done (TURN, email, backups, this).
 3. **The store paperwork is waiting, not working — start it in parallel.** Apple
    **Individual → Organization** needs a D-U-N-S number, which takes weeks and is free; the
    Play developer account has its own identity check. Neither costs a line of code and both
