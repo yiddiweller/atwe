@@ -136,10 +136,41 @@ progress rather than outstanding. Ask how it is going; do not report it as not s
 
 ## 🧭 THE PLATFORM ROADMAP — the founder's own order, and where we actually stand
 
-**Their plan, in their words (9 Sep 2026):** *"finish the actual Web App and then we will
-finish the iOS iPhone app and then we will continue to the play Developer account for
-android. When all of those are done, we will maybe make a desktop version for Mac and
-Windows."*
+**Their plan, restated and firmed up by them (9 Sep 2026) — this is THE order, and the
+"maybe" on desktop is gone:**
+
+> *"I want to continue with the Web app. I wanna complete entirely the Web app entirely.
+> Once the web app is completely done we will continue with the iOS app and update it to
+> 0.19. And then we will continue updating the iPhone app. When that is done we will start
+> and continue with play store account for android. When that is done we will try to finish
+> a desktop version. When that's done we are all done and we will launch it publicly
+> officially and we will begin bugs and problems we have from real users."*
+
+**So the sequence is: web → iPhone (0.19 first, then the rest) → Android → desktop →
+PUBLIC LAUNCH → live bug-fixing from real members.** The last two steps are new; everything
+before them is unchanged from their earlier statement (*"finish the actual Web App and then
+we will finish the iOS iPhone app and then we will continue to the play Developer account
+for android. When all of those are done, we will maybe make a desktop version for Mac and
+Windows"*). **The web app is the number-one goal and the only thing to work on until they
+say otherwise. Do not drift onto the phone app, and do not start anything on the list of
+"honest limits" below without asking.**
+
+**THE FOUNDER HAS BEEN TOLD, AND AGREED TO BE TOLD AGAIN, THAT "FINISH THE WEB APP" HAS NO
+FEATURE FINISH LINE.** Counted rather than quoted: 561 built, 4 deliberately skipped, 7
+left — and 6 of the 7 are the phone app, the 7th (Atwe Card) blocked on a card-issuing
+partner and KYC rather than on code. So there is no list of web features to burn down;
+what remains is **refinement**, which by nature never ends. That means step 1 needs a
+DEFINITION rather than a checklist — a fixed short list, or a date — or it silently becomes
+forever and every later step waits behind it. Raise this whenever "finish the web app"
+comes up, and offer to write the definition down.
+
+**They also chose to launch LAST rather than first**, after all four platforms. That is a
+deliberate, legitimate choice (one clean launch, one story) and it is theirs. The honest
+cost, which they have been told once and should not be nagged about: **no stranger will
+have used Atwe until everything is built**, and real members find things no amount of
+testing does — this session alone found a signup flow that lied, a whole feature with no
+door, and a test that had never once run. Mention it if the plan is reopened; otherwise
+follow their order.
 
 **It is the right order**, and the reason is worth keeping: each step reaches more people
 than the last but costs more to ship. The web has no gatekeeper — it goes live the moment
