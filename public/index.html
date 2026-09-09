@@ -848,7 +848,18 @@ body > .auth-step:not(.hidden){position:fixed;left:0;right:0;top:0;bottom:0;z-in
   display:flex;align-items:center;justify-content:center;}
 .dev-ic svg{width:22px;height:22px;}
 .dev-main{flex:1;min-width:0;}
-.dev-name{font-size:15px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;}
+.dev-name{font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:8px;}
+  /* THIS WAS `color:#fff` AND IT MADE THREE LABELS INVISIBLE IN LIGHT THEME. The class
+     began life as a device NAME in Devices & sessions and was then reused as a section
+     heading — Your studio's "Money", "Reach", "What you have made" — which sit on the
+     page rather than on a dark card, so in Light it was white text on a white page.
+     Proved by reading real pixels rather than the CSS: the whole band came back
+     255,255,255, lightest and darkest identical, i.e. nothing drawn at all. `--t1` is
+     #FFFFFF on Black and #1D1D1F on Light, so Black is byte-identical and Light works.
+     This is the colour law's own rule — reference colours ONLY via variables — and the
+     app still has ~94 rules hardcoding white text; see docs/WEB-FINISH-LIST.md item C1.
+     NB `.dev-name` is declared TWICE (again near the Devices block, font only). This is
+     the copy that sets `color`, so it is the one to edit. */
 .dev-badge{font-size:10px;font-weight:800;letter-spacing:.05em;color:var(--green-txt);background:rgba(48,209,88,.16);padding:2px 7px;border-radius:6px;flex:0 0 auto;}
 .dev-sub{font-size:12.5px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .dev-x{flex:0 0 auto;width:34px;height:34px;border:none;background:none;color:var(--t3);cursor:pointer;border-radius:50%;
@@ -2011,7 +2022,13 @@ body.reduce-motion .me-slide,body.reduce-motion .me-slide-back{animation:none;}
 .iset-row.iset-staff .iset-label{color:var(--t3);font-weight:600;}
 .iset-row.iset-staff .iset-sub{color:var(--t4);}
 .iset-row.iset-staff .iset-ic{opacity:.6;}
-.me-row.danger .me-lbl{color:var(--red);}
+/* `--red-txt`, not raw `--red`: the Log out label measured 3.99:1 on Light from real
+   pixels (245,0,51 on near-white) against a 4.5 floor. The token exists for exactly this —
+   it is --red on Black and #C00020 on Light, 6.4:1 on white and 4.9:1 on its own tint — and
+   the block that declares it says to use it for a coloured WORD rather than the raw hue.
+   The ICON keeps the raw hue: a 22px glyph is a graphic, which has a 3:1 floor, and the
+   brighter red is what makes the row read as destructive at a glance. */
+.me-row.danger .me-lbl{color:var(--red-txt);}
 .me-row.danger .me-ic{background:none;color:var(--red);}
 .me-row.danger .me-ic svg{stroke:var(--red);}
 /* Circle deletion "danger zone" in the edit form. */
@@ -9007,7 +9024,10 @@ body.light .rev-sum-v{color:var(--on-green);}
 .dlv-t{font-size:14.5px;font-weight:750;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dlv-s{font-size:12.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dlv-state{font-size:12px;font-weight:700;margin-top:2px;}
-.dlv-state.wait{color:var(--amber);}
+.dlv-state.wait{color:var(--amber-txt);}  /* NOT raw --amber: 1.56:1 on a white page.
+   `--amber-txt` is the token that exists for a coloured WORD (it is --amber on Black and
+   #805300 on Light, 6.7:1). The declaration block for these tokens says in as many words
+   "use these — never raw --green/--amber — for a coloured WORD"; this rule predated it. */
 .dlv-state.go{color:var(--accent);}
 .dlv-state.done{color:var(--green);}
 body.light .dlv-state.done{color:var(--on-green);}
@@ -11938,10 +11958,14 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
   .ci-bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:5px;}
   .ci-fill{background:var(--accent);border-radius:5px 5px 3px 3px;min-height:5px;}
   .ci-zero{height:2px;background:var(--b2);border-radius:2px;}
-  .ci-yr{font-size:10px;color:var(--t4);text-align:center;font-variant-numeric:tabular-nums;}
+  .ci-yr{font-size:10px;color:var(--t3);text-align:center;font-variant-numeric:tabular-nums;}  /* 10px on the icon tint — same fault as .ci-note above */
   .ci-hire{margin-top:14px;font-size:13px;color:var(--t2);}
   .ci-hire.up{color:var(--green);} .ci-hire.down{color:var(--t3);}
-  .ci-note{margin-top:10px;font-size:11.5px;color:var(--t4);}
+  /* `--t4` IS THE ICON TINT AND MUST NEVER BE WORDS — the design law says so twice, and
+     this is the THIRD time it has been used for text (the muted-group unread badge and
+     the "Add" tab were the first two). Measured here at 2.02:1 on Black and 1.86:1 on
+     Light against a 4.5:1 floor — under half. `--t3` measures 5.2 / 5.07. */
+  .ci-note{margin-top:10px;font-size:11.5px;color:var(--t3);}
 /* The morning briefing: the sentence, then the money, then the list. */
 .bf-line{font-size:15px;line-height:1.45;color:var(--t1);}
 .bf-money{margin-top:10px;font-size:14px;font-weight:700;color:var(--green-txt);}
@@ -13920,7 +13944,13 @@ body.light #signupDob{color-scheme:light;}
 .till-code span{font-size:13px;color:var(--t3);display:block;margin-top:6px;}
 .till-code-in{text-align:center;font-size:30px;letter-spacing:.2em;font-variant-numeric:tabular-nums;}
 .till-methods{display:flex;gap:8px;margin:10px 0;}
-.till-methods button{flex:1;padding:10px;border-radius:999px;border:none;background:var(--s1);color:var(--t2);font-size:13.5px;font-weight:600;cursor:pointer;}
+.till-methods button{flex:1;padding:10px;border-radius:999px;border:none;background:var(--s1);color:var(--t1);font-size:13.5px;font-weight:600;cursor:pointer;}
+  /* `--t2` measured 3.52:1 HERE — it is 5.4:1 on pure black, but these sit on --s1, a
+     lighter grey, and the ratio falls with the ground. A label on a button somebody taps
+     while taking money at a counter has to be readable; --t1 is the same choice the tab
+     law made for `--tab-ink` after Apple's own unselected labels measured near-white.
+     Deliberately NOT converted to the --tab-* pills: this is a form option picker (like a
+     gift-card amount), which design rule 9b explicitly leaves alone. */
 .till-methods button.on{background:var(--accent);color:#fff;}
 
 /* Voice. One big thing to press, and it breathes while it is listening. */
@@ -22358,7 +22388,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1829'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1830'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —

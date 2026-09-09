@@ -8,7 +8,7 @@ whole site, written up as a real list; finished means this list is at zero.**
 **Every item here is MEASURED, not judged.** A list built on taste can never reach zero.
 Each entry says the screen, the exact fault, the number, and what "done" looks like.
 
-Progress: **0 of 12 done.**
+Progress: **4 of 13 done.**  ·  1 item turned out to be bigger than it looked and is now D1.
 
 ---
 
@@ -45,36 +45,43 @@ paint text with the icon-tint token; measuring showed a later rule wins and they
 The floor is **4.5:1** for normal text (3:1 once it is 24px, or 18.7px bold). These are all
 below it.
 
-### A1 — "Your studio": three labels are invisible in Light theme ⬜
+### A1 — "Your studio": three labels are invisible in Light theme ✅ DONE (build 1830)
 **The worst item on this list.** `.dev-name` (index.html:851) hardcodes `color:#fff`, so
 **"Money", "Reach" and "What you have made" are white text on a white page.** Confirmed by
 reading real pixels, not CSS: the whole band is `255,255,255` — lightest and darkest pixel
 identical, i.e. nothing is drawn. Black theme is fine (white on black).
 *Done when:* the labels use a theme token and measure ≥4.5:1 in **both** themes.
+**Fixed:** `.dev-name` now uses `--t1`. Re-measured on the real screen — Black **21:1**, Light **16.83:1** (was 1:1, i.e. invisible).
 
-### A2 — "Message insights": the summary line is at 2.02:1 ⬜
+### A2 — "Message insights": the summary line is at 2.02:1 ✅ DONE (build 1830)
 `.ci-note` (index.html:11944) paints text with **`--t4`**, the icon-tint token. The design
 law names this exact misuse twice — it fails both the 4.5:1 floor for text and the 3:1
 floor for a control. "Last 30 days · 5 in, 37 out · 0 new" measures **2.02:1 on Black** and
 **1.86:1 on Light** at 12px: under half the floor.
 *Done when:* it uses a text token (`--t3` measures 5.2:1) in both themes.
 *Note:* this is the **third** time `--t4` has been used for words. Worth a sweep of its own.
+**Fixed:** `.ci-note` and the `.ci-yr` year label beside it (same fault, same block) use `--t3`. Re-measured: Black **4.56:1**, Light **4.66:1**.
 
-### A3 — "Deliver for others": the three waiting lines are at 1.56:1 ⬜
+### A3 — "Deliver for others": the three waiting lines are at 1.56:1 ✅ DONE (build 1830)
 "Waiting on the seller to agree…", "Waiting for a courier", "Waiting on the buyer to
 agree…" — 12px, **1.56:1 in Light**. These are status lines; they are the whole point of
 the screen.
 *Done when:* ≥4.5:1 in both themes.
+**Fixed:** `.dlv-state.wait` used raw `--amber`; it now uses **`--amber-txt`**, the token that exists for a coloured word and whose own declaration says "use these — never raw --green/--amber". Re-measured: Black **11.57:1**, Light **6.11:1**.
 
-### A4 — "The till": the payment-method label is at 3.52:1 ⬜
-"Atwe wallet" at 14px, **3.52:1 on Black**. This is a label on a button someone taps while
-taking money at a counter.
-*Done when:* ≥4.5:1 in both themes.
+### A4 — "The till": the payment-method labels ⚠️ PART DONE — the rest became D1
+**I aimed the first fix at the wrong rule, and the re-measurement caught it.** The
+UNSELECTED labels were changed from `--t2` to `--t1` (Black 6.03 → **19.66:1**) and that
+stands. But the 3.52:1 the sweep reported was the **selected** pill — white text on the
+accent blue — which is a different rule and turns out not to be a till problem at all.
+See **D1**.
+*Done when:* D1 is decided; the unselected half is already done.
 
-### A5 — the "Log out" row is at 3.99:1 in Light ⬜
+### A5 — the "Log out" row is at 3.99:1 in Light ✅ DONE (build 1830)
 Measured from real pixels: red `245,0,51` on near-white. Red is required here by the colour
 law (destructive), so the fix is the shade, not the colour.
 *Done when:* ≥4.5:1 in Light without ceasing to read as red.
+**Fixed:** the LABEL uses `--red-txt` (#C00020 on Light); the ICON keeps the raw hue, since a glyph is a graphic with a 3:1 floor and the brighter red is what makes the row read as destructive. Re-measured: Black **4.64:1**, Light **5.91:1**.
 
 ---
 
@@ -101,6 +108,28 @@ row's rhythm — this one is a design decision, not just a number.
 ### B5 — Help's close "×" is 32×32 ⬜
 
 ### B6 — Push notifications' "1h" and "8h" are 41×29 ⬜
+
+---
+
+## D · One for the owner to decide
+
+### D1 — white text on the accent blue is 3.52:1, in 17 places ⬜ **NEEDS A DECISION**
+White on `--accent` (#0088FF) measures **3.52:1** — under the 4.5 floor for normal text.
+It is **not one screen**: `background:var(--accent);color:#fff` appears in **17 rules**, so
+every selected blue control in the app is the same. Fixing one and not the rest would leave
+the app inconsistent, which is worse than the fault.
+
+Three ways out, and they are genuinely different products, not one right answer:
+1. **Make a selected choice the WHITE pill**, which is already the app's own law for a row
+   of choices (`--tab-fill-on` / `--tab-ink-on`) and passes easily. Cost: the colour law
+   says white is *the one primary action per screen*, and on a screen that already has a
+   real primary (a Charge button) this spends it twice.
+2. **Darken the blue** behind white text until it passes. Cost: the accent is the brand's
+   identity colour and would no longer be one blue.
+3. **Accept it for large/bold text only.** At 18.66px bold or 24px the floor drops to 3:1
+   and 3.52 passes. Cost: it does not help the 13–14px labels, which are most of them.
+
+*Done when:* the owner picks one and it is applied to all 17 consistently.
 
 ---
 
