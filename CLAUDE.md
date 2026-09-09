@@ -154,11 +154,36 @@ on the wrong thing:
   is `openHelp()` and has always worked. Grep the app for a function before concluding it is
   missing.
 
-**And the pattern the app's own 44pt overlays follow:** an invisible `::before` buys the
+**And the pattern the app's own 44pt overlays follow:** an invisible **`::after`** buys the
 touch floor without changing how anything looks or costing any layout — but growing sideways
 over the control next door trades one fault for a worse one, so `touchsize.js` hit-tests each
 neighbour's centre, and it reads the CSS block itself so a renamed class cannot orphan its
 overlay silently.
+
+**A PSEUDO-ELEMENT IS A SLOT, AND IT CAN ALREADY BE TAKEN — this shipped WRONG, visibly, on
+~90 screens.** The block first claimed `::before`, and **`.job-card-modal .sheet-close::before`
+IS the sheet back chevron** (an 11×11 box with two borders, rotated 45°). The chevron's rule is
+more specific so it kept its own `content` and size — but it sets no `position`, so it
+inherited `position:absolute; inset:-3px` from the touch block and the arrow jumped **19px
+left**, out of its padding and onto the sheet's edge, on every sheet in the app. Moved to
+`::after`, which nothing in that class list uses. **Grep for both pseudo-elements before
+adding a class to a block like this.**
+
+**TWO probe lessons came out of that, and both are about believing the wrong evidence:**
+
+- **`gutters.js` caught it exactly as designed** — "content starts at 11px, want 14", on 18
+  screens at once — and it was nearly dismissed. **A probe reporting many failures at once is
+  more likely to be one real cause than many false ones.**
+- **REPRODUCE A PROBE'S EXACT SETUP BEFORE CONCLUDING A FAILURE PREDATES YOU.** The A/B that
+  "proved" the previous build behaved identically did not seed `atwe_intro_seen`, so BOTH runs
+  measured the **Wallet feature-intro sheet's** blurred halo (`blur(42px)`, deliberately
+  reaching past its card) instead of the sheet underneath — and agreed for a reason that had
+  nothing to do with the change. An A/B that measures the wrong thing agrees on everything.
+
+**AND DO NOT KILL THE SHARED SERVER WHILE A REGRESSION IS RUNNING.** `run-all.sh` drives the
+one server on 3262; restarting it mid-run makes every remaining probe fail for an
+environmental reason and the whole run has to be thrown away and repeated. Check
+`pgrep -f run-all` first.
 
 ## 📱 iOS / mobile app — resume protocol ("continue with the app")
 

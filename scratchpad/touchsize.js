@@ -1,5 +1,5 @@
 /* docs/WEB-FINISH-LIST.md B1–B6 — the 44pt touch floor.
-   Measures the box the BROWSER would hit (the ::before overlay included) and, just as
+   Measures the box the BROWSER would hit (the ::after overlay included) and, just as
    importantly, that no overlay steals the tap of the control beside it: the cheap way to
    "pass" this check is to grow sideways over a neighbour, which trades one fault for a
    worse one. So every control is also hit-tested at its neighbour's centre. */
@@ -58,18 +58,42 @@ const ok=(c,n,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+n+(d?'
        if(el) break; await new Promise(r=>setTimeout(r,150));
      }
      if(!el) return {missing:true};
-     const b=el.getBoundingClientRect(), be=getComputedStyle(el,'::before');
+     /* MEASURE BOTH PSEUDO-ELEMENTS. The app has two touch blocks and they deliberately
+        use different slots — the filter chips (B1-B6) are on ::before, the icon buttons
+        (B7) on ::after, because `.sheet-close::before` is already the sheet back arrow.
+        The browser gives whichever is there, so the honest hit box is the union: take the
+        largest outward reach on each side. Reading only one slot makes the OTHER block's
+        controls look untouched, which is exactly how this probe failed after the move. */
+     const b=el.getBoundingClientRect();
      const n=v=>parseFloat(v)||0;
-     const hit={w:b.width+ -n(be.left)+ -n(be.right), h:b.height+ -n(be.top)+ -n(be.bottom)};
+     const grow=(side)=>{
+       let g=0;
+       for(const pe of ['::before','::after']){
+         const cs=getComputedStyle(el,pe);
+         if(cs.content==='none') continue;
+         g=Math.max(g, -n(cs[side]));
+       }
+       return g;
+     };
+     const hit={w:b.width+grow('left')+grow('right'), h:b.height+grow('top')+grow('bottom')};
      /* does the overlay reach over a sibling's centre? */
+     /* ONLY A CONTROL CAN HAVE ITS TAP STOLEN. This check exists to stop one button's
+        invisible overlay eating the button next to it — so the neighbour has to BE
+        something you can press. It used to test any sibling, and reported the profile
+        editor's ✕ as stealing `.pf-top-title`, a plain <div> of text that does not
+        overlap it at all (measured: the ✕ spans 12-52, the title 62-296). A label has no
+        tap to take. */
      let steals=null;
-     const sib=el.nextElementSibling||el.previousElementSibling;
+     const tappable=e=>!!e && (e.onclick || e.getAttribute('onclick') ||
+       /^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(e.tagName) ||
+       e.getAttribute('role')==='button' || e.hasAttribute('tabindex'));
+     const sib=[el.nextElementSibling, el.previousElementSibling].find(tappable);
      if(sib){ const sb=sib.getBoundingClientRect();
        if(sb.width>3){ const hitEl=document.elementFromPoint(sb.x+sb.width/2, sb.y+sb.height/2);
          if(hitEl && (hitEl===el||el.contains(hitEl))) steals=String(sib.className).slice(0,24); } }
      return {w:Math.round(b.width),h:Math.round(b.height),
              hitW:Math.round(hit.w),hitH:Math.round(hit.h),steals,
-             hasBefore: be.content!=='none'};
+             pseudo:['::before','::after'].filter(pe=>getComputedStyle(el,pe).content!=='none').join('+')||'none'};
    },[sel]);
    if(r.missing){ ok(false, screen+' '+sel+' not found'); continue; }
    ok(r.hitH>=minH-0.5, screen+' '+sel+' hit height >= '+minH, r);
@@ -83,8 +107,8 @@ const ok=(c,n,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+n+(d?'
     So: every class the 44pt block names must still be a real class somewhere in the app.
     A rename or a deletion orphans the overlay silently, and nothing else would say so. */
  const src=fs.readFileSync('/home/user/atwe/public/index.html','utf8');
- const blk=src.slice(src.indexOf('.sheet-close,.iset-back,.tb-brand-act'));
- const named=[...new Set((blk.slice(0,blk.indexOf('/* B2')).match(/\.[a-z][a-z0-9-]+(?=::before|[,{])/g)||[]))];
+ const blk=src.slice(src.indexOf('.sheet-close::after,.iset-back::after'));
+ const named=[...new Set((blk.slice(0,blk.indexOf('/* B2')).match(/\.[a-z][a-z0-9-]+(?=::after|[,{])/g)||[]))];
  ok(named.length>=19,'the 44pt block still names every control it was written for',{named:named.length});
  /* The test is deliberately blunt: does the BARE name appear anywhere OUTSIDE this block?
     A first attempt hunted for it inside class="..." and inside template literals, and it
