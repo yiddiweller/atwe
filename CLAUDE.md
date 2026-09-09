@@ -7,26 +7,31 @@ Guidance for AI assistants (and humans) working in this repository.
 The owner asked for one place that answers two questions at any moment: **where are we up
 to, and what is the goal.** This is it. Everything below is detail.
 
-**THE GOAL — a massive marketing campaign at the BEGINNING OF 2028**, launching what will
-by then be a finished product that already has real users on it. Everything before that
-date exists to make that campaign land on something solid.
+**TWO DATES, AND THEY ARE DIFFERENT THINGS. Do not merge them.**
+
+- **Beginning of 2027 — the PRODUCT goes officially public.** Web, iPhone, Android and (if
+  it makes it) desktop are all done and available. *"From 2027 the company is officially
+  public and everyone can use it wherever they want."*
+- **1 JANUARY 2028 — ATWE INC OFFICIALLY BEGINS.** The company itself starts, together with
+  **the massive marketing campaign**. This is the goal everything else serves.
 
 **THE ROUTE THERE:**
 
 | when | what |
 |---|---|
-| **now → end of 2026** | **finish the web app.** The only thing being worked on. Real people may use it meanwhile — that is fine and wanted. |
-| **beginning of 2027** | **official public release** |
-| **through 2027** | iPhone (0.19 onto a real device first, then the rest) → Android → desktop. AND the shakedown year: real members find what no test here can. |
-| **beginning of 2028** | product **fully complete**, real users already on it |
-| **beginning of 2028** | **the campaign** — full brand and marketing push, treated as a new company brand even though it will have been live for a year |
+| **now → beginning of 2027** | **Finish, in this order: the WEB APP entirely (*"at least the stuff we can finish"*) → the iPhone app → the Android app → the desktop app *"if possible"*.** One at a time, each finished before the next starts. The web is the only thing being worked on right now. |
+| **beginning of 2027** | **official public release** — all platforms, available to everyone, everywhere |
+| **2027 → beginning of 2028** | the shakedown year. *"We will fix older problems we didn't recognize while the users and real users are using it — with my real team and workers."* Real usage teaches what no test here can. |
+| **1 Jan 2028** | **Atwe Inc officially starts + the massive marketing campaign** |
 
-**WHERE WE ARE RIGHT NOW:** step 1. The web app.
-**Progress: 561 features built · 7 to do** — and 6 of those 7 are the phone app, the 7th
-(Atwe Card) waiting on a card-issuing partner rather than on code. **Count it, never quote
-it** (the one-liner is in the feature-campaign section below), and **report those two
-numbers only** — built and to-do. The owner does not want to hear about deliberately
-skipped items again.
+**People may use the web NOW, and that is wanted, not tolerated** — *"I have no problem that
+people are using the web app even the iPhone and other apps are not available yet."* The
+site being live is not the public release; the public release is the moment in 2027 when
+every platform is ready.
+
+**WHERE WE ARE RIGHT NOW:** step 1 of 4 — the web app.
+**Progress: run `node tools/features.js`.** It prints the only two numbers that exist,
+built and to-do. **Never quote a number from this file.**
 
 **THE ONE THING TO KEEP HONEST ABOUT STEP 1:** the web's FEATURE list is finished, so
 "finish the web app" cannot mean burning down a checklist — what is left is refinement,
@@ -75,25 +80,39 @@ checklist. Pick up exactly where the last batch left off. Nothing else is needed
 from them; "go" is the whole instruction.
 
 **Where the state lives (all in the repo — no session memory required):**
-- `features-data.js` — THE source of truth for what is built. Every item has a
-  `phase`: `inv` (live in the app) · `admin_have` (live in the dashboard) ·
-  `roadmap` / `admin_idea` (still to build) · `excluded` (a decision already taken — kept
-  as the record of it, NEVER reported; see the two-numbers rule below).
+- `features-data.js` — THE source of truth. **There are exactly TWO states and no third
+  one:** BUILT (`inv` live in the app · `admin_have` live in the dashboard) and TO DO
+  (`roadmap` · `admin_idea`). The owner's instruction, 9 Sep 2026: *"You can delete the
+  skipped features entirely. I don't need it at all… we should only have the features we
+  have and the features we still need to do."* The four `excluded` rows are **deleted** —
+  and they were not harmless: `public/features.html` marks a row planned only when its phase
+  is `roadmap|admin_idea`, so `excluded` rendered as **DONE** and the owner's own Features
+  tab was reporting 565 built instead of 561. **Never reintroduce a third phase.**
 - The owner sees this as the **Features** tab in the admin dashboard.
 - `git log` — every batch is one commit whose message says what was built, what
   was found already built, and what bugs were caught.
 - **Never quote a progress number from this file — count it from `features-data.js`,
   which is the only place that is current.** A hardcoded tally here went stale by
   ~90 items and was repeated to the owner as fact.
-- **REPORT EXACTLY TWO NUMBERS: how many are BUILT and how many are STILL TO DO.**
-  Nothing else. The owner asked for this directly (9 Sep 2026): *"You can remove
-  entirely this for features we skipped. You don't need to tell me every time we
-  skipped this. You can just tell me how many features we have and how many features
-  we still need to do, that's it."* The deliberately-skipped items STAY in
-  `features-data.js` — they are the record of decisions already taken, and deleting
-  them would lose that — they are simply never mentioned again. One line gives the
-  two numbers:
-  `node -e "const l=require('./features-data.js');const b=l.filter(f=>f.phase==='inv'||f.phase==='admin_have').length,t=l.filter(f=>f.phase==='roadmap'||f.phase==='admin_idea').length;console.log(b+' built · '+t+' to do')"`
+- **`tools/features.js` IS THE SYSTEM — use it, never hand-edit the file.** The owner asked
+  for the counting to run itself: *"once we have something we did of the features we have to
+  do, it automatically goes into the features we have and the features we do has now one
+  less. Automatic official system."*
+
+  | | |
+  |---|---|
+  | `node tools/features.js` | the two numbers, and nothing else |
+  | `node tools/features.js todo` | what is left, with ids |
+  | `node tools/features.js done <id>` | shipped → moves across, to-do drops by one |
+  | `node tools/features.js add "Name" "What it does" ["Category"]` | a new feature or a touch-up, recorded as BUILT |
+  | `… add "Name" "Desc" --todo` | …or onto the to-do list instead |
+
+- **A SMALL FEATURE OR A TOUCH-UP MUST GO ON THE LIST — it does not get ignored.** The
+  owner said this explicitly and it is the half that is easy to forget, because the
+  interesting work is the building and the list feels like paperwork. **Run
+  `tools/features.js add` in the same commit that ships it**, so the two numbers are always
+  the truth rather than a periodic reconciliation. The list is meant to GROW as well as
+  shrink.
 - As of the last count: **561 built · 7 to do** — and 6 of the 7 are the native
   iOS/Android app (`atwe-mobile/`, its own track with its own resume protocol above),
   the 7th being the Atwe Card launch, which is blocked on a card-issuing partner and
@@ -206,13 +225,21 @@ limits" list below without asking.
 
 ### THE DATES — the part that makes the whole plan make sense (their own, 9 Sep 2026)
 
+**Corrected 9 Sep 2026 after the owner restated it — an earlier version of this table had
+the apps shipping THROUGH 2027 and that is wrong. All four platforms are due BY the
+beginning of 2027; 2027 itself is the shakedown year.**
+
 | when | what |
 |---|---|
-| **now** | the web is **already usable by real people**, and they are happy for it to be. *"I have no problem that people are using the web app even the iPhone and other apps are not available yet."* Not a secret, just not promoted. |
-| **beginning of 2027** | **official public release** |
-| **through 2027** | every remaining version and app ships — iPhone, Android, desktop — AND the year runs as a real-world shakedown: *"this year I will be able to fix a lot of stuff we do not recognize."* Real members find what no probe here can. |
-| **beginning of 2028** | app **fully completed**, with a lot of users already on it |
-| **beginning of 2028** | **the massive marketing campaign** — the official major branding push, treated as a NEW company brand even though it will have been in use for nearly a year |
+| **now** | the web is **already usable by real people**, and they are happy for it to be. *"I have no problem that people are using the web app even the iPhone and other apps are not available yet."* Not a secret, just not promoted — and NOT the public release. |
+| **now → beginning of 2027** | **all four, one at a time, in order: web (*"entirely… at least the stuff we can finish"*) → iPhone → Android → desktop (*"if possible"*).** Each finished before the next begins. |
+| **beginning of 2027** | **OFFICIAL PUBLIC RELEASE of the product.** *"From 2027 the company is officially public and everyone can use it wherever they want."* |
+| **2027 → beginning of 2028** | the shakedown year, and it is a deliberate part of the plan: *"we will fix older problems we didn't recognize while the users and real users are using it — with my real team and workers."* |
+| **1 JANUARY 2028** | **ATWE INC OFFICIALLY BEGINS** — the company itself starts, together with **the massive marketing campaign**. Treated as a new company brand even though the product will have been live for a year. |
+
+**THE TWO DATES ARE DIFFERENT THINGS AND MUST NOT BE MERGED**: beginning of 2027 is the
+PRODUCT going public on every platform; 1 Jan 2028 is the COMPANY starting, with the
+campaign. An earlier note here collapsed them and got the plan wrong.
 
 **THIS ANSWERS THE ONE OBJECTION THAT WAS RAISED ABOUT THE PLAN, AND ANSWERS IT WELL — do
 not raise it again.** The worry was "launching last means no stranger uses Atwe until
