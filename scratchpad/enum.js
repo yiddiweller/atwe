@@ -1,5 +1,9 @@
 /* Ask the APP for every destination it believes it has. */
-const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
+/* PW_SCRATCH first. A hardcoded session path is how this repo's runner once ran a
+   frozen copy of every probe from /tmp for weeks, and how the nav-icon generator came
+   one restart from being lost. Resolve it, and keep the old path only as a fallback. */
+const SP=process.env.PW_SCRATCH||
+  '/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const {chromium}=require(SP+'/node_modules/playwright-core');
 const TOK=require('fs').readFileSync('/tmp/tok.txt','utf8').trim();
 (async()=>{
@@ -14,7 +18,7 @@ const TOK=require('fs').readFileSync('/tmp/tok.txt','utf8').trim();
       bySub: idx.reduce((a,x)=>{a[x.sub]=(a[x.sub]||0)+1;return a;},{}),
       items: idx.map(x=>({name:x.name||x.label||x.title||x.t||'?', sub:x.sub, run:String(x.run||''), keys:Object.keys(x).join(',')})) };
   });
-  require('fs').writeFileSync(SP+'destinations.json', JSON.stringify(d,null,1));
+  require('fs').writeFileSync(require('path').join(__dirname,'destinations.json'), JSON.stringify(d,null,1));
   console.log('destinations:', d.total);
   console.log(JSON.stringify(d.bySub,null,1));
   await b.close();
