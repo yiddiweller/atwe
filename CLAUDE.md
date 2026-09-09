@@ -107,6 +107,59 @@ zero.** With a public release at the start of 2027, this is a scheduling matter,
 philosophical one — an undefined step 1 eats the runway the phone, Android and desktop all
 have to fit into.
 
+**THAT LIST EXISTS AND IT LIVES IN `docs/WEB-FINISH-LIST.md`.** The first pass is done: the
+app's own search index was used as the checklist rather than a hand-written one — **154
+destinations**, opened one at a time at 390×844 **in both themes**, each asked the same
+objective questions (does it open, does it throw, does anything spill sideways, is any text
+under the legibility floor, is any control under the touch floor, are there two primary
+buttons doing one job). It found **13 items; 12 are fixed and guarded.** The one left is
+**D1** and it is not a bug — see below. **The list is not the whole web app**: it says
+plainly what it did NOT look at (deeper states, other widths, the admin dashboard, anything
+needing a second person or real money, speed and motion), and each of those is a further
+pass that ADDS to it.
+
+**D1 IS WAITING ON THE FOUNDER AND MUST NOT BE DECIDED HERE.** White text on the accent blue
+measures **3.52:1** — under the 4.5 floor for normal text, over the 3 floor for large. It is
+**17 rules**, i.e. every selected blue control in the app, so fixing one and not the rest is
+worse than the fault. The three ways out are genuinely different products (make a selected
+choice the WHITE pill, which is already the app's own law but spends the one white action;
+darken the blue, and the brand no longer has one blue; accept it for large text only, which
+does not help the 13–14px labels that are most of them). `legible.js` carries it as **one
+exact-string exception on one surface** so the guard is not permanently red on a call nobody
+has made — delete that exception the day it is decided.
+
+**THREE GUARDS KEEP IT FIXED, all in `run-all.sh`** — `contrastfix.js` (the five contrast
+faults, re-measured on the real screens), `touchsize.js` (the touch floor) and
+**`legible.js`** (60 surfaces, both themes: every leaf of text scored against its real
+background). Four lessons came out of building them, and every one made a check pass or fail
+on the wrong thing:
+
+- **MEASURE, NEVER GREP.** A grep would have put **eight** fake items on that list: eight
+  rules *say* they paint text with the icon-tint token, and measuring shows a later duplicate
+  rule wins in six of them. Reading rules tells you what the CSS says, never what a person
+  sees. Six more false alarms are recorded in the list itself for the same reason.
+- **COMPOSITE A BACKGROUND, never hunt for one that is opaque "enough".** `legible.js` walked
+  up for the first ancestor over 85% opaque — and the profile editor's own title bar is
+  exactly `rgba(0,0,0,.85)`, which is not *greater than* .85, so the walk sailed past it to
+  the white overlay behind and reported a perfectly legible title as white-on-white at
+  1.00:1. Any threshold has that failure somewhere; compositing has it nowhere, and it
+  reproduces the screenshot's own `[38,38,38]` to the byte.
+- **A CHECK THAT EXCLUDES MOST OF ITS SUBJECT REPORTS A CLEAN RESULT.** The touch-target
+  check required a control to have TEXT, so it never once looked at a button whose whole
+  content is a glyph — which is **the two most-pressed controls in the app** (the sheet
+  close, on ~90 screens, and the Settings back arrow, on ~35). Six controls became nineteen
+  the moment it stopped. Same shape as the runner that covered 68 probes while claiming 85.
+- **A PARKED ITEM CAN BE PARKED ON A MISREMEMBERED NAME.** B5 sat open as "possibly a dead
+  route" because `acOpenHelp()` does not exist. It does not — I invented it; the real opener
+  is `openHelp()` and has always worked. Grep the app for a function before concluding it is
+  missing.
+
+**And the pattern the app's own 44pt overlays follow:** an invisible `::before` buys the
+touch floor without changing how anything looks or costing any layout — but growing sideways
+over the control next door trades one fault for a worse one, so `touchsize.js` hit-tests each
+neighbour's centre, and it reads the CSS block itself so a renamed class cannot orphan its
+overlay silently.
+
 ## 📱 iOS / mobile app — resume protocol ("continue with the app")
 
 A **native iOS app** (Expo + TypeScript, currently Expo **SDK 54**) lives in

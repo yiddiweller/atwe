@@ -14,6 +14,26 @@ const CASES=[
  ['Collections',     "acSetFeed('bookmarks')",      [['.ac-lchip',44,44]]],
  ['Write a post',    "acOpenPost()",                [['.ac-post-toolbar .msg-attach',44,44]]],
  ['Push notifications',"acGoSettingsPage('notifications')",[['.snz-chip',44,44]]],
+ /* The icon-only controls — the half of this list the first pass missed entirely,
+    because its check required a control to have TEXT. The two commonest controls in
+    the app are here: the sheet close (90 screens) and the Settings back arrow (35). */
+ ['Wallet',          "acOpenWallet()",              [['.sheet-close',44,44]]],
+ ['Settings',        "acGoSettingsPage('account')", [['.iset-back',44,44]]],
+ ['Home top bar',    "appTab('home')",              [['.tb-brand-act',44,44]]],
+ ['Appearance',      "acGoSettingsPage('display')", [['.accent-sw',44,44]]],
+ ['Marketplace',     "acOpenMarketplace()",         [['.mkt-cart',44,44]]],
+ ['Edit profile',    "openProfileEdit()",           [['.pf-top-x',44,44],['.pf-cam',44,44],['.pf-bcam',44,44]]],
+ /* SET THE SCOPE, don't just go home. An earlier case switches the feed to Collections
+    and appTab('home') does not put the scope back — so this looked at an empty feed and
+    reported a missing control over 24 real posts. */
+ ['A post in the feed',"acSetFeed('foryou')",         [['.ac-post-more',44,44]]],
+ ['Your profile',    "acGoProfile()",               [['.ac-icon-btn',44,44]]],
+ ['Account',         "appTab('profile')",           [['.me-hero-switch',44,44]]],
+ ['Businesses',      "acOpenDirectory()",           [['.dir-ind',44,44]]],
+ /* B5 — the Help close. The first pass could not reach it and parked it, because the
+    opener I looked for (acOpenHelp) does not exist; the real one is openHelp(). That was
+    my error, not a dead route, so nothing needed hunting. */
+ ['Help',            "openHelp()",                  [['.modal-x',44,44]]],
 ];
 let pass=0,fail=0;
 const ok=(c,n,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+n+(d?'  '+JSON.stringify(d):''));};
@@ -28,8 +48,15 @@ const ok=(c,n,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+n+(d?'
   try{ await p.evaluate(r=>{(0,eval)(r)},run); }catch(e){ ok(false,screen+' could not open',{e:e.message.slice(0,50)}); continue; }
   await p.waitForTimeout(1500);
   for(const [sel,minH,minW] of sels){
-   const r=await p.evaluate(([sel])=>{
-     const el=[...document.querySelectorAll(sel)].find(e=>e.getBoundingClientRect().width>3);
+   const r=await p.evaluate(async([sel])=>{
+     /* POLL, don't snapshot. A screen that fetches (the feed does) can be a frame or two
+        behind a fixed wait, and "not found" then reports a fault on a control that is
+        plainly there — .ac-post-more failed exactly that way over 24 real posts. */
+     let el=null;
+     for(let i=0;i<20;i++){
+       el=[...document.querySelectorAll(sel)].find(e=>e.getBoundingClientRect().width>3);
+       if(el) break; await new Promise(r=>setTimeout(r,150));
+     }
      if(!el) return {missing:true};
      const b=el.getBoundingClientRect(), be=getComputedStyle(el,'::before');
      const n=v=>parseFloat(v)||0;
@@ -50,6 +77,24 @@ const ok=(c,n,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+n+(d?'
    ok(!r.steals, screen+' '+sel+' does not steal its neighbour', {steals:r.steals});
   }
  }
+ /* AND A SOURCE CHECK, because driving screens can only ever cover the controls those
+    screens happen to hold — the block names nineteen classes and the reachable ones are
+    a subset. That subset is exactly how this probe under-covered itself the first time.
+    So: every class the 44pt block names must still be a real class somewhere in the app.
+    A rename or a deletion orphans the overlay silently, and nothing else would say so. */
+ const src=fs.readFileSync('/home/user/atwe/public/index.html','utf8');
+ const blk=src.slice(src.indexOf('.sheet-close,.iset-back,.tb-brand-act'));
+ const named=[...new Set((blk.slice(0,blk.indexOf('/* B2')).match(/\.[a-z][a-z0-9-]+(?=::before|[,{])/g)||[]))];
+ ok(named.length>=19,'the 44pt block still names every control it was written for',{named:named.length});
+ /* The test is deliberately blunt: does the BARE name appear anywhere OUTSIDE this block?
+    A first attempt hunted for it inside class="..." and inside template literals, and it
+    passed a deliberately renamed class — because a class attribute has no leading dot, so
+    the pattern could never match, and the fallbacks matched by accident across the file.
+    A check that cannot fail is worse than none. */
+ const rest=src.replace(blk.slice(0,blk.indexOf('/* B2')),'');
+ const orphans=named.filter(c=>!new RegExp('[^a-z0-9-]'+c.slice(1)+'(?![a-z0-9-])').test(rest));
+ ok(orphans.length===0,'no class in the 44pt block has been renamed out from under it',{orphans});
+
  console.log('\n'+pass+' passed, '+fail+' FAILED');
  await b.close(); process.exit(fail?1:0);
 })().catch(e=>{console.error('CRASH',e.message);process.exit(1);});
