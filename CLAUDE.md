@@ -9359,6 +9359,16 @@ single upload failed while the signature itself was perfectly correct. It is now
 from the bucket's custom domain, which is what `CDN_URL` points at. `presignPut` was
 already clean (it signs the host alone).
 
+**EVERY `S3_*` VALUE IS TRIMMED, because an invisible space refused every upload.**
+With the ACL gone, R2's next answer was `InvalidRegionName: the region name
+' auto' is not valid. Must be one of: wnam, enam, weur, eeur, apac, oc, auto` —
+listing `auto` as valid while rejecting it, because the value pasted into the
+hosting dashboard carried a leading space. `envStr()` trims every one of them and
+strips a matched pair of surrounding quotes. **The region was the harmless place
+for this to land**: the same stray space in `S3_SECRET_KEY` produces a wrong
+signature and `SignatureDoesNotMatch`, which reads as a bad key and sends you
+rotating credentials that were right all along.
+
 **The offline signing test could not have caught this, and that is the lesson.** It
 verified the SigV4 maths against an independently written implementation and passed —
 byte-identical signatures. A correct signature is not an accepted request. The bug
