@@ -19,11 +19,27 @@ const path = require('path');
 const FILE = 'file://' + path.join(__dirname, '..', 'public', 'index.html');
 
 (async () => {
+  /* LOOK WHERE THE PROBES KEEP IT, and refuse to pass if it still is not there.
+     This used to try three bare module names, find none, print "skipping" and exit 0 —
+     so a run that checked NOTHING reported green, on the one tool that guards a fault
+     with no console error and no visual clue. That is the same quiet gap this repo has
+     now recorded three times over (a runner that covered 68 probes while claiming 85, a
+     probe that printed "skipped" for months, a stale path into /tmp). PW_SCRATCH is
+     where every probe in scratchpad/ resolves playwright-core from; try it too, and if
+     it genuinely cannot run, say so LOUDLY and exit non-zero — a check that could not
+     run is not a check that passed. */
+  const SP = process.env.PW_SCRATCH ||
+    '/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
   let chromium;
-  for (const p of ['playwright-core', 'playwright', '@playwright/test']) {
+  for (const p of ['playwright-core', 'playwright', '@playwright/test',
+                   SP + '/node_modules/playwright-core']) {
     try { chromium = require(p).chromium; break; } catch (_) {}
   }
-  if (!chromium) { console.log('playwright not installed — skipping (install it to run this check)'); process.exit(0); }
+  if (!chromium) {
+    console.error('CANNOT RUN — playwright-core not found. Set PW_SCRATCH to a directory '
+                + 'holding node_modules/playwright-core. Not treating this as a pass.');
+    process.exit(1);
+  }
   const exe = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
   const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox'] });
   /* SCRIPTS OFF. This tool checks how the file PARSES, and nothing else — but the app's

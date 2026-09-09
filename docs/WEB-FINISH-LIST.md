@@ -8,7 +8,10 @@ whole site, written up as a real list; finished means this list is at zero.**
 **Every item here is MEASURED, not judged.** A list built on taste can never reach zero.
 Each entry says the screen, the exact fault, the number, and what "done" looks like.
 
-Progress: **10 of 13 done.**  ·  1 item turned out to be bigger than it looked and is now **D1**, which needs the owner's decision. B5 could not be reached and is parked.
+Progress: **12 of 13 done.**  ·  The one left is **D1**, and it is not a bug — it is a
+design decision about the brand's blue that only the owner can make. Everything this pass
+found and could fix, is fixed, measured on real screens in both themes, and guarded by a
+probe that fails if it comes back.
 
 ---
 
@@ -33,6 +36,7 @@ because the next person to write one will hit the same traps:
 | 34 settings rows all throwing | `openAdmin()` navigates the browser to the admin dashboard, so everything after it ran on the wrong page. The sweep now notices it has been navigated away and boots the app back. |
 | six screens of "invisible" text at exactly 1.00:1 | the **gradient** cards (wallet, AI hero, Atwe Card, Rewards, Affiliate, studio). A gradient cannot be read out of CSS, so the walk-up found the page behind the card. Gradient-backed text is now skipped and counted, never scored. |
 | "Edit profile" invisible in Light | a real-pixel check said **15.13:1**. Dropped. |
+| the same "Edit profile" fault again, from the standing guard | **this one had a real cause and it took a diagnosis, not a dismissal.** The guard walked up for the first ancestor opaque *enough* — alpha > .85 — and the profile editor's own title bar is exactly `rgba(0,0,0,.85)`, which is not greater than .85. So the walk sailed past it to the white overlay behind and scored white-on-white. Any threshold has that failure somewhere; the guard now **composites** the alpha layers instead, and .85 black over white gives 38, which is the `[38,38,38]` the screenshot reads, to the byte. |
 
 **And a grep would have put eight fake items on this list.** Eight CSS rules *say* they
 paint text with the icon-tint token; measuring showed a later rule wins and they render at
@@ -98,7 +102,15 @@ pills — so the word looks identical and nothing moves. Measured hit box **41×
 free, but growing left further would eat the tab beside it. Stealing a neighbour's tap is
 a worse fault than the one being fixed.
 
-### B2 — Home's "+" is 20×20 ⬜  · the smallest control found anywhere.
+### B2 — Home's "+" is 20×20 ✅ DONE (build 1831) — with a recorded shortfall
+The smallest control found anywhere, and the one that **cannot simply be inflated**: it
+sits ON the 54px ring of your own Daily, whose own tap *views* it while this one *adds* to
+it — two actions in one tile. Centring a 44px target would swallow the ring's middle and
+steal the view tap, which is a worse fault than the one being fixed.
+**Fixed:** it grows only DOWN and OUT, away from the ring's centre and into the tray's 12px
+gap — **36×36**, not 44. Instagram makes the same compromise for the same reason. The
+shortfall is written into the CSS beside the rule and is **recorded here rather than
+claimed as 44**, which is the only honest way to leave it.
 
 ### B3 — the filter tabs are ~41×27, on six screens ✅ DONE (build 1831)
 **Fixed:** overlays, so the rows' rhythm is untouched — the design decision is preserved
@@ -109,13 +121,32 @@ Businesses' and the other chip rows. Horizontal growth held to ±3 (half the 7px
 **Fixed:** now **44×44**. Scoped to `.ac-post-toolbar` on purpose — `.msg-attach` is shared
 with the CHAT composer, whose bar is measured to ChatGPT's own 49px and would have grown.
 
-### B5 — Help's close "×" is 32×32 ⏸ PARKED — could not be reached
-The sweep found it, but the opener recorded in the index (`acOpenHelp`) does not exist as a
-function, so it could not be re-opened to fix and measure. **That is itself worth chasing**
-— it may be a second dead route of the kind `deadends.js` hunts. Left open deliberately
-rather than guessed at.
+### B5 — Help's close "×" is 32×32 ✅ DONE (build 1832)
+**It was never a dead route — the dead name was mine.** The first pass parked this because
+`acOpenHelp()` "does not exist", and it does not: I invented it. The real opener is
+`openHelp()`, which has always worked. Worth recording, because parking an item on a
+misremembered function name is how a real fault gets left standing on a false alibi.
+**Fixed:** the button is `.modal-x`, now carrying the same overlay as the rest — measured
+**44×44** on the real screen, stealing nothing.
 
 ### B6 — Push notifications' "1h" and "8h" are 41×29 ✅ DONE (build 1831) · now **47×45**.
+
+### B7 — the check had been ignoring every ICON-ONLY button ✅ DONE (build 1832)
+**Not a screen, a hole in the method — and it is the reason B1–B6 were only six items.**
+The first touch-target check required a control to have TEXT, so it never once looked at a
+button whose whole content is a glyph. That excluded **the two most-pressed controls in the
+app**: the sheet close, which appears on about 90 screens, and the Settings back arrow, on
+about 35. Six controls became **nineteen** the moment the check stopped excluding most of
+its own subject.
+**Fixed:** the same invisible-overlay pattern across all of them — sheet close, Settings and
+Alerts back, the top-bar circles, the post ⋯, the accent swatches, the Account hero chevron,
+the conversation back, the marketplace cart and save, the profile ✕ and both cameras, the
+modal ✕, the immersive rail and its buttons, the industry chips. Nothing moved a pixel;
+every one measures ≥44 in both directions and hit-tests clean against its neighbour.
+*The rail is the one exception, and deliberately:* it stacks vertically with a small gap, so
+it grows **sideways only** — 44 tall would overlap the button above and below it.
+*The lesson, which this repo keeps relearning:* **a check that quietly excludes most of its
+subject reports a clean result.**
 
 ---
 
@@ -143,13 +174,31 @@ Three ways out, and they are genuinely different products, not one right answer:
 
 ## C · A standing risk, not yet a fault
 
-### C1 — 94 rules hardcode white text ⬜
+### C1 — 94 rules hardcode white text ✅ DONE (build 1832) — closed by a guard, not by an audit
 The colour law says reference colours **only** via variables, so a theme can flip in one
 place. 94 rules set `color:#fff` directly. Most are legitimate (white on a gradient card,
 white on a blue fill, the always-black sign-in screen) — but **A1 proves at least one is
 invisible in Light**, and nothing stops the next one.
-*Done when:* each of the 94 is either confirmed to sit on a permanently dark ground, or
-moved onto a token — and a check exists so a new one cannot be added blind.
+
+**Auditing 94 rules by hand is the wrong tool, and this list already has the proof:** a
+grep of exactly that kind reported eight rules painting text with the icon tint, and
+measuring showed a later rule wins in six of them. Reading rules tells you what the CSS
+says; it cannot tell you what a person sees.
+
+**Fixed:** `scratchpad/legible.js` opens **30 surfaces in both themes** — 60 in all — walks
+every leaf of text, composites the real background, skips only text on a gradient (which
+cannot be read out of CSS at all) and fails anything under its floor. It scores nothing the
+browser would not actually paint at that point, so words sitting behind an open panel are
+never counted. It names any surface it could not open, because a surface that silently
+fails to open is uncovered — the same quiet gap as a probe that prints "skipped" and
+exits 0. **All 60 open.**
+
+*Self-tested:* putting A1's `color:#fff` back makes it fail Your studio by name, on all
+three labels, at 1.00:1.
+
+*It carries exactly one exception, D1, matched by exact string on one surface* — so the
+guard is not permanently red on a decision nobody has made, and anything else still fails.
+Delete the exception the day D1 is decided.
 
 ---
 
@@ -181,8 +230,23 @@ It enumerates from the app's own index (`scratchpad/enum.js` writes `destination
 and skips the two destinations that end the session (Log out, Delete account) — they are
 covered by `journeys.js`, which signs out for real.
 
-Two guards keep the fixed items fixed, both in `run-all.sh`:
-`scratchpad/contrastfix.js` (A1–A5, re-measured in both themes) and
-`scratchpad/touchsize.js` (B1–B6, which measures the box the BROWSER would hit, overlay
-included, **and** hit-tests each neighbour's centre — because the cheap way to pass a
-touch-target check is to grow sideways over the control next door).
+Three guards keep the fixed items fixed, all in `run-all.sh`:
+
+- **`scratchpad/contrastfix.js`** — A1–A5, re-measured on the real screens in both themes.
+- **`scratchpad/touchsize.js`** — B1–B7. It measures the box the BROWSER would hit, overlay
+  included, **and** hit-tests each neighbour's centre, because the cheap way to pass a
+  touch-target check is to grow sideways over the control next door. It also reads the CSS
+  block itself and fails if any class it names has been renamed out from under it — driving
+  screens can only cover the controls those screens happen to hold, which is exactly how
+  this probe under-covered itself the first time.
+- **`scratchpad/legible.js`** — C1's standing guard, 60 surfaces, both themes.
+
+**Two probe bugs found while writing these, both of which reported a fault on working code**
+— worth knowing before writing a similar check:
+
+- **Poll, don't snapshot.** A screen that fetches can be a frame behind a fixed wait, and
+  "not found" then reads as a fault on a control that is plainly there. `.ac-post-more`
+  failed exactly that way over 24 real posts.
+- **A probe's own earlier step can change what a later one sees.** One case switches the
+  home feed to Collections, and going back to Home does not put the scope back — so a later
+  case measured an empty feed. Set the state you need; do not assume navigating resets it.
