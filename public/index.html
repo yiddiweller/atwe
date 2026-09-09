@@ -14384,6 +14384,62 @@ back,.ac-info-act,.ai-empty-btn,.ai-open-btn,.ac-join-btn,.ac-circ-
 join,.circ2-join,.circ2-gjoin,.ac-req-yes,.ac-req-no,.ac-callbtn,.call-btn,.gc-banner-join,.gc-
 toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-orb{transition-duration:.01ms;}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   THE 44pt TOUCH FLOOR — bought with an invisible overlay, never by growing the control
+   ───────────────────────────────────────────────────────────────────────────────
+   docs/WEB-FINISH-LIST.md items B1–B6. Each was MEASURED under Apple's 44×44 floor on a
+   390px phone. The app already uses this pattern on the post action pills, and it is
+   right here for the same reason: the visible sizes are deliberate (the tab row's "Add"
+   is sized to match a tab label; a chip row's rhythm is a design decision), and
+   `::before` costs no layout, so nothing moves.
+
+   TWO RULES SHAPE THE NUMBERS.
+   1. Grow VERTICALLY as far as needed — a chip row has nothing above or below it.
+   2. Grow HORIZONTALLY only by HALF the gap to the neighbour. Going further steals the
+      neighbour's taps, trading one fault for a worse one. Where that leaves a control
+      still under 44 wide it is recorded in the list rather than hidden.
+
+   TWO PLACEMENT TRAPS, BOTH HIT WHILE WRITING THIS BLOCK.
+   1. This must sit immediately before the HEAD's closing style tag and nowhere else. The
+      file has EIGHT of them; seven are inside JS template literals (the packing slip, a
+      certificate, print windows). Inserting at the LAST one put this CSS inside a JS
+      string and broke the whole script — the same landmine already recorded here for the
+      script tag. Search forward from the head, never backward from the end.
+   2. NEVER WRITE A CLOSING STYLE TAG INSIDE A CSS COMMENT. The HTML parser does not read
+      CSS comments — it closes the stylesheet at the first such tag it sees, wherever it
+      appears — so a comment mentioning one ends the stylesheet early and turns the rest
+      of the file into soup. The symptom is a bare "Unexpected identifier" from somewhere
+      unrelated (here: accountBlocked, hundreds of lines away), which points nowhere near
+      the real cause. Describe the tag in words instead, as this line does.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.tb-feedtab-add,.svc-cat,.ac-lchip,.dir-ind,.snz-chip,.ac-post-toolbar .msg-attach,.story-add{position:relative;}
+.tb-feedtab-add::before,.svc-cat::before,.ac-lchip::before,.dir-ind::before,
+.snz-chip::before,.ac-post-toolbar .msg-attach::before{content:'';position:absolute;z-index:0;}
+
+/* B1 — the tab row's "Add", 29×30. It is the row's LAST child, so growing right is free;
+   left is held to half the tab gap. */
+.tb-feedtab-add::before{top:-7px;bottom:-7px;left:-4px;right:-8px;}
+
+/* B3 — the filter chips, ~41×27, in rows with a 7–8px gap, so ±3 horizontally. */
+.svc-cat::before,.ac-lchip::before,.dir-ind::before{top:-9px;bottom:-9px;left:-3px;right:-3px;}
+
+/* B6 — the quiet-hours chips, 41×29. Same row shape, same treatment. */
+.snz-chip::before{top:-8px;bottom:-8px;left:-3px;right:-3px;}
+
+/* B4 — the POST composer's B and I, 42×42, two short. Scoped to the post toolbar on
+   purpose: `.msg-attach` is shared with the CHAT composer, whose bar is measured to
+   ChatGPT's own 49px and would grow if this were global. */
+.ac-post-toolbar .msg-attach::before{top:-1px;bottom:-1px;left:-1px;right:-1px;}
+
+/* B2 — the "+" on your own Daily, 20×20, and the one that cannot simply be inflated: it
+   sits ON a 54px ring whose own tap VIEWS your Daily while this one ADDS to it (it
+   carries stopPropagation, so they are two actions in one tile). Centring a 44px target
+   would swallow the ring's middle and steal the view tap, so it grows only DOWN and OUT,
+   away from the ring's centre and into the tray's 12px gap. Instagram makes the same
+   compromise for the same reason; the shortfall is recorded rather than claimed as 44. */
+.story-add::before{content:'';position:absolute;z-index:0;top:-6px;left:-6px;right:-10px;bottom:-10px;}
+
 </style>
 </head>
 <body style="background:#000">
@@ -22388,7 +22444,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1830'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1831'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
