@@ -1,4 +1,6 @@
-/* The web app has no version — only a build. Prove it on the real About page. */
+/* The web app shows NO version and NO build — the whole row is gone (owner, 9 Sep 2026).
+   ATWE_BUILD still exists in the code and must: it is what checkForUpdate() compares and
+   what a fault report is stamped with. It is simply never shown to a member. */
 const SP=process.env.PW_SCRATCH||'/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const {chromium}=require(SP+'/node_modules/playwright-core');
 const fs=require('fs');
@@ -10,29 +12,24 @@ const ok=(n,c,d)=>{ c?pass++:fail++; console.log((c?'  ok  ':'  ✗   ')+n+(d?' 
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
   const p=await b.newPage({viewport:{width:390,height:844}});
   await p.addInitScript(t=>localStorage.setItem('atwe_token',t), TOK);
-  await p.goto('http://localhost:3000/', {waitUntil:'domcontentloaded'});
+  await p.goto('http://localhost:3262/', {waitUntil:'domcontentloaded'});
   await p.waitForTimeout(3500);
   await p.evaluate(()=>{ openSettings(); setNav('about'); });
   await p.waitForTimeout(600);
-  const r=await p.evaluate(()=>{
-    const row=document.getElementById('settingsBuildAbout');
-    const lbl=row && row.closest('.iset-row').querySelector('.iset-label');
-    return { val: row&&row.textContent.trim(), label: lbl&&lbl.textContent.trim(),
-             build: (typeof ATWE_BUILD!=='undefined')?ATWE_BUILD:null,
-             pageText: document.querySelector('.iset-body[data-page="about"]').innerText };
-  });
-  ok('the row is labelled Build, not Version', r.label==='Build', r);
-  ok('it shows the build number and nothing else', r.val===r.build, r);
-  ok('no 1.0.0 anywhere on the About page', !/1\.0\.0/.test(r.pageText), {t:r.pageText.slice(0,120)});
-  ok('the word Version is gone from the page', !/\bVersion\b/.test(r.pageText), {t:r.pageText.slice(0,120)});
-  /* Searching for "version" must still land somewhere, not nowhere. */
-  const found=await p.evaluate(()=>{
-    setNav('hub');
-    const i=document.getElementById('setSearch'); if(!i) return 'no input';
-    i.value='version'; setSearchInput(i.value);
-    return (document.getElementById('setSearchResults')||{}).innerText||'';
-  });
-  ok('searching "version" still finds the Build row', /Build/.test(found), {found:String(found).slice(0,120)});
+  const r=await p.evaluate(()=>({
+    row: !!document.getElementById('settingsBuildAbout'),
+    build: (typeof ATWE_BUILD!=='undefined')?ATWE_BUILD:null,
+    text: document.querySelector('.iset-body[data-page="about"]').innerText,
+    hub: document.querySelector('.iset-body[data-page="hub"]').innerText,
+  }));
+  ok('the Build/Version row does not exist at all', !r.row, {row:r.row});
+  ok('no "Version" anywhere on the About page', !/\bVersion\b/i.test(r.text), {t:r.text.slice(0,120)});
+  ok('no "Build" anywhere on the About page', !/\bBuild\b/i.test(r.text), {t:r.text.slice(0,120)});
+  /* The running build number must not leak onto the page as a bare number either. */
+  ok('the build number is not printed anywhere', r.build && !r.text.includes(r.build), {build:r.build});
+  ok('the About row no longer advertises one', !/\bBuild\b|\bVersion\b/i.test(r.hub.split('\n').slice(0,40).join('\n')), {});
+  /* …but the constant itself is intact — the Refresh pill and error reports need it. */
+  ok('ATWE_BUILD still exists in the code', !!r.build, {build:r.build});
   console.log(`\n${pass} passed, ${fail} FAILED`);
   await b.close(); process.exit(fail?1:0);
 })().catch(e=>{console.error('CRASH',e); process.exit(1);});

@@ -40,14 +40,23 @@ put it next to the year style."*
 | **beginning of 2027** | **27.0** — all platforms done, official public release, **the word Beta is dropped** |
 | **1 Jan 2028** | **28.0** — Atwe Inc officially begins, with the marketing campaign |
 
-**THE WEB APP HAS NO VERSION AT ALL, and that is deliberate.** A website is always the
-newest one, so a version number tells a member nothing they can act on. Settings → About
-shows the **build number** only — it used to read `1.0.0 · build N`, and that `1.0.0` was
-a hardcoded literal nobody had ever chosen (and it disagreed with the phone's own number,
-which is exactly how two version fields go wrong). The build stays because it does real
-work: `checkForUpdate()` compares it with `/api/config`'s to offer the Refresh pill, and
-it is how a device says which code it is running. **Do not add a version back to the web.**
-`ATWE_BUILD` and `sw.js`'s `CACHE` still move in lockstep, unchanged.
+**THE WEB APP SHOWS NEITHER A VERSION NOR A BUILD — the whole row is GONE.** A website is
+always the newest one, so neither number is anything a member can act on. Settings → About
+used to read `1.0.0 · build N`; that `1.0.0` was a hardcoded literal nobody had ever chosen
+(and it disagreed with the phone's own number, which is exactly how two version fields go
+wrong). Build 1828 dropped the `1.0.0` and relabelled the row **Build**; the owner then said
+plainly: *"I don't want you should put any build version, etc. in the Web app. It should be
+empty, that whole line, it doesn't need to exist — even a version option on the Web app."*
+So the ROW is deleted, along with its `#settingsBuildAbout` span, the `openSettings` line
+that filled it, its `SET_SEARCH_INDEX` entry and the About-row subtitle that advertised it.
+**Do not add a Version or a Build row back.**
+
+**`ATWE_BUILD` ITSELF STAYS AND IS LOAD-BEARING — it is simply never shown.** It is what
+`checkForUpdate()` compares against `/api/config`'s `build` to raise the Refresh pill, and
+what a client-error report is stamped with, so a device can still say which code it is
+running without the number being on a screen. It and `sw.js`'s `CACHE` move in lockstep,
+unchanged. `scratchpad/verchk.js` asserts BOTH halves: no row, no "Version", no "Build",
+the build number nowhere in the page's text — and `ATWE_BUILD` still defined.
 
 **Where the app's number lives, and why it is DERIVED:** `atwe-mobile/app.json` and
 `package.json` both carry **`26.8.0`** — the store-safe three-part form, because npm's own
@@ -57,9 +66,19 @@ person SEES comes from `src/lib/version.ts`, which trims a trailing `.0` and app
 label becomes `27.0` on its own; that is the entire change. Typing the label out a second
 time is exactly the drift this file has recorded four times over.
 
-**The store BUILD number is a different thing and is not ours to pick.** EAS owns it
-(`eas.json`: `appVersionSource: "remote"`, `autoIncrement: true`) and it must strictly
-increase on every upload — two uploads of `26.8` with different build numbers is normal.
+**POINT RELEASES ARE THE THIRD NUMBER** (the owner's own preference, 9 Sep 2026): a small
+update inside the same year-version is `26.8.1`, `26.8.2`, … and shows in full, because at
+that point the patch means something. Only a trailing `.0` is trimmed, which is why today
+reads `26.8 Beta`. Nothing in the code has to change for a point release — edit
+`expo.version` in `app.json`, keep `package.json` identical, and the label follows.
+
+**The store BUILD number is a DIFFERENT FIELD and is not ours to pick — it never touches
+the version.** Apple and Google keep two separate values: the VERSION people see (ours,
+exactly as written) and a BUILD NUMBER that must strictly increase on every upload. EAS
+owns the second (`eas.json`: `appVersionSource: "remote"`, `autoIncrement: true`) and it
+appears only in TestFlight, as `26.8 (7)`. So uploading `26.8` five times is normal and the
+public number stays `26.8` — the owner asked this directly and the answer is that they can
+write exactly the version they want.
 
 **THE ADMIN DASHBOARD GETS ITS OWN SHORT PASS, right after the web app** (owner, 9 Sep
 2026): *"once the web app is finished, I would like to go over a little bit to finalize and
