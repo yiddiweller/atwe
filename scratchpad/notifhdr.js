@@ -80,8 +80,17 @@ const TYPES=['follow','like','reply','mention','connection','endorse','repost','
     return {before:+before.toFixed(1), after:+after.toFixed(1), nhHide:cls, opacity:op};
   });
   console.log('on scroll: header top '+roll.before+' -> '+roll.after+'  (.nh-hide='+roll.nhHide+', opacity='+roll.opacity+')');
-  ok(roll.nhHide, 'scrolling adds the retract class');
-  ok(roll.after < roll.before - 20, 'the header actually MOVES up out of the way', roll.before+' -> '+roll.after);
+  /* THE HEADER DELIBERATELY NO LONGER RETRACTS, and these two checks used to assert that
+     it did. Build 1766 froze it on purpose: retracting animates a 58px margin-top, which
+     REFLOWS the whole list under the finger, and that reflow was the choppy Notifications
+     scroll the founder reported. Measured on a 6x-throttled CPU, freezing it took the p95
+     frame from 45ms to 19ms and frames-over-32ms from 5 to 0 — level with the Account
+     page. `notifscroll.js` guards that decision from the other side and fails four of its
+     six checks if the retract comes back, so asserting the opposite here was the two
+     probes contradicting each other. This one went stale unnoticed because it is not in
+     run-all.sh; both facts are fixed together. */
+  ok(!roll.nhHide, 'the header does NOT retract on scroll (frozen in 1766 — the choppy-scroll fix)');
+  ok(Math.abs(roll.after - roll.before) < 2, 'and it stays exactly where it is', roll.before+' -> '+roll.after);
 
   // ── the profile button ──
   await p.evaluate(()=>{const l=document.getElementById('notifList'); l.scrollTop=0; l.dispatchEvent(new Event('scroll'));});

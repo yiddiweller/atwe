@@ -12,7 +12,13 @@ cd "$(dirname "$0")" || exit 1
 [ -z "$TOK" ] && [ -f /tmp/tok.txt ] && export TOK="$(cat /tmp/tok.txt)"
 [ -z "$JWT_SECRET" ] && export JWT_SECRET=scoresecret
 [ -z "$DATABASE_URL" ] && export DATABASE_URL=postgres://atwe:atwe@localhost:5432/atwescore
-for f in profilemenu buttons rowsize notifscroll demomedia gutters sethandoff concentric fullscan offstate sbfoot timealign menutrim iconsize oneeye actionrow postcorners evencards headcentre adcard postcard skelgrey trayline radii pillfit cardsweep postdetail postshot blurup settle toastpolish welcome setslide helpfb mehub meacct meidx mesearch mesearchx menonadmin mecolor medesk megap setpage focusring polish3 mefeedback engsettle imgedge appsearch aiguide navlayer aipage aileak addtab polish2 aicomposer clicktest structure everywhere searchsweep deskcols authpane chatscroll voicenote chathead fixtext lastseen chatedge acctswitch pwsave navnotif smooth attach sendundo openbottom layouts navtap apperrors emptystates bootspeed storagesign feedskel cluster profcard tabpills topglass reachable signupflow deadends journeys admintabs; do
+# THREE REAL PROBES WERE MISSING FROM THIS LIST — gapmob, notifhdr and acctbug, all
+# three of them referenced by name in CLAUDE.md as the cover for a real fix. Being
+# absent, notifhdr quietly went stale: it still asserted the Notifications header
+# retracts on scroll, which build 1766 deliberately removed. That is the same trap
+# recorded above (this runner once covered 68 probes while claiming 85) arriving a
+# second time. When you add a probe, add it here in the same commit.
+for f in profilemenu buttons rowsize notifscroll demomedia gutters sethandoff concentric fullscan offstate sbfoot timealign menutrim iconsize oneeye actionrow postcorners evencards headcentre adcard postcard skelgrey trayline radii pillfit cardsweep postdetail postshot blurup settle toastpolish welcome setslide helpfb mehub meacct meidx mesearch mesearchx menonadmin mecolor medesk megap setpage focusring polish3 mefeedback engsettle imgedge appsearch aiguide navlayer aipage aileak addtab polish2 aicomposer clicktest structure everywhere searchsweep deskcols authpane chatscroll voicenote chathead fixtext lastseen chatedge acctswitch pwsave navnotif smooth attach sendundo openbottom layouts navtap apperrors emptystates bootspeed storagesign feedskel cluster profcard tabpills topglass reachable signupflow deadends journeys admintabs gapmob notifhdr acctbug; do
   [ -f "$f.js" ] || { echo "-- $f -- MISSING"; continue; }
   echo "-- $f --"
   timeout 600 node "$f.js" 2>&1 | tail -3   # totals only; run a probe directly for its full output
