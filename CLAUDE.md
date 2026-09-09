@@ -9297,6 +9297,55 @@ Optional, for full functionality:
 The committed `data/`, `dist/`, `.next/` ignores are defensive — none are produced
 today.
 
+### FIVE ADMIN TABS COULD NEVER LOAD — `api(method, path)` called with the path first
+
+The owner opened **Storage** and got *"Could not check."* The route was fine. The call was
+not: `api(method, path, body)`, and ten later-written call sites across **five tabs** passed
+the PATH in the METHOD slot — `api('/api/admin/storage')`, `api('…/test', 'POST', {})`.
+**Storage · Cluster · Webinars · App reviews · Advances** had therefore never once reached
+their (perfectly good, already-shipped) server routes; every one of them showed its
+"Could not check." / "Could not load." line, and the Test-it, Cancel-webinar,
+respond-to-review and save-advances-config buttons were all dead. Every remaining `api()`
+call in the file passes a real verb, so this was one batch of views written against a
+misremembered signature. Grep guard: **`grep -n "api('/"` in `admin.html` must return
+nothing** — a first argument beginning with `/` is always this bug.
+
+**`fetch` REJECTS AN INVALID METHOD BEFORE MAKING ANY REQUEST**, which is why the obvious
+probe does not work. A method of `/api/admin/storage` is not a valid HTTP token, so fetch
+throws a TypeError synchronously and **there is nothing on the wire to inspect** — a check
+watching for a bogus URL (`/undefined`, a bare verb) sees no request and passes. The signal
+is the ABSENCE of a request: `scratchpad/admintabs.js` renders each tab and asserts it (a)
+is not showing its failure line and (b) **actually asked the server** — at least one `/api/`
+request while it ran. That second assertion has no list to maintain, so it covers call sites
+nobody thought of. It also presses **Test it**, because that is its own call site with its
+own argument order and no render check touches it: with no bucket configured the honest
+answer is *"It did not work — not configured"* (route reached); *"The test could not run."*
+is the `api()`-threw path, i.e. this bug. Self-tested: reverting any one call site fails it
+by name with `no requests at all`.
+
+**A probe signing in to the dashboard must seed `localStorage.atwe_token` BEFORE the page
+boots.** `let token = localStorage.getItem('atwe_token')` runs at load; assigning
+`window.token` afterwards cannot rebind a `let`, so every request goes out as
+`Bearer undefined`, 401s, and renders the exact failure line the probe is hunting. That
+reported five red checks on correct code before it was understood.
+
+### `LIKE 'data:%'` DETOASTS THE WHOLE 16MB PHOTO — use `substr(x,1,5)`
+
+The Storage tab's "still in the database" counts ran four full scans with
+`image LIKE 'data:%'`. **LIKE forces Postgres to detoast the entire value** — decompress and
+reassemble a 16MB base64 photo — merely to compare its first five characters. Measured on the
+test database: **22.4 seconds**, which on a real deployment is a timeout. `substr(x, 1, 5) =
+'data:'` uses TOAST *slicing* and reads only the first chunk: **0.075s, byte-identical
+counts** (NULL yields NULL either way, so the semantics match exactly). 300×, one word.
+Write any future "does this column hold a data URL" query the same way.
+
+**And the route must not bundle a cheap essential fact with an expensive optional one.** It
+asked `is storage configured?` — which needs no database at all — inside the SAME try block
+as those scans, so the scans' timeout took down the answer. The counts and the database size
+now sit in their own try blocks and a failure leaves them null; the client renders **"—", not
+"0"**, because a count you could not take is not zero, and rendering it as zero would tell the
+owner their database is already clean at the exact moment we failed to look.
+
 ### Object storage (`storage.js`) — `CDN_URL` is REQUIRED on R2, not cosmetic
 
 New media can go to an S3-compatible bucket instead of the database (optional, degrades
