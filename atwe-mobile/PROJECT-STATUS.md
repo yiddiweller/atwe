@@ -26,10 +26,12 @@ next to the year style."*
 | **beginning of 2027** | **27.0** — all platforms done, official public release, **no "Beta"** |
 | **1 Jan 2028** | **28.0** — Atwe Inc officially begins, with the marketing campaign |
 
-**The WEB APP has no version at all** — a website is always the newest one, so a
-version tells a member nothing they can act on. Its Settings → About row shows the
-**build number** only (it used to say `1.0.0 · build N`, and that `1.0.0` was a
-hardcoded literal nobody ever chose). Do not add a version back to the web.
+**Small updates inside a year-version are the third number** — `26.8.1`, `26.8.2`, … and
+they show in full; only a trailing `.0` is trimmed, which is why today reads `26.8 Beta`.
+
+**The WEB APP shows NEITHER a version NOR a build** — a website is always the newest one,
+so neither is anything a member can act on, and the whole row is deleted (owner). Do not
+add one back.
 
 **Where it lives:** `app.json` and `package.json` both carry **`26.8.0`** — the
 store-safe three-part form, because npm's own `version` field must be valid semver

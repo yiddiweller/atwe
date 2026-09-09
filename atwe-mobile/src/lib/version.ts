@@ -42,8 +42,22 @@ export const IOS_BUILD: string | undefined = appJson.expo.ios?.buildNumber;
  *  change when the public release lands; nothing else here moves. */
 export const RELEASE_CHANNEL: string = 'Beta';
 
-/** `26.8.0` -> `26.8`. A trailing `.0` patch is store bookkeeping, not something to
- *  show; `26.8.1` keeps its patch, because then it means something. */
+/**
+ * `26.8.0` -> `26.8`. A trailing `.0` patch is store bookkeeping, not something to show;
+ * `26.8.2` keeps its patch, because then it means something.
+ *
+ * POINT RELEASES (the founder's own preference, 9 Sep 2026): a small update inside the
+ * same year-version is the third number — 26.8 -> 26.8.1 -> 26.8.2 — and it shows in full.
+ * Nothing else has to change for that; edit `expo.version` in app.json (and keep
+ * package.json identical) and the label follows.
+ *
+ * DO NOT confuse this with the STORE BUILD NUMBER. Apple and Google keep two separate
+ * fields: the VERSION people see (ours, exactly what is written here) and a BUILD NUMBER
+ * that must strictly increase on every upload. EAS owns the second one
+ * (`eas.json`: appVersionSource "remote", autoIncrement true) and it never touches or
+ * appends to the version — it appears only in TestFlight, as "26.8 (7)". So uploading
+ * 26.8 five times is normal and the public number stays 26.8.
+ */
 const trimPatch = (v: string): string => v.replace(/^(\d+\.\d+)\.0$/, '$1');
 
 /** What the app shows a person: `26.8 Beta`, then `27.0`. */
