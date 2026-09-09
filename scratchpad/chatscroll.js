@@ -323,7 +323,23 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   const slide = await p.evaluate(async () => {
     const el = document.getElementById('acThread');
     const rows = [...el.querySelectorAll('.msg-row')];
-    const t = rows[Math.floor(rows.length / 2)]; if (!t) return { skip: true };
+    /* MEASURE A ROW THAT IS ACTUALLY ON SCREEN. `slideCollect` writes `--slidemag` to the
+       visible rows only — that IS the optimisation this block exists to protect (one write
+       per frame, to ~7 rows instead of ~80). An off-screen row therefore keeps the
+       @property initial value of 0px, which is correct behaviour and reads exactly like a
+       dead gesture. This used to take the middle row BY INDEX after scrolling to the middle
+       BY PIXELS; those agree only while every row is the same height, so as other probes
+       wrote photos and voice notes into this shared thread the two drifted apart. Measured
+       when it finally broke: 42 rows, 7 on screen, and the chosen row 1034px BELOW the
+       viewport — reporting 0px at every step while a visible row showed the correct curve
+       (15→3.0 35→23.0 50→38.0 80→56.6 110→67.1 125→72.0). The exact "a repro that depends
+       on the seeded database will drift under you" trap this repo already records. */
+    const vp = el.parentElement.getBoundingClientRect();
+    const onScreen = rows.filter((r) => {
+      const b = r.getBoundingClientRect();
+      return b.bottom > vp.top && b.top < vp.bottom;
+    });
+    const t = onScreen[Math.floor(onScreen.length / 2)]; if (!t) return { skip: true };
     const y = t.getBoundingClientRect().top + 10;
     const mk = (k, x) => new TouchEvent(k, { bubbles: true, cancelable: true,
       touches: k === 'touchend' ? [] : [new Touch({ identifier: 7, target: el, clientX: x, clientY: y })],
