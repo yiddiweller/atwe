@@ -46,6 +46,10 @@ if (!ok) {
 
 function isConfigured() { return ok; }
 
+// What the store actually said the last time an upload was refused. Read only by
+// selfTest(), so the dashboard can show a reason instead of a shrug.
+let _lastError = '';
+
 // Where the bucket actually lives. A custom endpoint (R2/B2/MinIO) is used
 // path-style; AWS is used virtual-host style, which is what it prefers.
 function bucketHost() {
@@ -127,17 +131,36 @@ async function putDataUrl(dataUrl, kind) {
   if (!body.length) return null;
   const key = makeKey(kind, EXT_FOR[contentType] || contentType.split('/')[1]);
   try {
+    /* NO ACL ON ANYTHING BUT AWS. `x-amz-acl: public-read` is an Amazon
+       convention; Cloudflare R2 has no per-object ACLs at all and REJECTS a
+       request carrying that header, so every upload failed with a 400 while the
+       signature itself was perfectly correct. The offline signing test proved
+       the maths and could not have caught this — it never spoke to R2. Public
+       readability on R2 comes from the bucket's custom domain, which is why
+       CDN_URL is required there (see the header comment). */
     const { headers, url } = sign({
-      method: 'PUT', key, payloadHash: sha256(body), contentType, acl: 'public-read',
+      method: 'PUT', key, payloadHash: sha256(body), contentType,
+      acl: ENDPOINT ? null : 'public-read',
     });
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 20000);
     const r = await fetch(url, { method: 'PUT', headers, body, signal: ctrl.signal })
       .finally(() => clearTimeout(timer));
-    if (!r.ok) { console.warn('[storage] upload failed', r.status); return null; }
+    if (!r.ok) {
+      // Keep WHY, not just THAT. A bare "refused" sent us guessing at the key,
+      // the bucket name and the permissions when the store was telling us
+      // exactly what was wrong all along.
+      let detail = '';
+      try { detail = (await r.text() || '').slice(0, 300).replace(/\s+/g, ' ').trim(); } catch (e) {}
+      _lastError = `HTTP ${r.status}${detail ? ' — ' + detail : ''}`;
+      console.warn('[storage] upload failed', _lastError);
+      return null;
+    }
+    _lastError = '';
     return publicUrl(key);
   } catch (e) {
-    console.warn('[storage] upload error:', e && e.message);
+    _lastError = (e && e.message) || 'request failed';
+    console.warn('[storage] upload error:', _lastError);
     return null;
   }
 }
@@ -171,7 +194,10 @@ async function selfTest() {
   if (!ok) return { ok: false, reason: 'not configured' };
   const probe = 'data:text/plain;base64,' + Buffer.from('atwe-storage-check').toString('base64');
   const url = await putDataUrl(probe, 'healthcheck');
-  if (!url) return { ok: false, reason: 'upload was refused — check the key, the bucket name and the permissions' };
+  if (!url) {
+    return { ok: false, reason: 'upload was refused — check the key, the bucket name and the permissions'
+      + (_lastError ? ` (the store said: ${_lastError})` : '') };
+  }
   let readable = false;
   try { const r = await fetch(url); readable = r.ok; } catch (e) { readable = false; }
   await remove(url);
