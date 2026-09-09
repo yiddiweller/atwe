@@ -129,8 +129,10 @@ taught: holding the settings is not the same as the thing working. And the snaps
 inside the same Railway account as the database, so they survive a bad deploy or a dropped
 table, not the loss of the account itself.
 
-What still sits outside the code: a Play developer account, and upgrading the Apple
-enrollment Individual → Organization before a public App Store launch.
+What still sits outside the code: a Play developer account, and the Apple
+Individual → Organization upgrade — **the founder's team started BOTH the Apple
+Organization enrollment and incorporating the real company on 9 Sep 2026**, so this is in
+progress rather than outstanding. Ask how it is going; do not report it as not started.
 
 ## 🧭 THE PLATFORM ROADMAP — the founder's own order, and where we actually stand
 
@@ -167,10 +169,14 @@ all four:**
    the `reportSetupGaps` warning below describe the NO-STRIPE case, which is correct as
    written and does not describe their deployment. This is the FOURTH item this file has
    carried as outstanding after it was already done (TURN, email, backups, this).
-3. **The store paperwork is waiting, not working — start it in parallel.** Apple
-   **Individual → Organization** needs a D-U-N-S number, which takes weeks and is free; the
-   Play developer account has its own identity check. Neither costs a line of code and both
-   sit on the critical path of a public launch.
+3. **The store paperwork is UNDERWAY (9 Sep 2026).** The founder's team is doing the Apple
+   **Individual → Organization** upgrade and incorporating the real company at the same
+   time, which is the right order: **the D-U-N-S number Apple asks for is issued against a
+   legal entity**, so the corporation has to exist first and the two genuinely are one job.
+   It is free and takes weeks, which is why it belongs in parallel with the build rather
+   than at the end. The **Play developer account** (a one-off fee plus its own identity
+   check) is the same shape of task and is still to start. Neither costs a line of code and
+   both sit on the critical path of a public launch.
 4. **Do not treat the phone app as one block.** Getting 0.19.0 onto their phone is a
    different job from finishing the six remaining app features, and it comes first — six
    rounds of work that nobody has seen on a device is six rounds of unverified work.
