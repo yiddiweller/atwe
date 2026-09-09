@@ -31,13 +31,34 @@
 ═══════════════════════════════════════════════ */
 const crypto = require('crypto');
 
-const BUCKET = process.env.S3_BUCKET;
-const ACCESS = process.env.S3_ACCESS_KEY;
-const SECRET = process.env.S3_SECRET_KEY;
-const REGION = process.env.S3_REGION || 'auto';
-const ENDPOINT = (process.env.S3_ENDPOINT || '').replace(/\/$/, '');
-const CDN = (process.env.CDN_URL || '').replace(/\/$/, '');
-const PREFIX = (process.env.S3_PREFIX || 'atwe').replace(/^\/|\/$/g, '');
+/* EVERY ONE OF THESE IS TRIMMED, AND THAT IS NOT DEFENSIVE PADDING — it is a
+   bug we shipped. A value pasted into a hosting dashboard picks up a leading or
+   trailing space with no visible trace, and R2 refused every upload with
+   `InvalidRegionName: the region name ' auto' is not valid` — while listing
+   `auto` among the valid names, which is exactly how invisible this is. The
+   same stray space in the SECRET would be far worse: the signature would come
+   out wrong and the store would answer `SignatureDoesNotMatch`, which reads as
+   a wrong key and sends you off rotating credentials that were correct all
+   along. A matched pair of surrounding quotes is stripped too — pasting
+   "auto" WITH the quotes is the other half of the same mistake, and no real
+   value here is quoted at both ends. */
+const envStr = (name, dflt = '') => {
+  let v = process.env[name];
+  if (v == null) return dflt;
+  v = String(v).trim();
+  if (v.length > 1 && ((v[0] === '"' && v.endsWith('"')) || (v[0] === "'" && v.endsWith("'")))) {
+    v = v.slice(1, -1).trim();
+  }
+  return v || dflt;
+};
+
+const BUCKET = envStr('S3_BUCKET');
+const ACCESS = envStr('S3_ACCESS_KEY');
+const SECRET = envStr('S3_SECRET_KEY');
+const REGION = envStr('S3_REGION', 'auto');
+const ENDPOINT = envStr('S3_ENDPOINT').replace(/\/$/, '');
+const CDN = envStr('CDN_URL').replace(/\/$/, '');
+const PREFIX = (envStr('S3_PREFIX', 'atwe')).replace(/^\/|\/$/g, '');
 
 const ok = !!(BUCKET && ACCESS && SECRET);
 if (!ok) {
