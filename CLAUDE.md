@@ -19,7 +19,7 @@ to, and what is the goal.** This is it. Everything below is detail.
 
 | when | what |
 |---|---|
-| **now → beginning of 2027** | **Finish, in this order: the WEB APP entirely (*"at least the stuff we can finish"*) → the iPhone app → the Android app → the desktop app *"if possible"*.** One at a time, each finished before the next starts. The web is the only thing being worked on right now. |
+| **now → beginning of 2027** | **Finish, in this order: the WEB APP entirely (*"at least the stuff we can finish"*) → a SWEEP OF THE ADMIN DASHBOARD → the iPhone app → the Android app → the desktop app *"if possible"*.** One at a time, each finished before the next starts. The web is the only thing being worked on right now. |
 | **beginning of 2027** | **official public release** — all platforms, available to everyone, everywhere |
 | **2027 → beginning of 2028** | the shakedown year. *"We will fix older problems we didn't recognize while the users and real users are using it — with my real team and workers."* Real usage teaches what no test here can. |
 | **1 Jan 2028** | **Atwe Inc officially starts + the massive marketing campaign** |
@@ -28,6 +28,14 @@ to, and what is the goal.** This is it. Everything below is detail.
 people are using the web app even the iPhone and other apps are not available yet."* The
 site being live is not the public release; the public release is the moment in 2027 when
 every platform is ready.
+
+**THE ADMIN DASHBOARD GETS ITS OWN SHORT PASS, right after the web app** (owner, 9 Sep
+2026): *"once the web app is finished, I would like to go over a little bit to finalize and
+make sure the admin dashboard app is perfect as well… just a small sweep over, make sure
+everything is perfect there as well."* Deliberately SMALL — it is `public/admin.html`, staff
+only, and it is not a fifth platform. It matters because the owner and their team live in it
+daily and it is where money, moderation and members are actually handled. Do it as its own
+pass once the web list is at zero, not woven through the web work.
 
 **WHERE WE ARE RIGHT NOW:** step 1 of 4 — the web app.
 **Progress: run `node tools/features.js`.** It prints the only two numbers that exist,
@@ -201,10 +209,18 @@ taught: holding the settings is not the same as the thing working. And the snaps
 inside the same Railway account as the database, so they survive a bad deploy or a dropped
 table, not the loss of the account itself.
 
-What still sits outside the code: a Play developer account, and the Apple
-Individual → Organization upgrade — **the founder's team started BOTH the Apple
-Organization enrollment and incorporating the real company on 9 Sep 2026**, so this is in
-progress rather than outstanding. Ask how it is going; do not report it as not started.
+**THE PAPERWORK IS THE OWNER'S OWN TRACK FOR THE NEXT MONTH, and it does not block the
+web work.** On 9 Sep 2026 they said they are personally taking on the Apple
+Individual → Organization upgrade, incorporating the real company, and the Play developer
+account — *"I hopefully to be busy with it the next month and hopefully to be done the next
+month as well"*, i.e. targeting **early-to-mid October 2026**. So: **do not chase them about
+it, and do not report any of the three as "not started"** — ask how it is going if it is
+genuinely relevant, and otherwise get on with the web app. This runs in PARALLEL with step 1
+by design: it is free, it is slow, it is entirely outside the code, and it sits on the
+critical path of the beginning-of-2027 public release, which is why it belongs alongside the
+build rather than after it. The D-U-N-S number Apple asks for is issued against a legal
+entity, so the corporation genuinely has to exist before the Apple upgrade can complete —
+their order is right.
 
 ## 🧭 THE PLATFORM ROADMAP — the founder's own order, and where we actually stand
 
@@ -232,7 +248,7 @@ beginning of 2027; 2027 itself is the shakedown year.**
 | when | what |
 |---|---|
 | **now** | the web is **already usable by real people**, and they are happy for it to be. *"I have no problem that people are using the web app even the iPhone and other apps are not available yet."* Not a secret, just not promoted — and NOT the public release. |
-| **now → beginning of 2027** | **all four, one at a time, in order: web (*"entirely… at least the stuff we can finish"*) → iPhone → Android → desktop (*"if possible"*).** Each finished before the next begins. |
+| **now → beginning of 2027** | **in order: web (*"entirely… at least the stuff we can finish"*) → a small sweep of the ADMIN DASHBOARD → iPhone → Android → desktop (*"if possible"*).** Each finished before the next begins. |
 | **beginning of 2027** | **OFFICIAL PUBLIC RELEASE of the product.** *"From 2027 the company is officially public and everyone can use it wherever they want."* |
 | **2027 → beginning of 2028** | the shakedown year, and it is a deliberate part of the plan: *"we will fix older problems we didn't recognize while the users and real users are using it — with my real team and workers."* |
 | **1 JANUARY 2028** | **ATWE INC OFFICIALLY BEGINS** — the company itself starts, together with **the massive marketing campaign**. Treated as a new company brand even though the product will have been live for a year. |
