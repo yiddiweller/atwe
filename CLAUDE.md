@@ -1201,7 +1201,14 @@ this member CHOSE** (`user_id = me`) — telling someone that a person hid from 
 hand back the exact fact the feature conceals. Client: `acToggleHideLastSeenFrom` (with a
 confirm that states the reciprocity up front rather than letting it be discovered), and a
 **Hidden from** list on Privacy & safety (`acOpenLastSeenHidden`) so a deleted conversation
-can never strand the setting somewhere unreachable. Covered by `scratchpad/lastseen.js`.
+can never strand the setting somewhere unreachable. Covered by `scratchpad/lastseen.js`,
+which **seeds its own three accounts** — it used to demand `TOK_A`/`TOK_B`/`TOK_C` from the
+environment, which nothing has ever exported, so it printed "skipped", exited 0, and was
+counted as a pass on every run for months while this feature had no working coverage at
+all. It also has to **stamp `users.last_seen`**: the presence poll reports exactly that
+column, so a brand-new account honestly has nothing to show and every baseline check ("to
+begin with, A can see B's last seen") fails on a perfectly working feature — the first run
+of the new seeder went 7 red on green code for precisely that reason.
 `connections_visible` (hide your
 connections list — gates `/api/social/connections/:username`), `who_can_request`
 (everyone/network/nobody — gates `POST /api/connections/:id`),
@@ -1390,6 +1397,13 @@ Three things about it are load-bearing:
 `acSkelProfile` mirrors all of it (148px, the gutter, `--post-card-r`, the −4px picture) so nothing
 changes shape as the profile lands. It is shared with the circle and feed screens, where
 `--prof-top` does not resolve — hence its `14px` fallback.
+
+**THE RUNNER HAS UNDER-COVERED ITSELF THREE TIMES NOW, in three different ways** — worth
+naming as one pattern: a stale path in `/tmp` (it ran a frozen copy of every probe), probes
+missing from its list (gapmob, notifhdr, acctbug — and notifhdr then went stale unnoticed),
+and a probe present in the list that could only ever skip (lastseen, above). It is at **96
+probes** today. When you add one, add it to `run-all.sh` in the same commit, and check a
+full run for `skipped` and `MISSING` as well as `FAILED`.
 
 **The regression runner was quietly covering 68 probes, not 85.** Seventeen probes need a bearer
 token and printed `export TOK first` and were counted as a pass by `run-all.sh` — every Beam,
@@ -2398,6 +2412,17 @@ this repo cover `public/index.html` only.** The native app has no probes at all,
 which is precisely why a whole-app audit that came back clean was followed within
 the hour by a real, reachable, blank-screen bug. A clean sweep of the web is not
 a clean sweep of Atwe.
+
+### A PROBE THAT SKIPS DOES NOT SAY "FAILED" EITHER — and nobody notices for months
+
+`lastseen.js` sat in `run-all.sh` and ran on every regression. It also required three
+bearer tokens from the environment that nothing in this repo has ever exported, so its
+first act was to print `skipped` and `process.exit(0)` — a clean pass. **A skip nobody can
+turn into a run is a note, not a test**, and this one hid a whole feature (per-person
+hide-my-last-seen, reciprocal, enforced at three separate doors) for as long as it existed.
+The fix is the same one every self-contained probe here already uses: **seed your own
+fixtures**. A probe that depends on somebody remembering to export something will be
+skipped forever. Grep a regression run for `skipped` as well as for `FAILED`.
 
 ### A PROBE THAT CRASHES DOES NOT SAY "FAILED"
 
@@ -5874,24 +5899,101 @@ covered the whole nav: clicking Account did nothing and Notifications stayed lit
 is what the founder saw as the tab "popping back" to the wrong icon. `appTab()` also
 closes the panel when you switch worlds, or it would sit over the world you moved to.
 
-**OPEN, COSMETIC, PRE-EXISTING: the Notifications title sits ~3px lower than the other
-worlds.** Measured 9 Sep 2026 by pixel-scanning each title's own ink inside its own box
-(the method this section prescribes), on a 390x844 phone with the bar reset to the top:
+### THE FOUR WORLDS ARE ONE HEADER — and three separate things had drifted apart
 
-| | title box top | title INK top |
+The founder: *"all the pages should be perfectly the same — Home, Beam, Engine and
+Notifications should have the same full look and size and feel."* Measured against each
+other on a 390x844 phone, three things were adrift, and **all three were the same kind of
+mistake: a number typed once, correct at the time, that later stopped tracking what it was
+derived from.**
+
+| | was | now |
 |---|---|---|
-| Beam | 13 | 17 |
-| Engine | 13 | 16 |
-| **Notifications** | **17** | **20** |
+| Notifications' whole header | 4px lower than the other three (swirl at 17 against 13, circles at 13 against 9) | identical |
+| Notifications' tab pills | 13px type in a 29px pill | 15px in 31, the worlds' own |
+| Beam's Chats / Groups tab | **32.03px while it had unread**, 31 otherwise | 31 always |
 
-`notifhdr.js` fails on exactly this and is LEFT RED on purpose rather than relaxed — it is
-the one thing a sweep found that a person might see. It was NOT introduced by any recent
-work (`index.html` last changed for the signup-wizard fix in 1826, and the header last in
-1766). **Do not "fix" it by nudging `#notifHead`'s padding without measuring:** the 13px
-padding-top is itself a deliberate correction recorded above, and the numbers in that
-paragraph — "the title now starts at 19.75px, identical to Engine" — do not reconcile with
-either column here, so the intended target is genuinely unclear. It needs the founder's eye
-on a real screen, not another guess. Everything else about this header passes.
+**1. The 4px was a hardcoded top inset.** `#notifHead` said a flat `13px`, which was RIGHT
+when it was typed in build 1712 — the gutter was 18 then, and the worlds compute
+`.topbar`'s own 2px plus `.tb-brandrow`'s `--feed-gutter - (circle - h)/2`, i.e. 2 + 11 =
+13 — and silently WRONG from build 1744, when the gutter moved to 14, the three worlds
+followed the formula down to 9, and this number stayed put for eighty-odd builds. It is
+spelled as **the same expression** now, so the gutter, the circle size and the lockup
+height move all four together or none. **Never re-type a number here that another rule
+derives.**
+
+**2. The tab pills were never brought into their own rule.** The rule the worlds share
+says why, in the founder's words from an earlier pass: *"Home + Beam tabs must be
+IDENTICAL across worlds — same size/weight/colour so switching worlds never feels off."*
+`.ntf-tab` was simply never added to it — 13px in a 29px pill, its selected tab never took
+the bolder 700, and its row sat the chips 2px low. The colours were already right, because
+they come from the shared `--tab-*` tokens; only the geometry was adrift, which is exactly
+what a token system does NOT protect you from.
+
+**3. A pill's height is its line-height, never its contents.** Beam's Chats and Groups
+tabs carry an unread count — an 18px `inline-flex` badge in a line box that
+`line-height:normal` makes ~17.25 at 15px Inter. An inline child taller than the line box
+GROWS it, so those two tabs measured **32.03 against every other tab's 31 — but only while
+something was unread**, i.e. the row twitched by a pixel as messages arrived and cleared,
+and Beam sat a pixel off Home and Engine beside it. `.topbar .tb-feedtab,.ntf-tab
+{line-height:18px}` pins the line box at the badge's own height, so the pill is now
+independent of anything ever put inside it — a badge, a dot, an icon. Same reasoning as
+`--post-av`, where a header row's height is the picture's and never the text's.
+
+**Two things that look like differences and must NOT be "fixed".** Home shows the Atwe
+**logotype** where the other three show a word, so its ink sits differently from a capital
+letter's — the shared anchor is the **swirl mark**, which all four have, and that is what
+must line up. And Home and Beam carry three right-hand circles (＋ · ⋯ · avatar) where
+Engine and Notifications carry two: different buttons, same size, same right edge, same
+gap. A 1px spread in the words' ink tops (Beam 16.5, Engine 15.5) is letterform, not
+layout — a flat-topped "E" registers a row before a rounded "B" at the same threshold.
+
+**The glass band is deliberately a different HEIGHT on each and that is the rule, not a
+bug**: it is that bar's own visible height plus the 26px tail, so the worlds' 98px bar
+gives 124 and Notifications' 57px header gives 83. What must match is the recipe — 4
+layers, blur ramp 1/2/4/8, the same tint stops — and it does.
+
+**THE NOTIFICATIONS HEADER RETRACTS ON SCROLL AGAIN**, which is the fourth world's share
+of the "same feel". It was frozen in build 1766 for a real, measured reason: it hid by
+animating a `margin-top` while sitting IN FLOW above the list, which reflowed every row
+under the finger — p95 45ms, 5 frames over 32ms, and the founder called it choppy twice.
+**The note left behind said the fix would mean "rebuilding it as a composited transform on
+a non-scrolling wrapper", and that is exactly what the page became for an unrelated
+reason**: making the bar glass moved it to `position:absolute` OVER the list. So the
+blocker had quietly gone away. Re-measured at the same 6x CPU throttle, 90 frames through
+70 notifications:
+
+| | p50 | p95 | frames > 32ms |
+|---|---|---|---|
+| retract live | 16.7 | 16.8 | 2 |
+| retract off | 16.7 | 16.7 | 1 |
+| **two live runs disagreed with each other by more than either disagreed with off** | | | |
+| the Account page, for comparison | 16.7 | 16.8 | 0 |
+
+It is one composited transform on a floating layer; `--tb-hide` counter-translates the
+glass so the dissolve stays pinned to the top of the screen while its band shrinks 83 → 26,
+exactly as the world bars do. `notifscroll.js` owns the cost side of that bargain and now
+asserts the terms it came back on: it must MOVE, it must move by **transform** (not a
+margin — that WAS the jank), **nothing below it may reflow**, and the pacing checks are
+unchanged. `notifhdr.js` asserts the movement and the title height; it had been left RED on
+this very title for months and is green for the first time.
+
+**`scratchpad/worldhdr.js` (129 checks) is the durable guard**, and every check is written
+as a RELATIONSHIP between the four worlds rather than as a number — which is the only shape
+that would have caught the original drift, since each of the three faults was a literal that
+was correct on the day it was written. Three widths (360/390/430) and both themes.
+Self-tested: putting the 13px back fails 19 checks, naming 17-against-13 and 61-against-57;
+freezing the retract fails 2.
+
+**Two probe traps it hit, both of which reported a failure on working code.**
+`querySelector` returns the FIRST match and Home's `#tbFeedTabs` comes before Beam's
+`#tbChatTabs` in the source, so asking for `.tb-feedtabs` on Beam hands back Home's hidden
+row and reports "no tabs" on a world that plainly has them — take the first VISIBLE match.
+And **which element scrolls depends on where you are**: in a mobile BROWSER the three worlds
+run in `body.pgscroll`, where the WINDOW scrolls and `#acFeed`/`#acList`/`#acSearchScroll`
+are `overflow:visible` with `scrollHeight === clientHeight`; the installed PWA is the other
+way round. Ask the page which one can actually move rather than assuming, and say "skipped,
+nothing to scroll" out loud instead of failing when a world has too little content to test.
 
 **Testing note:** the notifications list GROUPS identical entries ("X and 39 others
 followed you"), so 40 seeded `follow` rows collapse to ONE row and there is nothing to

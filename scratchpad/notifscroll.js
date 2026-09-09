@@ -56,15 +56,25 @@ const ok=(c,m,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+m+(d?'
       return h?Math.round(h.getBoundingClientRect().top):null;};
     el.scrollTop=0; await new Promise(r=>setTimeout(r,300));
     const before=headTop();
-    const d=[]; let prev=performance.now(), moved=0;
+    /* NO REFLOW is the whole reason the retract is affordable again, so measure it:
+       the list's own box and its content height must not change while the header moves.
+       A margin-top retract (the 1766 version) shifts both — that IS the jank. */
+    const boxBefore=Math.round(el.getBoundingClientRect().top);
+    const shBefore=el.scrollHeight;
+    const d=[]; let prev=performance.now(), moved=0, reflowed=0;
     for(let i=0;i<90;i++){
       el.scrollTop += 14;
       await new Promise(r=>requestAnimationFrame(()=>{const n=performance.now(); d.push(n-prev); prev=n; r();}));
       const now=headTop(); if(now!==null && before!==null && now!==before) moved++;
+      if(Math.round(el.getBoundingClientRect().top)!==boxBefore || el.scrollHeight!==shBefore) reflowed++;
     }
     d.sort((a,b)=>a-b);
+    const h=document.getElementById('notifHead');
     return {p95:+d[Math.floor(d.length*0.95)].toFixed(1), janky:d.filter(x=>x>32).length,
-            headMoved:moved, hadHideClass:ov?ov.classList.contains('nh-hide'):false};
+            headMoved:moved, reflowed,
+            headMargin: h?getComputedStyle(h).marginTop:null,
+            headTf: h?getComputedStyle(h).transform:null,
+            hadHideClass:ov?ov.classList.contains('nh-hide'):false};
   }, sel);
 
   await p.evaluate(()=>acNavNotifs()); await p.waitForTimeout(2200);
@@ -79,9 +89,22 @@ const ok=(c,m,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+m+(d?'
   /* the yardstick: a list of the same shape elsewhere in the app, measured the same way */
   ok(n.p95 <= a.p95 + 12, 'and it paces like the Account page, not worse',
      'notifications p95 '+n.p95+'ms vs account '+a.p95+'ms');
-  ok(n.headMoved===0, 'the header does not move while you scroll — that reflow WAS the jank',
-     n.headMoved+' frames where it had shifted');
-  ok(!n.hadHideClass, 'and nothing re-introduced the retract');
+  /* THE HEADER RETRACTS AGAIN, and these checks are the terms on which it is allowed to.
+     It was frozen in 1766 because it hid by animating a margin-top while it sat IN FLOW
+     above the list, which reflowed every row under the finger — p95 45ms, 5 frames over
+     32ms. It is a floating position:absolute layer since it became glass, so hiding it is
+     now one composited transform and nothing below it moves. Re-measured at the same 6x
+     throttle: p50 16.7 with it live and 16.7 with it off, and two live runs disagreed
+     with each other by more than either disagreed with off. So: it MUST move (the founder
+     asked for the four worlds to feel like one thing), it must move by TRANSFORM, and the
+     list underneath must not shift a pixel. The pacing checks above are unchanged and are
+     what stop this being reasoned about rather than measured. */
+  ok(n.headMoved>0, 'the header retracts on scroll, like the other three worlds', n.headMoved+' frames where it had moved');
+  ok(n.reflowed===0, 'and NOTHING below it reflows — it moves by transform, not by layout',
+     n.reflowed+' frames where the list box or its height had changed');
+  ok(n.headMargin==='0px', 'the retract is not a margin (the 1766 version, which was the jank)', 'margin-top '+n.headMargin);
+  ok(/matrix/.test(n.headTf||''), 'it really is a transform', n.headTf);
+  ok(!n.hadHideClass, 'and the old class-driven retract stayed deleted');
   ok(errs.length===0,'no JS errors',errs.slice(0,2).join(' | ')||'0');
   console.log('\n═══ '+pass+' passed, '+fail+' failed ═══');
   await b.close(); await pool.end();

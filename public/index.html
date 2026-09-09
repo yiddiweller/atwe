@@ -2883,6 +2883,18 @@ body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand
   /* Home + Beam tabs must be IDENTICAL across worlds — same size/weight/colour
      so switching worlds never feels "off" (founder). */
   padding:7px 15px;font-size:15px;font-weight:600;color:var(--tab-ink);background:var(--tab-fill);}
+/* A PILL'S HEIGHT IS ITS LINE-HEIGHT, NEVER WHATEVER HAPPENS TO BE INSIDE IT.
+   Beam's Chats and Groups tabs carry an unread count — an 18px inline-flex badge in a
+   line box that `line-height:normal` makes about 17.25 at 15px Inter. An inline child
+   taller than the line box GROWS it, so those two tabs measured 32.03 against every
+   other tab's 31 — but only while there was something unread, i.e. the row twitched by a
+   pixel as messages arrived and cleared, and Beam sat a pixel off Home and Engine beside
+   it. Pinning the line box at the badge's own height fixes both at once and, more
+   usefully, makes the pill's height independent of anything that is ever put in it: a
+   badge, a dot, an icon. Same reasoning as --post-av, where a header row's height is the
+   picture's and never the text's. All four worlds are declared together here so they
+   cannot drift apart again. */
+.topbar .tb-feedtab,.ntf-tab{line-height:18px;}
 .topbar.tb-solo.tb-home .tb-feedtab.active:not(.tb-feedtab-add),.topbar.tb-solo.tb-chat .tb-feedtab.active:not(.tb-feedtab-add),.topbar.tb-solo.tb-engine .tb-feedtab.active:not(.tb-feedtab-add){
   font-weight:700;background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{align-self:center;align-items:center;}
@@ -8582,10 +8594,20 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .rev-chips{display:flex;gap:8px;margin:2px 0 10px;overflow-x:auto;scrollbar-width:none;}
 .rev-chips::-webkit-scrollbar{display:none;}
 /* Notification filter tabs */
-.ntf-tabs{display:flex;gap:8px;padding:4px var(--feed-gutter) 10px;overflow-x:auto;scrollbar-width:none;}
+/* THE SAME PILL AS THE OTHER THREE WORLDS, and the rule it is matching says why in the
+   founder's own words: "Home + Beam tabs must be IDENTICAL across worlds — same size /
+   weight / colour so switching worlds never feels off". Notifications was simply never
+   brought into that. It shipped at 13px in a 29px pill where Home, Beam and Engine are
+   15px in a 31px one, its active tab never took the bolder weight, and its row sat its
+   chips 2px lower — three small differences that add up to the fourth world looking like
+   a different app's screen. The numbers here are copied from
+   `.topbar.tb-solo.tb-home .tb-feedtab` (padding 7px 15px / 15px / 600, active 700) and
+   the row's 2px lifts the chips onto the worlds' own line; the colours already came from
+   the shared --tab-* tokens, which is why only the geometry was adrift. */
+.ntf-tabs{display:flex;gap:8px;padding:2px var(--feed-gutter) 10px;overflow-x:auto;scrollbar-width:none;}
 .ntf-tabs::-webkit-scrollbar{display:none;}
-.ntf-tab{flex:0 0 auto;background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
-.ntf-tab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);}
+.ntf-tab{flex:0 0 auto;background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:15px;font-weight:600;padding:7px 15px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.ntf-tab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);font-weight:700;}
 /* Wallet history filter chips */
 .wf-chips{display:flex;gap:8px;margin:2px 0 10px;overflow-x:auto;scrollbar-width:none;}
 .wf-chips::-webkit-scrollbar{display:none;}
@@ -12840,10 +12862,17 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 /* The world header on Notifications. .tb-brandrow's sizes come from variables set
    on .topbar.tb-solo, so they have to be supplied here too — otherwise the lockup
    renders at zero. */
-/* Two things here are load-bearing and were both wrong, so don't "tidy" them back.
-   padding-top is 13px, NOT 10px: on the other worlds the lockup sits inside .topbar,
-   which adds its own 2px above the brand row's 11px. At 10px the title rendered 3px
-   higher than Atwe / Beam / Engine (measured: 14px vs 17px) — visibly out of line.
+/* THE TOP INSET IS DERIVED, NEVER TYPED — and typing it is exactly what went wrong.
+   On the other three worlds the lockup sits inside .topbar, so its distance from the
+   top of the screen is .topbar's own 2px PLUS .tb-brandrow's own
+   `--feed-gutter - (circle - h)/2`. This header is not inside a .topbar, so it has to
+   add both halves itself. It used to say a flat `13px`, which was RIGHT when it was
+   written in build 1712 (the gutter was 18 then: 18 - 7 + 2 = 13) and silently WRONG
+   from build 1744, when the gutter moved to 14 and the three worlds followed the
+   formula down to 9 while this number stayed where it was. The result was a
+   Notifications title sitting 4px lower than Beam's and Engine's for eighty-odd builds
+   — measured, mark top 17 against 13. Spelling out the same expression means a future
+   change to the gutter, the circle size or the lockup height moves all four together.
    position is relative, NOT sticky: this header is a plain flex sibling above the
    scrolling list inside an overflow:hidden card, so sticky does no work here anyway.
    (It used to also clamp the retract-on-scroll, which is gone — that reflow was the
@@ -12852,7 +12881,8 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px var(--feed-gutter) 12px;border-bottom:none;background:var(--bg);
   position:relative;z-index:3;
-  padding-top:calc(13px + env(safe-area-inset-top,0px));
+  padding-top:calc(env(safe-area-inset-top,0px) + 2px
+    + var(--feed-gutter,16px) - (var(--tb-brand-circle) - var(--tb-brand-h)) / 2);
   }
 #notifHead .tb-brand-word-txt{display:block;}
 /* No gap override: .tb-brand derives its gap from --tb-brand-h (10.56px), and hardcoding
@@ -22328,7 +22358,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1826'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1827'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -31386,9 +31416,47 @@ function acNotifHeadSync(arriving) {
      trick the FEED uses, made it three times WORSE (18 frames over 32ms): a feed card is
      tall and expensive, so skipping it pays, while a notification row is cheap and
      deferring its layout just moves the work into the scroll itself.
-     Keeping the retract would mean rebuilding it as a composited transform on a
-     non-scrolling wrapper — a real change to how the page is laid out, for 58px of screen
-     that nobody asked for. The header simply stays put now, like the Account page's. */
+     THAT BLOCKER IS NOW GONE, and the retract is back — see below. */
+
+  /* ── RETRACT ON SCROLL, the same way the other three worlds do it ──────────────
+     The founder asked for Home / Beam / Engine / Notifications to feel like ONE thing,
+     and a header that stays put while the other three roll away is a difference you feel
+     rather than see. It is affordable now for a reason that changed underneath the note
+     above: when that note was written the header was a flex sibling IN FLOW above the
+     list, so hiding it animated a `margin-top` and REFLOWED every row under the finger —
+     which is exactly what the founder called choppy. Making the bar glass moved it to
+     `position:absolute` OVER the list, i.e. the "non-scrolling wrapper" that note said
+     would be needed. So this is one composited transform per frame on a floating layer,
+     and the list's own layout never moves at all.
+     Delta-tracked, 1:1 with the finger, clamped to the header's own height and pinned
+     fully open at the top — the same shape as _onListScroll's brand-collapse. --tb-hide
+     counter-translates the glass so the dissolve stays at the top of the screen at a
+     constant height, exactly as it does on the other three. */
+  if (!list._nhBound) {
+    list._nhBound = 1;
+    list.addEventListener('scroll', function () {
+      const hd = document.getElementById('notifHead');
+      if (!hd) return;
+      const h = hd.offsetHeight || 0;
+      const st = list.scrollTop;
+      const prev = (list._nhLast != null) ? list._nhLast : st; list._nhLast = st;
+      if (st <= 0) list._nhHide = 0;
+      else list._nhHide = Math.max(0, Math.min(h, (list._nhHide || 0) + (st - prev)));
+      const p = h ? (list._nhHide / h) : 0;
+      hd.style.transform = 'translateY(' + (-list._nhHide) + 'px)';
+      hd.style.setProperty('--tb-hide', list._nhHide + 'px');
+      /* Fade FASTER than it slides, for the reason the world bars do: the panel's own
+         top edge would otherwise clip the lockup's letters mid-stroke, which reads as a
+         ragged cut rather than a clean one. Gone well before the edge reaches it. */
+      hd.style.opacity = String(Math.max(0, 1 - p * 2));
+    }, { passive: true });
+  }
+  /* Opening always starts at the top, so the header starts fully open — otherwise a
+     panel closed while scrolled reopens with its header already retracted and gone. */
+  list._nhHide = 0; list._nhLast = 0;
+  head.style.transform = 'translateY(0px)';
+  head.style.setProperty('--tb-hide', '0px');
+  head.style.opacity = '1';
 }
 // Put the highlight back on the world that is actually showing.
 function acSyncNavActive() {
