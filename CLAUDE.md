@@ -9351,6 +9351,27 @@ owner their database is already clean at the exact moment we failed to look.
 New media can go to an S3-compatible bucket instead of the database (optional, degrades
 like every other integration here).
 
+**NEVER SEND `x-amz-acl` TO ANYTHING BUT AWS.** `putDataUrl` signed every upload
+with `acl: 'public-read'` — an Amazon convention. **Cloudflare R2 has no per-object
+ACLs and REJECTS a request carrying that header**, so on the owner's real bucket every
+single upload failed while the signature itself was perfectly correct. It is now
+`acl: ENDPOINT ? null : 'public-read'`, i.e. AWS only; on R2 public readability comes
+from the bucket's custom domain, which is what `CDN_URL` points at. `presignPut` was
+already clean (it signs the host alone).
+
+**The offline signing test could not have caught this, and that is the lesson.** It
+verified the SigV4 maths against an independently written implementation and passed —
+byte-identical signatures. A correct signature is not an accepted request. The bug
+lived in a header the recipe never had an opinion about, and it took four seconds of
+the owner pressing **Test it** against a real bucket to find. **Verifying a protocol
+offline proves you speak it; only the real service proves it will answer.**
+
+**A refusal now says WHY.** `putDataUrl` records the HTTP status and the store's own
+error text in `_lastError`, and `selfTest` appends it to the dashboard's reason line.
+Before this the whole diagnosis was "upload was refused — check the key, the bucket
+name and the permissions", which sent us guessing at three things that were all
+correct while R2 had been saying exactly what was wrong the entire time.
+
 **The bucket needs a CORS policy, and both things that need it fail SILENTLY.** A
 browser will not let `atwe.com` talk to `media.atwe.com` unless the bucket says so,
 and two features do exactly that: the **direct-to-bucket upload** (`presignPut` ->
