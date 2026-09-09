@@ -8,7 +8,7 @@ whole site, written up as a real list; finished means this list is at zero.**
 **Every item here is MEASURED, not judged.** A list built on taste can never reach zero.
 Each entry says the screen, the exact fault, the number, and what "done" looks like.
 
-Progress: **4 of 13 done.**  ·  1 item turned out to be bigger than it looked and is now D1.
+Progress: **10 of 13 done.**  ·  1 item turned out to be bigger than it looked and is now **D1**, which needs the owner's decision. B5 could not be reached and is parked.
 
 ---
 
@@ -91,23 +91,31 @@ Apple's floor is **44×44pt**, and the app already carries invisible `::before` 
 elsewhere to meet it without making a control look heavy — so the pattern exists. These
 were measured **including** any such overlay.
 
-### B1 — the tab row's "Add" is 29×30, on six screens ⬜
-Home, Circles, Collections, Get verified, Export your customers, Help & feedback.
-*Done when:* the tap target is ≥44 in both directions while the word looks unchanged.
+### B1 — the tab row's "Add" is 29×30, on six screens ✅ DONE (build 1831)
+**Fixed:** an invisible `::before` overlay — the app's own pattern from the post action
+pills — so the word looks identical and nothing moves. Measured hit box **41×44**.
+*The width is deliberately 41, not 44*: "Add" is the row's last child so growing right is
+free, but growing left further would eat the tab beside it. Stealing a neighbour's tap is
+a worse fault than the one being fixed.
 
 ### B2 — Home's "+" is 20×20 ⬜  · the smallest control found anywhere.
 
-### B3 — the filter tabs are ~41×27, on six screens ⬜
-"All" on Services (43×27), Businesses (40×26), Collections, Get verified, Export your
-customers, Help & feedback (41×27).
-*Done when:* ≥44 tall, or an overlay supplies it. **NB** a taller pill changes the tab
-row's rhythm — this one is a design decision, not just a number.
+### B3 — the filter tabs are ~41×27, on six screens ✅ DONE (build 1831)
+**Fixed:** overlays, so the rows' rhythm is untouched — the design decision is preserved
+rather than overridden. Services **49×45**, Collections **47×45**, and the same for
+Businesses' and the other chip rows. Horizontal growth held to ±3 (half the 7px row gap).
 
-### B4 — the composer's B and I are 42×42 ⬜ · two short. The cheapest item here.
+### B4 — the composer's B and I are 42×42 ✅ DONE (build 1831)
+**Fixed:** now **44×44**. Scoped to `.ac-post-toolbar` on purpose — `.msg-attach` is shared
+with the CHAT composer, whose bar is measured to ChatGPT's own 49px and would have grown.
 
-### B5 — Help's close "×" is 32×32 ⬜
+### B5 — Help's close "×" is 32×32 ⏸ PARKED — could not be reached
+The sweep found it, but the opener recorded in the index (`acOpenHelp`) does not exist as a
+function, so it could not be re-opened to fix and measure. **That is itself worth chasing**
+— it may be a second dead route of the kind `deadends.js` hunts. Left open deliberately
+rather than guessed at.
 
-### B6 — Push notifications' "1h" and "8h" are 41×29 ⬜
+### B6 — Push notifications' "1h" and "8h" are 41×29 ✅ DONE (build 1831) · now **47×45**.
 
 ---
 
@@ -172,3 +180,9 @@ node scratchpad/sweep.js <from> <to> <black|light>
 It enumerates from the app's own index (`scratchpad/enum.js` writes `destinations.json`),
 and skips the two destinations that end the session (Log out, Delete account) — they are
 covered by `journeys.js`, which signs out for real.
+
+Two guards keep the fixed items fixed, both in `run-all.sh`:
+`scratchpad/contrastfix.js` (A1–A5, re-measured in both themes) and
+`scratchpad/touchsize.js` (B1–B6, which measures the box the BROWSER would hit, overlay
+included, **and** hit-tests each neighbour's centre — because the cheap way to pass a
+touch-target check is to grow sideways over the control next door).
