@@ -8465,8 +8465,11 @@ async function renderStorageView(){
   document.getElementById('stats').innerHTML = '';
   c.innerHTML = '<div class="muted">Checking…</div>';
   let d = null;
-  try { d = await api('/api/admin/storage'); } catch(e){ c.innerHTML = '<div class="muted">Could not check.</div>'; return; }
+  try { d = await api('GET', '/api/admin/storage'); } catch(e){ c.innerHTML = '<div class="muted">Could not check.</div>'; return; }
+  // A count we could not take is NOT zero. Rendering `null` as 0 would tell the owner
+  // their database is already clean at the exact moment we failed to look.
   const inDb = d.inDatabase || {};
+  const n = (v) => (d.inDatabase ? (v || 0) : '—');
   c.innerHTML = `
     <div class="card">
       <div class="card-h">Media storage</div>
@@ -8481,13 +8484,15 @@ async function renderStorageView(){
     <div class="card">
       <div class="card-h">Still in the database</div>
       <div class="stat-grid">
-        <div class="stat"><b>${inDb.posts||0}</b><span>posts</span></div>
-        <div class="stat"><b>${inDb.messages||0}</b><span>messages</span></div>
-        <div class="stat"><b>${inDb.listings||0}</b><span>listings</span></div>
-        <div class="stat"><b>${inDb.stories||0}</b><span>stories</span></div>
+        <div class="stat"><b>${n(inDb.posts)}</b><span>posts</span></div>
+        <div class="stat"><b>${n(inDb.messages)}</b><span>messages</span></div>
+        <div class="stat"><b>${n(inDb.listings)}</b><span>listings</span></div>
+        <div class="stat"><b>${n(inDb.stories)}</b><span>stories</span></div>
         <div class="stat"><b>${jstr(d.databaseSize||'—')}</b><span>database size</span></div>
       </div>
-      <div class="muted" style="margin-top:10px;">These carry their pictures inside the database. They are counted here so the number going up (or not) is visible, not guessed at.</div>
+      <div class="muted" style="margin-top:10px;">${d.inDatabase
+        ? 'These carry their pictures inside the database. They are counted here so the number going up (or not) is visible, not guessed at.'
+        : 'The count could not be taken this time — a dash means unknown, not zero. Everything above about the file store is still accurate.'}</div>
     </div>
     ${d.configured ? '' : `<div class="card"><div class="card-h">Switching it on</div>
       <div class="muted">Set <code>S3_BUCKET</code>, <code>S3_ACCESS_KEY</code> and <code>S3_SECRET_KEY</code> — plus
@@ -8499,7 +8504,7 @@ async function testStorage(){
   const el = document.getElementById('storageTest');
   el.innerHTML = '<div class="muted" style="margin-top:10px;">Writing a small file, reading it back, deleting it…</div>';
   try {
-    const r = await api('/api/admin/storage/test', 'POST', {});
+    const r = await api('POST', '/api/admin/storage/test', {});
     /* THREE outcomes, not two. A write that succeeds but cannot be READ BACK
        used to render as a pass with a note — and it is not a pass: Atwe puts the
        bucket's own address into the post and the member's phone fetches it
@@ -8525,7 +8530,7 @@ async function renderClusterView(){
   document.getElementById('stats').innerHTML = '';
   c.innerHTML = '<div class="muted">Checking…</div>';
   let d = null;
-  try { d = await api('/api/admin/cluster'); } catch(e){ c.innerHTML = '<div class="muted">Could not check.</div>'; return; }
+  try { d = await api('GET', '/api/admin/cluster'); } catch(e){ c.innerHTML = '<div class="muted">Could not check.</div>'; return; }
   c.innerHTML = `
     <div class="card">
       <div class="card-h">Running on more than one server</div>
@@ -8560,7 +8565,7 @@ async function renderWebinarsAdmin(){
   document.getElementById('stats').innerHTML = '';
   c.innerHTML = '<div class="muted">Loading…</div>';
   let d = null;
-  try { d = await api('/api/admin/webinars'); } catch(e){ c.innerHTML = '<div class="muted">Could not load.</div>'; return; }
+  try { d = await api('GET', '/api/admin/webinars'); } catch(e){ c.innerHTML = '<div class="muted">Could not load.</div>'; return; }
   const rows = d.webinars || [];
   c.innerHTML = `
     <div class="stat-grid">
@@ -8579,7 +8584,7 @@ async function renderWebinarsAdmin(){
 }
 async function cancelWebinar(id){
   if (!confirm('Cancel this webinar? Everyone who signed up will be told.')) return;
-  try { await api('/api/admin/webinars/'+id+'/cancel', 'POST', {}); renderWebinarsAdmin(); }
+  try { await api('POST', '/api/admin/webinars/'+id+'/cancel', {}); renderWebinarsAdmin(); }
   catch(e){ alert('Could not cancel it.'); }
 }
 
@@ -8592,7 +8597,7 @@ async function renderAppReviews(){
   document.getElementById('stats').innerHTML = '';
   c.innerHTML = '<div class="muted">Loading…</div>';
   let d = null;
-  try { d = await api('/api/admin/app-reviews'); } catch(e){ c.innerHTML = '<div class="muted">Could not load.</div>'; return; }
+  try { d = await api('GET', '/api/admin/app-reviews'); } catch(e){ c.innerHTML = '<div class="muted">Could not load.</div>'; return; }
   if (!d.configured) {
     c.innerHTML = `<div class="card"><div class="card-h">Not connected yet</div>
       <div class="muted">${jstr(d.note || '')} Apple's public feed needs no key and no approval, so this starts working the day the app is live.</div></div>`;
@@ -8621,12 +8626,12 @@ async function renderAppReviews(){
       then mark it here so nobody answers the same person twice.</div></div>`;
 }
 async function refreshAppReviews(){
-  try { await api('/api/admin/app-reviews?refresh=1'); renderAppReviews(); } catch(e){ alert('Could not fetch.'); }
+  try { await api('GET', '/api/admin/app-reviews?refresh=1'); renderAppReviews(); } catch(e){ alert('Could not fetch.'); }
 }
 async function markAppReviewReplied(id){
   const txt = prompt('What did you reply? (kept here as a record)');
   if (txt === null) return;
-  try { await api('/api/admin/app-reviews/'+encodeURIComponent(id)+'/responded','POST',{response:txt}); renderAppReviews(); }
+  try { await api('POST', '/api/admin/app-reviews/'+encodeURIComponent(id)+'/responded',{response:txt}); renderAppReviews(); }
   catch(e){ alert('Could not save that.'); }
 }
 
@@ -8638,7 +8643,7 @@ async function renderAdvancesAdmin(){
   document.getElementById('stats').innerHTML = '';
   c.innerHTML = '<div class="muted">Loading…</div>';
   let d = null;
-  try { d = await api('/api/admin/advances'); } catch(e){ c.innerHTML = '<div class="muted">Could not load.</div>'; return; }
+  try { d = await api('GET', '/api/admin/advances'); } catch(e){ c.innerHTML = '<div class="muted">Could not load.</div>'; return; }
   const cfg = d.config || {};
   const rows = d.advances || [];
   c.innerHTML = `
@@ -8680,7 +8685,7 @@ async function renderAdvancesAdmin(){
 async function saveAdvanceCfg(){
   const num = (id) => Number((document.getElementById(id)||{}).value) || 0;
   try {
-    await api('/api/admin/advances/config','PUT',{
+    await api('PUT', '/api/admin/advances/config',{
       enabled: !!(document.getElementById('advOn')||{}).checked,
       maxCents: Math.round(num('advMax')*100), feePct: num('advFee'),
       sharePct: num('advShare'), minSalesCents: Math.round(num('advMin')*100),
