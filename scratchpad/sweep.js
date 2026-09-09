@@ -2,11 +2,15 @@
    Opens every destination the app's own index knows about and asks a battery of
    OBJECTIVE questions of each. Objective is the point: this list has to be one a
    person can burn down, not a matter of taste. */
-const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
+/* PW_SCRATCH first. A hardcoded session path is how this repo's runner once ran a
+   frozen copy of every probe from /tmp for weeks, and how the nav-icon generator came
+   one restart from being lost. Resolve it, and keep the old path only as a fallback. */
+const SP=process.env.PW_SCRATCH||
+  '/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const {chromium}=require(SP+'/node_modules/playwright-core');
 const fs=require('fs');
 const TOK=fs.readFileSync('/tmp/tok.txt','utf8').trim();
-const DEST=JSON.parse(fs.readFileSync(SP+'destinations.json','utf8')).items;
+const DEST=JSON.parse(fs.readFileSync(require('path').join(__dirname,'destinations.json'),'utf8')).items;
 const FROM=+(process.argv[2]||0), TO=+(process.argv[3]||DEST.length);
 const THEME=process.argv[4]||'black';
 
@@ -198,9 +202,17 @@ const THEME=process.argv[4]||'black';
         /* A CONTROL TOO SMALL TO HIT — 44pt is the floor, and an invisible ::before overlay
            can legitimately supply it, so measure the TARGET the browser would hit. */
         small: (()=>{
+          /* THIS USED TO REQUIRE TEXT, and so missed every ICON-ONLY button — which is most
+             of the controls in the app. Opening one screen by hand turned up a 26px x, a
+             25px info button and a 32px close that the whole 154-screen pass had walked
+             past. Icon-only buttons are now included, keyed by class since they have no
+             label. Avatars are excluded: a 36px profile picture is a link to a person, and
+             every list in the app would report one. */
           const out=[];
           scope.querySelectorAll('button,[role=button],a[onclick]').forEach(el=>{
-            const t=(el.innerText||'').trim(); if(!t||t.length>26) return;
+            const t=(el.innerText||'').trim(); if(t.length>26) return;
+            const cls=String(el.className||'');
+            if(/user-avatar|post-av|-ava\b|avatar/.test(cls)) return;
             const b=el.getBoundingClientRect();
             if(b.width<4||b.height<4||b.top>innerHeight||b.bottom<0) return;
             const be=getComputedStyle(el,'::before');
@@ -209,7 +221,7 @@ const THEME=process.argv[4]||'black';
               const ins=['top','bottom','left','right'].map(k=>parseFloat(be[k])||0);
               h+= -(ins[0])-(ins[1]); w+= -(ins[2])-(ins[3]);
             }
-            if(h<44-0.5 && w<44-0.5) out.push(t+' ['+Math.round(w)+'x'+Math.round(h)+']');
+            if(h<44-0.5 && w<44-0.5) out.push((t||('.'+cls.split(' ')[0]))+' ['+Math.round(w)+'x'+Math.round(h)+']');
           });
           return [...new Set(out)].slice(0,6);
         })(),

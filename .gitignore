@@ -8,3 +8,4 @@ data/
 scratchpad/node_modules
 scratchpad/**/out/
 scratchpad/out/
+scratchpad/destinations.json
