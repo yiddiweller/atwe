@@ -107,8 +107,21 @@ stories at the time) is untouched and keeps serving through `/api/media`. The co
 that tab are the honest measure of whether it is working: they should hold steady rather
 than climb.
 
-What still sits outside the code: Railway database backups, a Play developer account, and
-upgrading the Apple enrollment Individual → Organization before a public App Store launch.
+**RAILWAY DATABASE BACKUPS ARE ON (confirmed by the founder, 9 Sep 2026)** — a daily and a
+weekly snapshot, kept for a month, on the Postgres service. **This entry used to list them
+as outstanding and that was simply STALE**: nothing here had ever been updated when they
+were switched on, and the founder had to correct it. Note the shape of the mistake, since
+it is the third time this file has carried it (TURN, email, this): an item on a "still to
+do" list is only evidence that nobody updated the list.
+
+Two honest limits worth keeping in mind rather than acting on today. **A backup nobody has
+restored is a hypothesis, not a safety net** — the same lesson the storage and mail tests
+taught: holding the settings is not the same as the thing working. And the snapshots live
+inside the same Railway account as the database, so they survive a bad deploy or a dropped
+table, not the loss of the account itself.
+
+What still sits outside the code: a Play developer account, and upgrading the Apple
+enrollment Individual → Organization before a public App Store launch.
 
 **Tone with this owner:** they are non-technical and test on a real iPhone.
 Explain plainly, never oversell, always volunteer the limitation or the bug
