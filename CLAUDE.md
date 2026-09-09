@@ -72,6 +72,13 @@ that point the patch means something. Only a trailing `.0` is trimmed, which is 
 reads `26.8 Beta`. Nothing in the code has to change for a point release — edit
 `expo.version` in `app.json`, keep `package.json` identical, and the label follows.
 
+**WHERE THE VERSION IS SEEN — the owner asked this directly, so it is written down.** The
+same number appears in TWO places and nowhere else: **inside the app** (Settings → About)
+and **on the App Store / Google Play download page**. On the stores it is in the DETAILS,
+not beside the Install button — Apple puts it under "Version History" and in the What's New
+notes, Google under "About this app". That is where every app's version lives; it is normal
+and it is not a problem to solve.
+
 **The store BUILD number is a DIFFERENT FIELD and is not ours to pick — it never touches
 the version.** Apple and Google keep two separate values: the VERSION people see (ours,
 exactly as written) and a BUILD NUMBER that must strictly increase on every upload. EAS
@@ -173,10 +180,13 @@ from them; "go" is the whole instruction.
   `tools/features.js add` in the same commit that ships it**, so the two numbers are always
   the truth rather than a periodic reconciliation. The list is meant to GROW as well as
   shrink.
-- As of the last count: **561 built · 7 to do** — and 6 of the 7 are the native
-  iOS/Android app (`atwe-mobile/`, its own track with its own resume protocol above),
-  the 7th being the Atwe Card launch, which is blocked on a card-issuing partner and
-  KYC rather than on code. **The web platform's feature list is finished.**
+- **The shape of what is left, which does NOT go stale — the numbers, which do, come from
+  `node tools/features.js` and from nowhere else.** All but one of the to-dos are the native
+  iOS/Android app (`atwe-mobile/`, its own track with its own resume protocol above); the
+  last is the Atwe Card launch, blocked on a card-issuing partner and KYC rather than on
+  code. **The web platform's feature list is finished.** This line used to carry a hardcoded
+  tally and went stale within two builds of being written — for the second time. Do not put
+  one back.
 
 **The working agreement (follow it exactly):**
 1. **Existence-check FIRST, always.** Grep the codebase for each candidate before
@@ -286,7 +296,10 @@ their order is right.
 > a desktop version. When that's done we are all done and we will launch it publicly
 > officially and we will begin bugs and problems we have from real users."*
 
-**So the build sequence is: web → iPhone (0.19 first, then the rest) → Android → desktop.**
+**So the build sequence is: web → iPhone (get the built-and-waiting version onto their
+phone first, then the rest) → Android → desktop.** NB their quote says "0.19" because that
+was the version number at the time; the year-style scheme renamed the same tree **26.8
+Beta**. It is one thing, not two.
 **The web app is the number-one goal and the only thing to work on until they say
 otherwise.** Do not drift onto the phone app, and do not start anything on the "honest
 limits" list below without asking.
@@ -319,9 +332,10 @@ been lived in — which is the opposite of the mistake that was feared. It is a 
 than the objection assumed.
 
 **"FINISH THE WEB APP" STILL HAS NO FEATURE FINISH LINE, and that is now a scheduling
-question rather than a philosophical one.** Counted: 561 built, 7 to do — and 6 of the 7
-are the phone app, the 7th (Atwe Card) blocked on a card-issuing partner rather than on
-code. So there is no list of web features to burn down; what remains is **refinement**,
+question rather than a philosophical one.** Count it with `node tools/features.js`; the
+shape is that all but one of the to-dos are the phone app, and the last (Atwe Card) is
+blocked on a card-issuing partner rather than on code. So there is no list of web features
+to burn down; what remains is **refinement**,
 which never ends on its own. With a public release at the start of 2027, step 1 needs a
 DEFINITION — a fixed list, or a date — or it eats the runway that the phone, Android and
 desktop all have to fit into. The agreed approach: **do one honest full pass over the whole
@@ -338,7 +352,7 @@ ungated thing first and the expensive, slow, reviewed thing last.
 
 | step | real state |
 |---|---|
-| **1. Web app** | **The feature list is FINISHED.** 561 built · 7 to do, and **6 of the 7 are the phone app**. The 7th (Atwe Card) is blocked on a card-issuing partner and KYC, not on code. |
+| **1. Web app** | **The feature list is FINISHED** (`node tools/features.js` for the two live numbers — never quote one from here). All but one of the remaining to-dos are the phone app; the last, Atwe Card, is blocked on a card-issuing partner and KYC, not on code. |
 | **2. iPhone app** | `atwe-mobile/` is at **26.8 Beta**; the founder's phone still runs **0.13**. Six rounds of finished work have never run on a real device. PAUSED on EAS build credits, not on code — see the resume protocol above. Apple enrollment is APPROVED (Team `TH3FQ8FMKB`). |
 | **3. Android** | **Not a fourth build.** `atwe-mobile/` is Expo/React Native, so iOS and Android are ONE codebase — Android is a build target, not a rebuild. What is genuinely missing is the **Play developer account** (a one-off $25 and an identity check). |
 | **4. Mac / Windows desktop** | **Largely already exists.** Atwe is an installable PWA — on a Mac or a PC, Chrome/Edge's "Install" puts it in the dock or taskbar with its own icon and window, no browser chrome. A real native wrapper (Electron/Tauri) buys very little beyond that and is correctly last. |
@@ -364,7 +378,7 @@ all four:**
    than at the end. The **Play developer account** (a one-off fee plus its own identity
    check) is the same shape of task and is still to start. Neither costs a line of code and
    both sit on the critical path of a public launch.
-4. **Do not treat the phone app as one block.** Getting 0.19.0 onto their phone is a
+4. **Do not treat the phone app as one block.** Getting 26.8 onto their phone is a
    different job from finishing the six remaining app features, and it comes first — six
    rounds of work that nobody has seen on a device is six rounds of unverified work.
 
