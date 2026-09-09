@@ -2,6 +2,40 @@
 
 Guidance for AI assistants (and humans) working in this repository.
 
+## 📍 WHERE WE ARE, AND WHERE WE ARE GOING — read this first
+
+The owner asked for one place that answers two questions at any moment: **where are we up
+to, and what is the goal.** This is it. Everything below is detail.
+
+**THE GOAL — a massive marketing campaign at the BEGINNING OF 2028**, launching what will
+by then be a finished product that already has real users on it. Everything before that
+date exists to make that campaign land on something solid.
+
+**THE ROUTE THERE:**
+
+| when | what |
+|---|---|
+| **now → end of 2026** | **finish the web app.** The only thing being worked on. Real people may use it meanwhile — that is fine and wanted. |
+| **beginning of 2027** | **official public release** |
+| **through 2027** | iPhone (0.19 onto a real device first, then the rest) → Android → desktop. AND the shakedown year: real members find what no test here can. |
+| **beginning of 2028** | product **fully complete**, real users already on it |
+| **beginning of 2028** | **the campaign** — full brand and marketing push, treated as a new company brand even though it will have been live for a year |
+
+**WHERE WE ARE RIGHT NOW:** step 1. The web app.
+**Progress: 561 features built · 7 to do** — and 6 of those 7 are the phone app, the 7th
+(Atwe Card) waiting on a card-issuing partner rather than on code. **Count it, never quote
+it** (the one-liner is in the feature-campaign section below), and **report those two
+numbers only** — built and to-do. The owner does not want to hear about deliberately
+skipped items again.
+
+**THE ONE THING TO KEEP HONEST ABOUT STEP 1:** the web's FEATURE list is finished, so
+"finish the web app" cannot mean burning down a checklist — what is left is refinement,
+which never ends by itself. It needs a definition, and the agreed one is: **one honest full
+pass over the whole site, written up as a real list; "finished" means that list is at
+zero.** With a public release at the start of 2027, this is a scheduling matter, not a
+philosophical one — an undefined step 1 eats the runway the phone, Android and desktop all
+have to fit into.
+
 ## 📱 iOS / mobile app — resume protocol ("continue with the app")
 
 A **native iOS app** (Expo + TypeScript, currently Expo **SDK 54**) lives in
@@ -43,19 +77,27 @@ from them; "go" is the whole instruction.
 **Where the state lives (all in the repo — no session memory required):**
 - `features-data.js` — THE source of truth for what is built. Every item has a
   `phase`: `inv` (live in the app) · `admin_have` (live in the dashboard) ·
-  `roadmap` / `admin_idea` (still to build) · `excluded` (deliberately skipped).
+  `roadmap` / `admin_idea` (still to build) · `excluded` (a decision already taken — kept
+  as the record of it, NEVER reported; see the two-numbers rule below).
 - The owner sees this as the **Features** tab in the admin dashboard.
 - `git log` — every batch is one commit whose message says what was built, what
   was found already built, and what bugs were caught.
 - **Never quote a progress number from this file — count it from `features-data.js`,
   which is the only place that is current.** A hardcoded tally here went stale by
-  ~90 items and was repeated to the owner as fact. To get the real state:
-  `node -e "const l=require('./features-data.js');const c={};for(const f of l)c[f.phase]=(c[f.phase]||0)+1;console.log(c)"`
-- As of the last count: **561 built · 4 deliberately skipped · 7 to build** — and 6
-  of those 7 are the native iOS/Android app (`atwe-mobile/`, its own track with its
-  own resume protocol above), the 7th being the Atwe Card launch, which is blocked on
-  a card-issuing partner and KYC rather than on code. **The web platform's feature
-  list is finished.**
+  ~90 items and was repeated to the owner as fact.
+- **REPORT EXACTLY TWO NUMBERS: how many are BUILT and how many are STILL TO DO.**
+  Nothing else. The owner asked for this directly (9 Sep 2026): *"You can remove
+  entirely this for features we skipped. You don't need to tell me every time we
+  skipped this. You can just tell me how many features we have and how many features
+  we still need to do, that's it."* The deliberately-skipped items STAY in
+  `features-data.js` — they are the record of decisions already taken, and deleting
+  them would lose that — they are simply never mentioned again. One line gives the
+  two numbers:
+  `node -e "const l=require('./features-data.js');const b=l.filter(f=>f.phase==='inv'||f.phase==='admin_have').length,t=l.filter(f=>f.phase==='roadmap'||f.phase==='admin_idea').length;console.log(b+' built · '+t+' to do')"`
+- As of the last count: **561 built · 7 to do** — and 6 of the 7 are the native
+  iOS/Android app (`atwe-mobile/`, its own track with its own resume protocol above),
+  the 7th being the Atwe Card launch, which is blocked on a card-issuing partner and
+  KYC rather than on code. **The web platform's feature list is finished.**
 
 **The working agreement (follow it exactly):**
 1. **Existence-check FIRST, always.** Grep the codebase for each candidate before
@@ -157,31 +199,39 @@ progress rather than outstanding. Ask how it is going; do not report it as not s
 > a desktop version. When that's done we are all done and we will launch it publicly
 > officially and we will begin bugs and problems we have from real users."*
 
-**So the sequence is: web → iPhone (0.19 first, then the rest) → Android → desktop →
-PUBLIC LAUNCH → live bug-fixing from real members.** The last two steps are new; everything
-before them is unchanged from their earlier statement (*"finish the actual Web App and then
-we will finish the iOS iPhone app and then we will continue to the play Developer account
-for android. When all of those are done, we will maybe make a desktop version for Mac and
-Windows"*). **The web app is the number-one goal and the only thing to work on until they
-say otherwise. Do not drift onto the phone app, and do not start anything on the list of
-"honest limits" below without asking.**
+**So the build sequence is: web → iPhone (0.19 first, then the rest) → Android → desktop.**
+**The web app is the number-one goal and the only thing to work on until they say
+otherwise.** Do not drift onto the phone app, and do not start anything on the "honest
+limits" list below without asking.
 
-**THE FOUNDER HAS BEEN TOLD, AND AGREED TO BE TOLD AGAIN, THAT "FINISH THE WEB APP" HAS NO
-FEATURE FINISH LINE.** Counted rather than quoted: 561 built, 4 deliberately skipped, 7
-left — and 6 of the 7 are the phone app, the 7th (Atwe Card) blocked on a card-issuing
-partner and KYC rather than on code. So there is no list of web features to burn down;
-what remains is **refinement**, which by nature never ends. That means step 1 needs a
-DEFINITION rather than a checklist — a fixed short list, or a date — or it silently becomes
-forever and every later step waits behind it. Raise this whenever "finish the web app"
-comes up, and offer to write the definition down.
+### THE DATES — the part that makes the whole plan make sense (their own, 9 Sep 2026)
 
-**They also chose to launch LAST rather than first**, after all four platforms. That is a
-deliberate, legitimate choice (one clean launch, one story) and it is theirs. The honest
-cost, which they have been told once and should not be nagged about: **no stranger will
-have used Atwe until everything is built**, and real members find things no amount of
-testing does — this session alone found a signup flow that lied, a whole feature with no
-door, and a test that had never once run. Mention it if the plan is reopened; otherwise
-follow their order.
+| when | what |
+|---|---|
+| **now** | the web is **already usable by real people**, and they are happy for it to be. *"I have no problem that people are using the web app even the iPhone and other apps are not available yet."* Not a secret, just not promoted. |
+| **beginning of 2027** | **official public release** |
+| **through 2027** | every remaining version and app ships — iPhone, Android, desktop — AND the year runs as a real-world shakedown: *"this year I will be able to fix a lot of stuff we do not recognize."* Real members find what no probe here can. |
+| **beginning of 2028** | app **fully completed**, with a lot of users already on it |
+| **beginning of 2028** | **the massive marketing campaign** — the official major branding push, treated as a NEW company brand even though it will have been in use for nearly a year |
+
+**THIS ANSWERS THE ONE OBJECTION THAT WAS RAISED ABOUT THE PLAN, AND ANSWERS IT WELL — do
+not raise it again.** The worry was "launching last means no stranger uses Atwe until
+everything is built, and real members find what testing does not." That worry was based on
+a misreading. They are NOT launching last: the web is live to real people now, the official
+release is a year before the marketing, and 2027 is deliberately set aside as the year real
+usage teaches them what is wrong. The big campaign is fired at a product that has already
+been lived in — which is the opposite of the mistake that was feared. It is a better plan
+than the objection assumed.
+
+**"FINISH THE WEB APP" STILL HAS NO FEATURE FINISH LINE, and that is now a scheduling
+question rather than a philosophical one.** Counted: 561 built, 7 to do — and 6 of the 7
+are the phone app, the 7th (Atwe Card) blocked on a card-issuing partner rather than on
+code. So there is no list of web features to burn down; what remains is **refinement**,
+which never ends on its own. With a public release at the start of 2027, step 1 needs a
+DEFINITION — a fixed list, or a date — or it eats the runway that the phone, Android and
+desktop all have to fit into. The agreed approach: **do one honest full pass over the whole
+site and turn it into a real list**, then "the web app is finished" means that list is at
+zero.
 
 **It is the right order**, and the reason is worth keeping: each step reaches more people
 than the last but costs more to ship. The web has no gatekeeper — it goes live the moment
@@ -193,7 +243,7 @@ ungated thing first and the expensive, slow, reviewed thing last.
 
 | step | real state |
 |---|---|
-| **1. Web app** | **The feature list is FINISHED.** 561 built · 4 deliberately skipped · 7 left, and **6 of the 7 are the phone app**. The 7th (Atwe Card) is blocked on a card-issuing partner and KYC, not on code. |
+| **1. Web app** | **The feature list is FINISHED.** 561 built · 7 to do, and **6 of the 7 are the phone app**. The 7th (Atwe Card) is blocked on a card-issuing partner and KYC, not on code. |
 | **2. iPhone app** | `atwe-mobile/` is at **0.19.0**; the founder's phone still runs **0.13**. Six rounds of finished work have never run on a real device. PAUSED on EAS build credits, not on code — see the resume protocol above. Apple enrollment is APPROVED (Team `TH3FQ8FMKB`). |
 | **3. Android** | **Not a fourth build.** `atwe-mobile/` is Expo/React Native, so iOS and Android are ONE codebase — Android is a build target, not a rebuild. What is genuinely missing is the **Play developer account** (a one-off $25 and an identity check). |
 | **4. Mac / Windows desktop** | **Largely already exists.** Atwe is an installable PWA — on a Mac or a PC, Chrome/Edge's "Install" puts it in the dock or taskbar with its own icon and window, no browser chrome. A real native wrapper (Electron/Tauri) buys very little beyond that and is correctly last. |
