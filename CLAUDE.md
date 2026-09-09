@@ -101,6 +101,23 @@ get through restrictive mobile networks — the exact case the free public fallb
 fail. **Do not tell the owner calls need a relay; they bought one.** This file said
 otherwise for several sessions after it was true.
 
+**EMAIL IS CONFIGURED AND VERIFIED LIVE (9 Sep 2026)** — the founder created a real
+account on atwe.com and the 6-digit code arrived. That is the strongest evidence there is
+for this flow, stronger than any probe here: it is the whole journey a stranger takes.
+**Do NOT tell the owner nobody can create an account.** The audit note above and the
+`reportSetupGaps` warning both describe the NO-MAIL case, which is correct as written and
+does not describe their deployment. This file made exactly this mistake with TURN for
+several sessions.
+
+**OBJECT STORAGE IS LIVE AND VERIFIED (9 Sep 2026)** — Cloudflare R2, bucket `atwe-media`,
+served from the custom domain `media.atwe.com`, CORS in place, least-privilege token. The
+admin Storage tab's **Test it** passes all three steps (write, read back over the public
+address, delete). New photos and video go to the bucket from now on; **nothing was
+migrated**, so the ~255MB already in Postgres (21 posts, 127 messages, 5 listings, 6
+stories at the time) is untouched and keeps serving through `/api/media`. The counts on
+that tab are the honest measure of whether it is working: they should hold steady rather
+than climb.
+
 What still sits outside the code: Railway database backups, a Play developer account, and
 upgrading the Apple enrollment Individual → Organization before a public App Store launch.
 
