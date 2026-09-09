@@ -2008,6 +2008,43 @@ app.get('/api/admin/setup', auth.requireAdmin, (_req, res) => {
   res.json({ groups, total: all.length, connected: all.filter((i) => i.on).length });
 });
 
+/* SETUP SAYS "connected". THIS SAYS "IT ACTUALLY DELIVERS", and they are not the
+   same claim. `mailer.isConfigured()` only reports that SMTP_HOST / USER / PASS are
+   present — a wrong password, a port the host blocks, or a From address the provider
+   refuses to send on behalf of all read as a green light and then fail at the exact
+   moment a stranger tries to join. Same lesson the object store taught: verifying you
+   hold the settings proves nothing about whether the service will answer. So this
+   sends ONE real email to the signed-in admin and reports what the provider said,
+   verbatim, rather than a shrug. */
+app.post('/api/admin/mail-test', auth.requireAdmin, async (req, res) => {
+  if (!mailer.isConfigured()) {
+    return res.json({ ok: false, reason: 'Email is not set up — no SMTP details are configured, so nothing was sent.' });
+  }
+  const to = req.user && req.user.email;
+  if (!to) return res.json({ ok: false, reason: 'This admin account has no email address on it.' });
+  try {
+    const r = await mailer.sendMail({
+      to,
+      subject: 'Atwe email test',
+      text: 'This is a test from the Atwe admin dashboard. If you are reading it, sending works.',
+      html: mailer.brand({
+        preheader: 'Your email settings work.',
+        heading: 'Email works',
+        intro: 'This was sent from the Atwe admin dashboard. Receiving it proves the real thing: sign-up codes, password resets and order emails can leave the building.',
+      }),
+    });
+    if (!r || !r.delivered) {
+      return res.json({ ok: false, reason: 'The message was written to the server log instead of being sent — email is not configured on this deployment.' });
+    }
+    res.json({ ok: true, to });
+  } catch (e) {
+    // Keep WHY. "Could not send" sends somebody rotating credentials that were fine;
+    // the provider's own words name the port, the auth failure or the refused sender.
+    const why = String((e && e.message) || e).replace(/\s+/g, ' ').trim().slice(0, 300);
+    res.json({ ok: false, reason: why || 'The provider refused the message and gave no reason.' });
+  }
+});
+
 app.get('/api/admin/site', auth.requireAdmin, async (_req, res) => {
   await loadSiteLock();
   if (!_siteLock.code) { _siteLock.code = genCode(_siteLock.codeLength); }

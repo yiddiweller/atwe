@@ -604,6 +604,18 @@ and nothing in the logs ever said so, while SMTP, Stripe, push and storage all
 announced themselves. Purely informational; nothing is blocked, and the banner is
 wrapped so it can never take the server down.
 
+**"Connected" and "it delivers" are two different claims — `POST /api/admin/mail-test`.**
+The Setup page reads `mailer.isConfigured()`, which only asks whether SMTP_HOST / USER /
+PASS exist. A wrong password, a port the host blocks, or a From address the provider will
+not send on behalf of all show a green light and then fail at the exact moment a stranger
+tries to join — and signup is the one flow that cannot be tested any other way without
+making a real account. The route sends ONE real email to the signed-in admin and returns
+the provider's own error text on failure (a **Send a test email** button on the Setup tab,
+next to the Email row, shown only when it reports connected). Same shape and same lesson as
+the storage self-test: holding the settings proves nothing about whether the service
+answers. The result line also says to check spam — arriving in spam is its own failure and
+better learned here than from a member who never got their code.
+
 ### Graceful degradation (important pattern)
 
 Every external dependency is **optional and degrades cleanly** — the server

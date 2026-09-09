@@ -2322,6 +2322,7 @@ async function renderSetupView(){
         <span class="pill ${it.on ? 'pro' : ''}" style="margin-inline-start:auto;">${it.on ? 'connected' : 'not set up'}</span>
       </div>
       <div class="srs" style="margin-top:6px;">${esc(it.gives)}</div>
+      ${it.key === 'email' && it.on ? `<div style="margin-top:10px;"><button class="btn" onclick="testMail()">Send a test email</button><div id="mailTest"></div></div>` : ''}
       ${it.on ? '' : `<div class="srs" style="margin-top:4px;color:var(--amber);">Without it: ${esc(it.without)}</div>
         <div class="srs" style="margin-top:4px;">Where to get it: ${esc(it.where)}</div>
         <div class="srs" style="margin-top:4px;opacity:.75;">Railway variable${it.env.length > 1 ? 's' : ''}: <code>${it.env.map(esc).join('</code>, <code>')}</code></div>`}
@@ -2335,6 +2336,19 @@ async function renderSetupView(){
       </div>
     </div>
     ${d.groups.map(g => `<div class="panel"><h3>${esc(g.group)}</h3>${g.items.map(card).join('')}</div>`).join('')}`;
+}
+/* "connected" only means the settings are present. This is the only thing that
+   proves a stranger can actually receive the code that creates their account. */
+async function testMail(){
+  const el = document.getElementById('mailTest');
+  if (!el) return;
+  el.innerHTML = '<div class="srs" style="margin-top:8px;">Sending one email to your own address…</div>';
+  try {
+    const r = await api('POST', '/api/admin/mail-test', {});
+    el.innerHTML = r.ok
+      ? `<div class="srs" style="margin-top:8px;"><b>Sent.</b> Check <code>${esc(r.to||'')}</code>. If it arrives, sign-up codes and password resets can reach real people. Look in spam too — landing there is its own problem, and worth knowing about now rather than from a member who never got their code.</div>`
+      : `<div class="srs" style="margin-top:8px;color:var(--amber);"><b>It did not send.</b> ${esc(r.reason||'')}</div>`;
+  } catch(e){ el.innerHTML = '<div class="srs" style="margin-top:8px;">The test could not run.</div>'; }
 }
 async function renderSiteView(){
   document.getElementById('stats').innerHTML = '';
