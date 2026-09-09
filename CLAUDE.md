@@ -9349,7 +9349,19 @@ owner their database is already clean at the exact moment we failed to look.
 ### Object storage (`storage.js`) — `CDN_URL` is REQUIRED on R2, not cosmetic
 
 New media can go to an S3-compatible bucket instead of the database (optional, degrades
-like every other integration here). The trap: **what goes into the post is the address
+like every other integration here).
+
+**The bucket needs a CORS policy, and both things that need it fail SILENTLY.** A
+browser will not let `atwe.com` talk to `media.atwe.com` unless the bucket says so,
+and two features do exactly that: the **direct-to-bucket upload** (`presignPut` ->
+`server.js` `/api/media/sign` -> `xhr.open('PUT', sign.uploadUrl)` in `index.html`,
+which is the whole reason the file ceiling goes from 16MB to hours of video) and
+**Postshot**, whose `_psImg` sets `crossOrigin='anonymous'` on any non-`data:` URL
+so the canvas is not tainted — with no CORS header the load fires `onerror`, the
+promise resolves `null`, and the shareable picture renders **without the photo**.
+Neither logs anything. `AllowedMethods` must carry **GET and PUT**, and `ETag`
+must be in `ExposeHeaders`. R2 applies one bucket policy to both the S3 API host
+and the custom domain, so a single policy covers upload and read. The trap: **what goes into the post is the address
 `publicUrl()` returns, and `mediaRef` passes any non-`data:` value straight to the
 browser** (`server.js:2988`) — so that address must be one a member's phone can actually
 fetch. With no `CDN_URL` on R2 it falls back to the **S3 API endpoint**

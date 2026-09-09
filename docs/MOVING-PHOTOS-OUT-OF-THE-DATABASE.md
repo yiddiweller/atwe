@@ -77,29 +77,77 @@ That last row is a real speed gain for anyone far away from the server.
 2. Name it **`atwe-media`**.
 3. Leave every other setting alone. Create it.
 
-## Step 3 — Let the world read it
+## Step 3 — Give it your own address
 
 This step is **not optional**, and it is the one that is easy to skip. Atwe puts
-the bucket's own address into the post, and the member's phone fetches it
-directly. If the bucket is private, the upload succeeds and the photo shows as a
-broken image. So:
+the bucket's address into the post, and the member's phone fetches it directly.
+If the bucket is private, the upload succeeds and the photo shows as a broken
+image — the worst kind of failure, because it looks like it is working.
 
-1. Open the `atwe-media` bucket → **Settings**.
-2. Find the **Public Development URL** section and click **Enable**.
-   (Cloudflare used to call this "Public access → R2.dev subdomain" — same thing,
-   and it may well be renamed again. It is the one that hands you a `pub-…r2.dev`
-   address. **Custom Domains** on the same page is the optional nicety in the last
-   section of this guide, not this step.)
-3. It will ask you to type `allow` to confirm. Do that.
-4. It then shows a **public address** that looks like
-   `https://pub-xxxxxxxxxxxx.r2.dev`. **Copy it** — you need it in step 5.
+Cloudflare offers two ways to make the files readable, and **only one of them is
+right for a live app**:
+
+| | `pub-….r2.dev` | a custom domain |
+|---|---|---|
+| Cloudflare's own words | *"rate-limited and not recommended for production"* | *"recommended for production use"* |
+| Caching | **unavailable** | yes — faster, and fewer billable reads |
+| Whose address is it | Cloudflare's | **yours** |
+
+Use the custom domain. Every large platform serves photos from its own name —
+`pbs.twimg.com`, `scontent.cdninstagram.com` — for exactly these reasons.
+
+**And there is one more reason it has to be decided now rather than later: the
+address is written into each post, permanently.** Start on `pub-….r2.dev` and
+switch six months later, and every photo posted in between still points at the
+old address until somebody rewrites them all in the database.
+
+1. Open the `atwe-media` bucket → **Settings** → **Custom Domains** → **Add**.
+2. Enter `media.atwe.com`.
+3. Because `atwe.com` is already on Cloudflare, it sets up the DNS itself —
+   accept what it offers. It goes green in a minute or two.
+4. **Copy the address** (`https://media.atwe.com`) — you need it in step 6.
 
 > This makes the *files* readable by anyone who has the link, which is what a
 > photo in a post needs to be. It does **not** let anyone list what is in the
-> bucket, and it does not let anyone upload. Only the keys in the next step can
-> write.
+> bucket, and it does not let anyone upload. Only the keys in step 5 can write.
 
-## Step 4 — Get the keys
+> **No domain on Cloudflare?** Then the `pub-….r2.dev` address is the fallback:
+> Settings → **Public Development URL** → **Enable** → type `allow`. It works,
+> and it is rate-limited, so treat it as temporary and read the paragraph above
+> about the address being baked into every post.
+
+## Step 4 — Let the app talk to it
+
+A browser refuses to let one website read another's files unless that other site
+says it is allowed. Two things in Atwe depend on it, and both fail **silently**
+without this — no error, just a missing picture:
+
+- **Long videos and big files**, which the browser sends straight to the bucket
+  rather than through the server (that is what lifts the ceiling to 3 hours).
+- **Postshot**, which paints a post onto a canvas to make a shareable picture.
+
+1. On the bucket's **Settings** page, find **CORS Policy** → **Add**.
+2. Paste this exactly:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://atwe.com", "https://www.atwe.com"],
+    "AllowedMethods": ["GET", "PUT"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+3. Save.
+
+> This names the only websites allowed to talk to the bucket from a browser.
+> It is not what makes the photos readable — step 3 did that. Add a line to
+> `AllowedOrigins` if Atwe ever answers on another address.
+
+## Step 5 — Get the keys
 
 1. Go back to the main **R2 Object Storage** page. On the right, under **Account
    Details**, click **Manage API Tokens**.
@@ -123,11 +171,12 @@ broken image. So:
 > Paste them only into Railway, never into a chat, an email or a document.
 
 > **Two addresses, and they are not interchangeable.** The `r2.cloudflarestorage.com`
-> endpoint is the private one Atwe writes through. The `pub-….r2.dev` address from
-> step 3 is the public one members read from. Both are needed, and putting one where
-> the other belongs is the single most likely way for this to go wrong.
+> endpoint is the private one Atwe writes through — it only answers requests signed
+> with the keys above. `media.atwe.com` from step 3 is the public one members read
+> from. Both are needed, and putting one where the other belongs is the single most
+> likely way for this to go wrong.
 
-## Step 5 — Tell Atwe about it
+## Step 6 — Tell Atwe about it
 
 1. Open **railway.com** → the **Atwe** project → the **atwe** service (not Postgres).
 2. Open the **Variables** tab.
@@ -135,16 +184,16 @@ broken image. So:
 
 ```
 S3_BUCKET      = atwe-media
-S3_ACCESS_KEY  = (the Access Key ID from step 4)
-S3_SECRET_KEY  = (the Secret Access Key from step 4)
-S3_ENDPOINT    = (the endpoint from step 4)
+S3_ACCESS_KEY  = (the Access Key ID from step 5)
+S3_SECRET_KEY  = (the Secret Access Key from step 5)
+S3_ENDPOINT    = (the endpoint from step 5)
 S3_REGION      = auto
-CDN_URL        = (the public pub-….r2.dev address from step 3)
+CDN_URL        = https://media.atwe.com   (the address from step 3)
 ```
 
 4. Railway will redeploy on its own. Give it a minute or two.
 
-## Step 6 — Prove it works before trusting it
+## Step 7 — Prove it works before trusting it
 
 1. Open **admin.atwe.com** and sign in.
 2. Go to the **Storage** tab in the left-hand menu.
@@ -155,7 +204,8 @@ There are three possible answers:
 
 - **It works** — everything is right. Nothing else to do.
 - **Photos would be broken** — the keys are right and the file went up, but it
-  could not be read back. That means step 3 or `CDN_URL` is wrong. New photos
+  could not be read back. That means step 3 or `CDN_URL` is wrong (or the custom
+  domain has not gone green yet — give it a minute and press it again). New photos
   would upload and then show as broken images, so this must be fixed before
   relying on it.
 - **It did not work** — the keys, the bucket name or the endpoint are wrong.
@@ -165,12 +215,12 @@ in the database exactly as before, and we fix the settings.
 
 ---
 
-## Optional, later: your own address
+## What is genuinely optional
 
-Photos will be served from a long `pub-….r2.dev` address. If you would rather
-they came from `media.atwe.com`, that is a **Custom domain** on the bucket in
-Cloudflare, and then `CDN_URL` changes to that instead. Purely cosmetic — it can
-wait, and it changes nothing about how any of the above works.
+Nothing above. Every step is needed for a live app.
+
+The one thing you can leave alone is the **default `pub-….r2.dev` address** — if
+you did step 3 with a custom domain, you never need to turn that on at all.
 
 ---
 
@@ -183,4 +233,4 @@ for long videos, and the self-test button were all checked, and every signature
 matched byte for byte. See `scratchpad/storagesign.js`.
 
 What has *not* been tested is a real Cloudflare account, because that needs your
-credentials. That is what step 5 is for.
+credentials. That is what step 7 is for.
