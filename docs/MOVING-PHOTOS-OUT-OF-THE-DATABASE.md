@@ -85,7 +85,11 @@ directly. If the bucket is private, the upload succeeds and the photo shows as a
 broken image. So:
 
 1. Open the `atwe-media` bucket → **Settings**.
-2. Find **Public access** → **R2.dev subdomain** → **Allow access**.
+2. Find the **Public Development URL** section and click **Enable**.
+   (Cloudflare used to call this "Public access → R2.dev subdomain" — same thing,
+   and it may well be renamed again. It is the one that hands you a `pub-…r2.dev`
+   address. **Custom Domains** on the same page is the optional nicety in the last
+   section of this guide, not this step.)
 3. It will ask you to type `allow` to confirm. Do that.
 4. It then shows a **public address** that looks like
    `https://pub-xxxxxxxxxxxx.r2.dev`. **Copy it** — you need it in step 5.
@@ -97,7 +101,8 @@ broken image. So:
 
 ## Step 4 — Get the keys
 
-1. On the R2 page find **Manage R2 API Tokens** (usually top right).
+1. Go back to the main **R2 Object Storage** page. On the right, under **Account
+   Details**, click **Manage API Tokens**.
 2. Click **Create API token**.
 3. Permission: **Object Read & Write**.
 4. Scope it to the `atwe-media` bucket.
@@ -105,7 +110,14 @@ broken image. So:
    the secret again:
    - Access Key ID
    - Secret Access Key
-   - the S3 endpoint (looks like `https://<something>.r2.cloudflarestorage.com`)
+   - the S3 endpoint (looks like `https://<a long code>.r2.cloudflarestorage.com`)
+
+> **The endpoint must NOT have the bucket name on the end.** The bucket's own
+> Settings page shows an "S3 API" address ending in `/atwe-media` — that is not
+> what goes in `S3_ENDPOINT`. Atwe adds the bucket name itself, so pasting that
+> longer version asks Cloudflare for `atwe-media/atwe-media/…` and every upload
+> fails. Cut everything from the `/` onwards, so it ends in
+> `.r2.cloudflarestorage.com` and nothing more.
 
 > Keep these private. Anyone holding them can read and write your members' files.
 > Paste them only into Railway, never into a chat, an email or a document.
