@@ -14,8 +14,50 @@
  * the pixels. The menu row and the manage list are covered by the browser pass below it.
  */
 const BASE = process.env.BASE || 'http://localhost:3262';
-const A = process.env.TOK_A, B = process.env.TOK_B, C = process.env.TOK_C;
-const IDA = +process.env.ID_A, IDB = +process.env.ID_B, IDC = +process.env.ID_C;
+let A = process.env.TOK_A, B = process.env.TOK_B, C = process.env.TOK_C;
+let IDA = +process.env.ID_A, IDB = +process.env.ID_B, IDC = +process.env.ID_C;
+
+/* IT SEEDS ITS OWN THREE ACCOUNTS, and that is the whole reason it now runs at all.
+   It used to demand TOK_A/TOK_B/TOK_C + ID_A/ID_B/ID_C from the environment and skip
+   cleanly when they were absent — which they always were, because run-all.sh only ever
+   exports the single shared TOK. So it printed "skipped", exited 0, and was counted as a
+   pass for months: the feature it guards (hide my last seen from ONE person, reciprocally,
+   at all three doors presence leaves by) had no working coverage at all.
+   A skip that nobody can turn into a run is not a test — it is a note.
+   The env vars still win if they are set, so an existing three-account setup is unchanged. */
+async function seedThree() {
+  const crypto = require('crypto');
+  const { Pool } = require('/home/user/atwe/node_modules/pg');
+  const auth = require('/home/user/atwe/auth');
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL
+    || 'postgres://atwe:atwe@localhost:5432/atwescore' });
+  const hash = await auth.hashPassword('x'.repeat(12));
+  const mk = async (n) => {
+    const email = crypto.randomUUID().slice(0, 8) + '@t.local';
+    const h = 'ls' + crypto.randomUUID().replace(/-/g, '').slice(0, 9);
+    /* users.last_seen must be STAMPED. The presence poll reports exactly that column, so
+       a brand-new account honestly has nothing to show and every baseline check ("to begin
+       with, A can see B's last seen") fails on a perfectly working feature — which is what
+       the first run of this seeder did, 7 red on green code. */
+    const { rows } = await pool.query(`INSERT INTO users
+      (name,email,password_hash,username,email_verified,onboarded,last_seen)
+      VALUES ($4,$1,$2,$3,true,true,now()) RETURNING id`, [email, hash, h, n]);
+    const id = rows[0].id;
+    const tok = auth.signToken({ id, email, is_admin: false });
+    await pool.query(`INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip)
+      VALUES ($1,$2,'lastseen','1.1.1.1')`,
+      [crypto.createHash('sha256').update(tok).digest('hex'), id]);
+    return { id, tok };
+  };
+  const a = await mk('LS A'), b = await mk('LS B'), c = await mk('LS C');
+  /* presence is only reported for people you can plausibly see — give each pair a real
+     DM so the poll has a reason to answer about them at all */
+  for (const [x, y] of [[a, b], [a, c], [b, c]])
+    await pool.query(`INSERT INTO at_messages (sender_id,recipient_id,body) VALUES ($1,$2,'hi'),($2,$1,'hi')`,
+      [x.id, y.id]);
+  await pool.end();
+  return { a, b, c };
+}
 
 let bad = 0;
 const say = (ok, m) => { if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : '✗   '} ${m}`); };
@@ -35,11 +77,18 @@ const sees = async (tok, id) => {
 };
 
 (async () => {
-  /* Needs THREE accounts, so it skips cleanly rather than failing the suite when only the
-     usual single TOK is exported — the same way npm test no-ops without a database. */
   if (!A || !B || !C) {
-    console.log('  skipped — needs three accounts: export TOK_A/TOK_B/TOK_C and ID_A/ID_B/ID_C');
-    process.exit(0);
+    try {
+      const s = await seedThree();
+      A = s.a.tok; B = s.b.tok; C = s.c.tok;
+      IDA = s.a.id; IDB = s.b.id; IDC = s.c.id;
+      console.log('  (seeded three accounts of its own: ' + IDA + ' / ' + IDB + ' / ' + IDC + ')');
+    } catch (e) {
+      /* no database reachable — skip rather than fail, the way npm test no-ops. This is
+         now the ONLY reason it can skip, and it says which one it is. */
+      console.log('  skipped — no database to seed against (' + String(e.message).slice(0, 80) + ')');
+      process.exit(0);
+    }
   }
   await req(A, 'DELETE', '/api/atchat/presence-hidden/' + IDB);   // start clean
   await req(A, 'DELETE', '/api/atchat/presence-hidden/' + IDC);

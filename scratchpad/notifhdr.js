@@ -65,6 +65,12 @@ const TYPES=['follow','like','reply','mention','connection','endorse','repost','
   const refs=[ref.Beam,ref.Engine].filter(v=>v!=null && v>0);
   const agree = refs.length===2 && Math.abs(refs[0]-refs[1])<=1;
   ok(agree, 'Beam and Engine agree on the title height (else the reference is unusable)', JSON.stringify(ref));
+  /* THIS WAS RED ON PURPOSE FOR EIGHTY-ODD BUILDS AND IS NOW GREEN. The header's top
+     inset was a flat `13px`, which was correct when it was typed in build 1712 (the
+     gutter was 18: 18 - (36-22)/2 + .topbar's own 2 = 13) and silently wrong from build
+     1744, when the gutter moved to 14 and the three worlds followed the formula down to 9
+     while this number stayed put. It is spelled as the same expression now, so a future
+     change to the gutter, the circle size or the lockup height moves all four together. */
   ok(agree && Math.abs(n0.title-refs[0])<=1, 'the Notifications title sits at the same height as Beam / Engine', 'notifs='+n0.title+' vs '+JSON.stringify(ref));
   ok(n0.scrollable>120, 'the list genuinely scrolls (otherwise the retraction cannot be judged)', 'only '+n0.scrollable+'px');
 
@@ -80,17 +86,15 @@ const TYPES=['follow','like','reply','mention','connection','endorse','repost','
     return {before:+before.toFixed(1), after:+after.toFixed(1), nhHide:cls, opacity:op};
   });
   console.log('on scroll: header top '+roll.before+' -> '+roll.after+'  (.nh-hide='+roll.nhHide+', opacity='+roll.opacity+')');
-  /* THE HEADER DELIBERATELY NO LONGER RETRACTS, and these two checks used to assert that
-     it did. Build 1766 froze it on purpose: retracting animates a 58px margin-top, which
-     REFLOWS the whole list under the finger, and that reflow was the choppy Notifications
-     scroll the founder reported. Measured on a 6x-throttled CPU, freezing it took the p95
-     frame from 45ms to 19ms and frames-over-32ms from 5 to 0 — level with the Account
-     page. `notifscroll.js` guards that decision from the other side and fails four of its
-     six checks if the retract comes back, so asserting the opposite here was the two
-     probes contradicting each other. This one went stale unnoticed because it is not in
-     run-all.sh; both facts are fixed together. */
-  ok(!roll.nhHide, 'the header does NOT retract on scroll (frozen in 1766 — the choppy-scroll fix)');
-  ok(Math.abs(roll.after - roll.before) < 2, 'and it stays exactly where it is', roll.before+' -> '+roll.after);
+  /* IT RETRACTS AGAIN — one of the four worlds standing still while the other three roll
+     away is a difference you feel. It was frozen in 1766 because it hid by animating a
+     margin-top from IN FLOW, which reflowed the list under the finger; it is a floating
+     absolute layer since it became glass, so it is one composited transform now and the
+     list never moves. `notifscroll.js` owns the frame-pacing side of that bargain and
+     fails if the cost ever comes back. Here we only care that it MOVES, and the same
+     amount the other three do. The old `.nh-hide` class is not the mechanism any more. */
+  ok(roll.after < roll.before - 10, 'the header retracts on scroll, like Home / Beam / Engine', roll.before+' -> '+roll.after);
+  ok(!roll.nhHide, 'and it is not the old class-driven margin retract', 'nh-hide='+roll.nhHide);
 
   // ── the profile button ──
   await p.evaluate(()=>{const l=document.getElementById('notifList'); l.scrollTop=0; l.dispatchEvent(new Event('scroll'));});
