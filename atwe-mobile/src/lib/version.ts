@@ -19,3 +19,33 @@ export const APP_VERSION: string = appJson.expo.version;
 /** What TestFlight shows beside it. EAS auto-increments the real one, so this
  *  is only the local baseline and is deliberately not shown on its own. */
 export const IOS_BUILD: string | undefined = appJson.expo.ios?.buildNumber;
+
+/**
+ * YEAR-STYLE VERSIONS — the founder's scheme, 9 Sep 2026.
+ *
+ *   26.8 Beta   now, on every real app (iPhone, Android, desktop)
+ *   27.0        beginning of 2027 — all platforms done, official public release, NO "Beta"
+ *   28.0        1 Jan 2028 — Atwe Inc officially begins, with the marketing campaign
+ *
+ * The year leads, the way iOS 26 does, so a version says WHEN rather than how many
+ * releases have happened. **The WEB APP has no version at all** — a website is always
+ * the newest one — only a build number; do not add one back.
+ *
+ * `app.json` carries the store-safe three-part form (`26.8.0`) because npm's own
+ * `version` field must be valid semver and the two files are deliberately kept
+ * identical. What a person SEES is derived from it here rather than typed a second
+ * time — this repo has been bitten more than once by a literal that stopped tracking
+ * what it was derived from.
+ */
+
+/** The word after the number. Empty string from 27.0 onwards — that is the whole
+ *  change when the public release lands; nothing else here moves. */
+export const RELEASE_CHANNEL: string = 'Beta';
+
+/** `26.8.0` -> `26.8`. A trailing `.0` patch is store bookkeeping, not something to
+ *  show; `26.8.1` keeps its patch, because then it means something. */
+const trimPatch = (v: string): string => v.replace(/^(\d+\.\d+)\.0$/, '$1');
+
+/** What the app shows a person: `26.8 Beta`, then `27.0`. */
+export const VERSION_LABEL: string =
+  (trimPatch(APP_VERSION) + (RELEASE_CHANNEL ? ' ' + RELEASE_CHANNEL : '')).trim();

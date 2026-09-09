@@ -23,7 +23,7 @@ import {
 } from '@/api/settings';
 import { api } from '@/api/client';
 import { timeAgo } from '@/lib/format';
-import { APP_VERSION } from '@/lib/version';
+import { VERSION_LABEL } from '@/lib/version';
 
 /**
  * One Settings page. Same header and same cards as the hub, so the tree is one
@@ -228,7 +228,7 @@ function AboutPage() {
   return (
     <>
       <MeGroup>
-        <MeFactRow label="Version" value={APP_VERSION} />
+        <MeFactRow label="Version" value={VERSION_LABEL} />
         <MeFactRow label="iOS" value={String(Platform.Version)} />
         {/* There is no "is glass on?" row any more, and that is deliberate: the
             app's deployment target IS iOS 26, so every glass surface is always

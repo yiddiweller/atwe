@@ -10,9 +10,39 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 > The work is finished and committed; it is stopped on **EAS build credits**, not
 > on code. **CONFIRMED by the founder on expo.dev, 2 Sep 2026** — the builds did
 > not fail on anything in this repo, they never ran for lack of credits. Their
-> phone runs **0.13** and the tree is **0.19.0**, so six rounds of work have
-> never been seen on a device. That section says what to do first, in order, and
+> phone runs **0.13** and the tree is now **26.8 Beta** (was 0.19.0 — see the
+> version scheme below), so six rounds of work have never been seen on a device. That section says what to do first, in order, and
 > names the two decisions of theirs not to reverse.
+
+## 9 Sep 2026 — YEAR-STYLE VERSIONS (the founder's scheme)
+
+The app no longer counts releases; it names the year, the way iOS 26 does. Their
+words: *"instead of having every version a new next number, I would rather put it
+next to the year style."*
+
+| when | version |
+|---|---|
+| **now** | **26.8 Beta** — on every real app: iPhone, Android, and desktop if it happens |
+| **beginning of 2027** | **27.0** — all platforms done, official public release, **no "Beta"** |
+| **1 Jan 2028** | **28.0** — Atwe Inc officially begins, with the marketing campaign |
+
+**The WEB APP has no version at all** — a website is always the newest one, so a
+version tells a member nothing they can act on. Its Settings → About row shows the
+**build number** only (it used to say `1.0.0 · build N`, and that `1.0.0` was a
+hardcoded literal nobody ever chose). Do not add a version back to the web.
+
+**Where it lives:** `app.json` and `package.json` both carry **`26.8.0`** — the
+store-safe three-part form, because npm's own `version` field must be valid semver
+and the two files are deliberately identical. What a person SEES is DERIVED in
+`src/lib/version.ts` rather than typed a second time: `VERSION_LABEL` trims a
+trailing `.0` and appends `RELEASE_CHANNEL`, giving **`26.8 Beta`**. At the 2027
+release, set `RELEASE_CHANNEL = ''` and the label becomes `27.0` on its own — that
+is the whole change.
+
+**The store BUILD number is separate and is not ours to choose.** EAS owns it
+(`eas.json`: `appVersionSource: "remote"`, `autoIncrement: true`), and it must
+strictly increase on every upload. Two uploads of `26.8` with different build
+numbers is normal and correct.
 
 ## 8 Sep 2026 — "I can't create an account" was the PHONE app, not the website
 
@@ -2792,7 +2822,8 @@ themes · 8 browser probes · everything committed and pushed to
 
 ## ⏸ STOPPED HERE — read this first when picking the app back up
 
-**The app on the founder's phone is 0.13. The tree is 0.19.0.** Builds 0.14
+**The app on the founder's phone is 0.13. The tree is 26.8 Beta** (0.19.0 when
+this was written). Builds 0.14
 through 0.19 never reached them, almost certainly because the free EAS build
 credits ran out around then. **Everything from round eighteen onward — the ＋
 removal, the smeared-edge fix, the sidebar, the status-bar band, the 88pt dead

@@ -29,6 +29,38 @@ people are using the web app even the iPhone and other apps are not available ye
 site being live is not the public release; the public release is the moment in 2027 when
 every platform is ready.
 
+**HOW VERSIONS ARE NUMBERED (the founder's own scheme, 9 Sep 2026) — the year leads,
+the way iOS 26 does, so a version says WHEN rather than how many releases there have
+been.** Their words: *"instead of having every version a new next number, I would rather
+put it next to the year style."*
+
+| when | what every real app says |
+|---|---|
+| **now** | **26.8 Beta** — iPhone, Android, and desktop if it happens |
+| **beginning of 2027** | **27.0** — all platforms done, official public release, **the word Beta is dropped** |
+| **1 Jan 2028** | **28.0** — Atwe Inc officially begins, with the marketing campaign |
+
+**THE WEB APP HAS NO VERSION AT ALL, and that is deliberate.** A website is always the
+newest one, so a version number tells a member nothing they can act on. Settings → About
+shows the **build number** only — it used to read `1.0.0 · build N`, and that `1.0.0` was
+a hardcoded literal nobody had ever chosen (and it disagreed with the phone's own number,
+which is exactly how two version fields go wrong). The build stays because it does real
+work: `checkForUpdate()` compares it with `/api/config`'s to offer the Refresh pill, and
+it is how a device says which code it is running. **Do not add a version back to the web.**
+`ATWE_BUILD` and `sw.js`'s `CACHE` still move in lockstep, unchanged.
+
+**Where the app's number lives, and why it is DERIVED:** `atwe-mobile/app.json` and
+`package.json` both carry **`26.8.0`** — the store-safe three-part form, because npm's own
+`version` field must be valid semver and those two files are deliberately identical. What a
+person SEES comes from `src/lib/version.ts`, which trims a trailing `.0` and appends
+`RELEASE_CHANNEL` → **`26.8 Beta`**. At the 2027 release, set `RELEASE_CHANNEL = ''` and the
+label becomes `27.0` on its own; that is the entire change. Typing the label out a second
+time is exactly the drift this file has recorded four times over.
+
+**The store BUILD number is a different thing and is not ours to pick.** EAS owns it
+(`eas.json`: `appVersionSource: "remote"`, `autoIncrement: true`) and it must strictly
+increase on every upload — two uploads of `26.8` with different build numbers is normal.
+
 **THE ADMIN DASHBOARD GETS ITS OWN SHORT PASS, right after the web app** (owner, 9 Sep
 2026): *"once the web app is finished, I would like to go over a little bit to finalize and
 make sure the admin dashboard app is perfect as well… just a small sweep over, make sure
@@ -65,7 +97,8 @@ branch (`claude/claude-md-docs-cajkf9`).
 
 **⏸ As of 2 Sep 2026 the app is PAUSED on EAS build credits, not on code** —
 confirmed by the founder on expo.dev; the builds never ran, nothing here failed.
-The tree is **0.19.0**; the founder's phone still runs **0.13**, so six rounds of
+The tree is **26.8 Beta** (0.19.0 before the year-style scheme below); the founder's
+phone still runs **0.13**, so six rounds of
 finished work have never been seen on a device. `PROJECT-STATUS.md` opens with
 this and its **"STOPPED HERE"** section says what to do first. **Never run an EAS
 build unasked** — `git push origin claude/claude-md-docs-cajkf9:ship --force` is
@@ -287,7 +320,7 @@ ungated thing first and the expensive, slow, reviewed thing last.
 | step | real state |
 |---|---|
 | **1. Web app** | **The feature list is FINISHED.** 561 built · 7 to do, and **6 of the 7 are the phone app**. The 7th (Atwe Card) is blocked on a card-issuing partner and KYC, not on code. |
-| **2. iPhone app** | `atwe-mobile/` is at **0.19.0**; the founder's phone still runs **0.13**. Six rounds of finished work have never run on a real device. PAUSED on EAS build credits, not on code — see the resume protocol above. Apple enrollment is APPROVED (Team `TH3FQ8FMKB`). |
+| **2. iPhone app** | `atwe-mobile/` is at **26.8 Beta**; the founder's phone still runs **0.13**. Six rounds of finished work have never run on a real device. PAUSED on EAS build credits, not on code — see the resume protocol above. Apple enrollment is APPROVED (Team `TH3FQ8FMKB`). |
 | **3. Android** | **Not a fourth build.** `atwe-mobile/` is Expo/React Native, so iOS and Android are ONE codebase — Android is a build target, not a rebuild. What is genuinely missing is the **Play developer account** (a one-off $25 and an identity check). |
 | **4. Mac / Windows desktop** | **Largely already exists.** Atwe is an installable PWA — on a Mac or a PC, Chrome/Edge's "Install" puts it in the dock or taskbar with its own icon and window, no browser chrome. A real native wrapper (Electron/Tauri) buys very little beyond that and is correctly last. |
 
