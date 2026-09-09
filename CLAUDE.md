@@ -134,6 +134,48 @@ table, not the loss of the account itself.
 What still sits outside the code: a Play developer account, and upgrading the Apple
 enrollment Individual → Organization before a public App Store launch.
 
+## 🧭 THE PLATFORM ROADMAP — the founder's own order, and where we actually stand
+
+**Their plan, in their words (9 Sep 2026):** *"finish the actual Web App and then we will
+finish the iOS iPhone app and then we will continue to the play Developer account for
+android. When all of those are done, we will maybe make a desktop version for Mac and
+Windows."*
+
+**It is the right order**, and the reason is worth keeping: each step reaches more people
+than the last but costs more to ship. The web has no gatekeeper — it goes live the moment
+it is pushed. An App Store release is reviewed. Play is a second review plus its own
+account. A desktop build is the most work for the fewest new people. Do the cheap, fast,
+ungated thing first and the expensive, slow, reviewed thing last.
+
+**Where each step actually stands — count it, never quote it:**
+
+| step | real state |
+|---|---|
+| **1. Web app** | **The feature list is FINISHED.** 561 built · 4 deliberately skipped · 7 left, and **6 of the 7 are the phone app**. The 7th (Atwe Card) is blocked on a card-issuing partner and KYC, not on code. |
+| **2. iPhone app** | `atwe-mobile/` is at **0.19.0**; the founder's phone still runs **0.13**. Six rounds of finished work have never run on a real device. PAUSED on EAS build credits, not on code — see the resume protocol above. Apple enrollment is APPROVED (Team `TH3FQ8FMKB`). |
+| **3. Android** | **Not a fourth build.** `atwe-mobile/` is Expo/React Native, so iOS and Android are ONE codebase — Android is a build target, not a rebuild. What is genuinely missing is the **Play developer account** (a one-off $25 and an identity check). |
+| **4. Mac / Windows desktop** | **Largely already exists.** Atwe is an installable PWA — on a Mac or a PC, Chrome/Edge's "Install" puts it in the dock or taskbar with its own icon and window, no browser chrome. A real native wrapper (Electron/Tauri) buys very little beyond that and is correctly last. |
+
+**Four things that change what "finish the web app" means, and the founder has been told
+all four:**
+
+1. **There is no feature finish line left on the web.** What remains is refinement — polish,
+   speed, the next bug — which has no natural end. So "finish the web app" cannot be the
+   gate on starting the phone app; a date or a short list has to be.
+2. **The real gate on opening to the public is STRIPE, not design.** With no card processor
+   configured, `POST /api/wallet/topup` credits the wallet instantly — **anyone signed in
+   can give themselves money**, then spend it, send it or buy Pro with it. Deliberate (every
+   flow stays testable without Stripe) and fine on a laptop; an open till on a site real
+   people can reach. **OPEN QUESTION, asked and not yet answered:** is `billingEnabled` true
+   at `atwe.com/api/config`? Ask before telling them the web app is ready for the public.
+3. **The store paperwork is waiting, not working — start it in parallel.** Apple
+   **Individual → Organization** needs a D-U-N-S number, which takes weeks and is free; the
+   Play developer account has its own identity check. Neither costs a line of code and both
+   sit on the critical path of a public launch.
+4. **Do not treat the phone app as one block.** Getting 0.19.0 onto their phone is a
+   different job from finishing the six remaining app features, and it comes first — six
+   rounds of work that nobody has seen on a device is six rounds of unverified work.
+
 **Tone with this owner:** they are non-technical and test on a real iPhone.
 Explain plainly, never oversell, always volunteer the limitation or the bug
 before they find it. Honest small numbers beat flattering big ones.
