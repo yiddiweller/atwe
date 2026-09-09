@@ -14444,26 +14444,48 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
    in both directions. Horizontal growth is still capped where they sit in a row, and
    touchsize.js hit-tests each one's neighbour to prove nothing was stolen.
    ────────────────────────────────────────────────────────────────────────────── */
-.sheet-close,.iset-back,.tb-brand-act,.notif-back,.ac-icon-btn,.accent-sw,
-.me-hero-switch,.msg-back,.aab-x,.ac-post-more,.ac-wtf-x,.mkt-card-save,
-.mkt-cart,.feed-im-btn,.frail-btn,.pf-top-x,.pf-bcam,.pf-cam,.modal-x{position:relative;}
-.sheet-close::before,.iset-back::before,.tb-brand-act::before,.notif-back::before,
-.ac-icon-btn::before,.accent-sw::before,.me-hero-switch::before,.msg-back::before,
-.aab-x::before,.ac-post-more::before,.ac-wtf-x::before,.mkt-card-save::before,
-.mkt-cart::before,.feed-im-btn::before,.frail-btn::before,.pf-top-x::before,
-.pf-bcam::before,.pf-cam::before,.modal-x::before{content:'';position:absolute;z-index:0;}
+/* ::after, NEVER ::before — and this shipped WRONG once, visibly, on ~90 screens.
+   `.job-card-modal .sheet-close::before` IS the back chevron (an 11x11 box with two
+   borders, rotated 45deg). The first version of this block claimed ::before for the
+   touch overlay; the chevron rule is more specific so it kept its own content and size,
+   but it did NOT set position — so it inherited `position:absolute; inset:-3px` from
+   here and the arrow jumped 19px left, out of its padding and onto the sheet's edge,
+   on every sheet in the app.
+   `gutters.js` caught it exactly as designed, reporting content starting at 11px where
+   14 was wanted, on 18 screens at once. My own A/B "it is identical on the previous
+   build" was WRONG and nearly buried it: that script did not seed `atwe_intro_seen`, so
+   BOTH runs measured the Wallet intro sheet's blurred halo instead of the sheet itself
+   and agreed for a reason that had nothing to do with the change. **Reproduce a probe's
+   exact setup before concluding a failure predates you.**
+   Nothing in this block's class list uses ::after, so it is collision-free — but grep
+   before adding a class, because a pseudo-element is a slot and it can already be taken. */
+/* ONLY THE STATIC ONES GET position:relative — the second half of the same bug.
+   An element that is already absolute / fixed / sticky IS a containing block, so it
+   needs nothing from here; setting `relative` on it OVERRIDES its own positioning.
+   `.sheet-close` is `position:absolute; left:0` (line ~3979) and this list, being later
+   at equal specificity, dropped it back into flow — the sheet back arrow moved from the
+   14px margin to 28px on every sheet, and `gutters.js` reported exactly that.
+   These eight are the ones with no position of their own. Check a class before adding
+   it: `grep` its rules for `position:` first. */
+.iset-back,.tb-brand-act,.notif-back,.ac-icon-btn,
+.me-hero-switch,.aab-x,.ac-post-more,.ac-wtf-x{position:relative;}
+.sheet-close::after,.iset-back::after,.tb-brand-act::after,.notif-back::after,
+.ac-icon-btn::after,.accent-sw::after,.me-hero-switch::after,.msg-back::after,
+.aab-x::after,.ac-post-more::after,.ac-wtf-x::after,.mkt-card-save::after,
+.mkt-cart::after,.feed-im-btn::after,.frail-btn::after,.pf-top-x::after,
+.pf-bcam::after,.pf-cam::after,.modal-x::after{content:'';position:absolute;z-index:0;}
 
-.sheet-close::before,.ac-icon-btn::before,.me-hero-switch::before{inset:-3px;}      /* 38 → 44 */
-.iset-back::before,.notif-back::before,.accent-sw::before{inset:-5px;}              /* 34 → 44 */
-.tb-brand-act::before,.ac-post-more::before{inset:-4px;}                            /* 36 → 44 */
-.msg-back::before,.ac-wtf-x::before,.modal-x::before{inset:-6px;}                   /* 32 → 44 */
-.aab-x::before{inset:-9px;}                                                         /* 26 → 44 */
-.mkt-card-save::before,.pf-cam::before{inset:-7px;}                                 /* 30 → 44 */
-.mkt-cart::before,.pf-top-x::before,.pf-bcam::before{inset:-2px;}                    /* 40 → 44 */
-.feed-im-btn::before{inset:-1px;}                                                   /* 42 → 44 */
+.sheet-close::after,.ac-icon-btn::after,.me-hero-switch::after{inset:-3px;}      /* 38 → 44 */
+.iset-back::after,.notif-back::after,.accent-sw::after{inset:-5px;}              /* 34 → 44 */
+.tb-brand-act::after,.ac-post-more::after{inset:-4px;}                            /* 36 → 44 */
+.msg-back::after,.ac-wtf-x::after,.modal-x::after{inset:-6px;}                   /* 32 → 44 */
+.aab-x::after{inset:-9px;}                                                         /* 26 → 44 */
+.mkt-card-save::after,.pf-cam::after{inset:-7px;}                                 /* 30 → 44 */
+.mkt-cart::after,.pf-top-x::after,.pf-bcam::after{inset:-2px;}                    /* 40 → 44 */
+.feed-im-btn::after{inset:-1px;}                                                   /* 42 → 44 */
 /* The immersive rail stacks vertically with a small gap, so this one grows sideways
    only — reaching 44 tall would overlap the button above and below it. */
-.frail-btn::before{top:-2px;bottom:-2px;left:-6px;right:-6px;}
+.frail-btn::after{top:-2px;bottom:-2px;left:-6px;right:-6px;}
 
 /* B2 — the "+" on your own Daily, 20×20, and the one that cannot simply be inflated: it
    sits ON a 54px ring whose own tap VIEWS your Daily while this one ADDS to it (it
@@ -22477,7 +22499,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1833'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1834'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —

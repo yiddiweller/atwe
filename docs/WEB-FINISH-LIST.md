@@ -36,6 +36,7 @@ because the next person to write one will hit the same traps:
 | 34 settings rows all throwing | `openAdmin()` navigates the browser to the admin dashboard, so everything after it ran on the wrong page. The sweep now notices it has been navigated away and boots the app back. |
 | six screens of "invisible" text at exactly 1.00:1 | the **gradient** cards (wallet, AI hero, Atwe Card, Rewards, Affiliate, studio). A gradient cannot be read out of CSS, so the walk-up found the page behind the card. Gradient-backed text is now skipped and counted, never scored. |
 | "Edit profile" invisible in Light | a real-pixel check said **15.13:1**. Dropped. |
+| two screens reporting a JavaScript error | both were `Failed to load resource: net::ERR_CONNECTION_RESET` — **fonts.googleapis.com**, which this build environment blocks. Not app code at all. The sweep counts a failed RESOURCE separately from a thrown exception now, and names the host, so it can never read as broken code again. |
 | the same "Edit profile" fault again, from the standing guard | **this one had a real cause and it took a diagnosis, not a dismissal.** The guard walked up for the first ancestor opaque *enough* — alpha > .85 — and the profile editor's own title bar is exactly `rgba(0,0,0,.85)`, which is not greater than .85. So the walk sailed past it to the white overlay behind and scored white-on-white. Any threshold has that failure somewhere; the guard now **composites** the alpha layers instead, and .85 black over white gives 38, which is the `[38,38,38]` the screenshot reads, to the byte. |
 
 **And a grep would have put eight fake items on this list.** Eight CSS rules *say* they
@@ -130,6 +131,21 @@ misremembered function name is how a real fault gets left standing on a false al
 **44×44** on the real screen, stealing nothing.
 
 ### B6 — Push notifications' "1h" and "8h" are 41×29 ✅ DONE (build 1831) · now **47×45**.
+
+### B7a — the overlay took a slot that was already the back arrow ✅ FIXED (build 1834)
+**B7 shipped with a real, visible regression and this is the record of it.** The overlay was
+put on `::before`, and `.job-card-modal .sheet-close::before` **is the sheet's back chevron**.
+The chevron's rule is more specific so it kept its shape — but it sets no `position`, so it
+inherited `position:absolute; inset:-3px` and the arrow jumped **19px left**, onto the sheet's
+edge, on every sheet in the app (~90 screens). Moved to `::after`; nothing in that class list
+uses it. Re-measured: every sheet's content starts and ends at **14px** again.
+
+*Two things about how it was found are worth more than the fix:* `gutters.js` reported it
+**18 screens at once** and that breadth was nearly read as probe noise — a probe failing
+everywhere at once is usually ONE cause, not many. And the A/B that appeared to prove the
+previous build behaved identically was **invalid**: it did not seed `atwe_intro_seen`, so both
+runs measured the Wallet intro sheet's blurred halo instead of the sheet, and agreed for a
+reason unrelated to the change.
 
 ### B7 — the check had been ignoring every ICON-ONLY button ✅ DONE (build 1832)
 **Not a screen, a hole in the method — and it is the reason B1–B6 were only six items.**

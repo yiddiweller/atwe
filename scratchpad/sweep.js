@@ -18,8 +18,17 @@ const THEME=process.argv[4]||'black';
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
   const ctx=await b.newContext({viewport:{width:390,height:844}});
   const p=await ctx.newPage();
-  const errs=[];
-  p.on('console',m=>{ if(m.type()==='error') errs.push(m.text().slice(0,200)); });
+  /* A FAILED RESOURCE IS NOT A THROWN EXCEPTION, and lumping them together is the
+     seventh false-alarm class this sweep has produced. Two screens reported JSERR and
+     both were "Failed to load resource: net::ERR_CONNECTION_RESET" — a third-party host
+     (Google's fonts and sign-in script) that this build environment blocks, on a page
+     whose own code never threw. Kept and reported, because a missing OWN asset is a real
+     fault, but counted separately so it can never read as broken app code again. */
+  const errs=[], neterrs=[];
+  p.on('console',m=>{ if(m.type()!=='error') return;
+    const t=m.text().slice(0,200);
+    (/Failed to load resource/i.test(t) ? neterrs : errs).push(t); });
+  p.on('requestfailed',r=>{ try{ neterrs.push(new URL(r.url()).host); }catch(_){ } });
   p.on('pageerror',e=>errs.push('PAGEERROR '+String(e.message).slice(0,200)));
   await p.addInitScript(([t,th])=>{localStorage.setItem('atwe_token',t);localStorage.setItem('atwe_theme',th);}, [TOK,THEME]);
   await p.goto('http://localhost:3262/',{waitUntil:'domcontentloaded'});
@@ -34,7 +43,7 @@ const THEME=process.argv[4]||'black';
   for(let i=FROM;i<TO;i++){
     const d=DEST[i];
     if(DESTRUCTIVE.test(d.name)){ console.log(String(i).padStart(3),'  '+d.name.padEnd(30).slice(0,30),'skipped — ends the session'); continue; }
-    errs.length=0;
+    errs.length=0; neterrs.length=0;
     /* SOME DESTINATIONS LEAVE THE APP ENTIRELY, and one of them poisoned 34 results.
        `openAdmin()` navigates to the admin dashboard, so every settings row after it ran
        against admin.html and reported "acGoSettingsPage is not defined" — 34 findings from
@@ -165,13 +174,27 @@ const THEME=process.argv[4]||'black';
              1.00:1 — which is the giveaway: it reported "Balance", "$0.00", "Send" and
              "Coming soon" as invisible on six screens where they are plainly legible.
              Return null for these and count them, rather than scoring them wrong. */
-          const bgOf=el=>{ let n=el;
+          /* COMPOSITE, never hunt for "opaque enough". This walked up for the first
+             ancestor over 85% opaque, and the profile editor's own title bar is exactly
+             rgba(0,0,0,.85) — not GREATER than .85 — so it sailed past to the white
+             overlay behind and reported a title a screenshot measures at 15.13:1 as
+             white-on-white. Any threshold has that failure somewhere. (legible.js had
+             the identical bug; fixing one and not the other is how two probes drift.) */
+          const bgOf=el=>{
+            const layers=[]; let n=el;
             while(n&&n!==document.documentElement){ const cs2=getComputedStyle(n);
               if(cs2.backgroundImage&&cs2.backgroundImage!=='none') return null;   // gradient/photo
-              const c=cs2.backgroundColor;
-              const m=String(c).match(/[\d.]+/g);
-              if(m&&(m[3]===undefined||+m[3]>0.85)) return px(c); n=n.parentElement; }
-            return px(getComputedStyle(document.body).backgroundColor)||[0,0,0]; };
+              const m=String(cs2.backgroundColor).match(/[\d.]+/g);
+              if(m){ const a=m[3]===undefined?1:+m[3];
+                if(a>0) layers.push([+m[0],+m[1],+m[2],a]);
+                if(a>=0.999) break; }
+              n=n.parentElement; }
+            const rm=String(getComputedStyle(document.body).backgroundColor).match(/[\d.]+/g);
+            let base=(layers.length&&layers[layers.length-1][3]>=0.999)?layers.pop().slice(0,3)
+                     :(rm?[+rm[0],+rm[1],+rm[2]]:[0,0,0]);
+            for(let i=layers.length-1;i>=0;i--){ const [r,g,bl,a]=layers[i];
+              base=[base[0]+(r-base[0])*a, base[1]+(g-base[1])*a, base[2]+(bl-base[2])*a]; }
+            return base; };
           let onGradient=0;
           const out=[];
           scope.querySelectorAll('*').forEach(el=>{
@@ -229,9 +252,11 @@ const THEME=process.argv[4]||'black';
     }, [d.name, before]);
 
     r.sub=d.sub; r.run=d.run; r.threw=threw; r.errs=[...new Set(errs)].slice(0,3);
+    r.neterrs=[...new Set(neterrs)].slice(0,4);
     out.push(r);
     const bad=[threw&&'THREW', r.fail&&'FAIL-TEXT', r.wide.length&&'WIDE', r.clipped.length&&'CLIPPED', r.junk.length&&'JUNK-TEXT', r.dim.length&&'LOW-CONTRAST', r.small.length&&'SMALL-TARGET',
-               r.dupWhite.length&&'DUP-WHITE', r.errs.length&&'JSERR', (!r.grew&&r.top==='(no overlay)')&&'NO-OPEN'].filter(Boolean);
+               r.dupWhite.length&&'DUP-WHITE', r.errs.length&&'JSERR',
+               r.neterrs.length&&('net:'+r.neterrs.join(',')), (!r.grew&&r.top==='(no overlay)')&&'NO-OPEN'].filter(Boolean);
     console.log(String(i).padStart(3), (bad.length?'⚠ ':'  ')+d.name.padEnd(30).slice(0,30), (bad.join(',')||'ok'));
   }
   fs.writeFileSync(SP+`sweep-${THEME}-${FROM}-${TO}.json`, JSON.stringify(out,null,1));
