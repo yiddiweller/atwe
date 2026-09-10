@@ -7,6 +7,16 @@ const {PNG}=require(SP+'node_modules/pngjs');
 const {Pool}=require('/home/user/atwe/node_modules/pg');
 const auth=require('/home/user/atwe/auth');
 const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+// Colour helpers — a CSS value may arrive as a hex token or as an rgb() string, so both
+// are parsed to [r,g,b]. contrast() is the real WCAG ratio, not an eyeball average.
+const _px=(v)=>{ v=String(v).trim();
+  if(v[0]==='#'){ let h=v.slice(1); if(h.length===3) h=h.split('').map(c=>c+c).join('');
+    return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+  const m=v.match(/-?[\d.]+/g); return m? m.slice(0,3).map(Number) : [0,0,0]; };
+const rgbEq=(a,b)=>{ const x=_px(a),y=_px(b); return x[0]===y[0]&&x[1]===y[1]&&x[2]===y[2]; };
+const _lum=(v)=>{ const [r,g,b]=_px(v); const f=(c)=>{c/=255; return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4);};
+  return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b); };
+const contrast=(a,b)=>{ const la=_lum(a),lb=_lum(b); return (Math.max(la,lb)+0.05)/(Math.min(la,lb)+0.05); };
 let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}else{fail++;console.log('  FAIL '+m+(x!==undefined?'\n         '+String(x).slice(0,300):''));}};
 (async()=>{
   const email=crypto.randomUUID().slice(0,8)+'@t.local',hash=await auth.hashPassword('x'.repeat(12));
@@ -62,11 +72,26 @@ let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}els
     await new Promise(r=>setTimeout(r,500));
     const btn=document.querySelector('#acUndoToast .ut-btn'); if(!btn) return null;
     const cs=getComputedStyle(btn);
-    return {bg:cs.backgroundColor, color:cs.color, radius:cs.borderRadius};
+    const rs=getComputedStyle(document.body);
+    return {bg:cs.backgroundColor, color:cs.color, radius:cs.borderRadius,
+            fill:rs.getPropertyValue('--accent-fill').trim(),
+            ident:rs.getPropertyValue('--accent').trim()};
   });
   ok(!!undo, 'the undo toast shows');
   ok(undo && !/rgba\(0, 0, 0, 0\)/.test(undo.bg), 'Undo is a filled button, not plain text', undo&&undo.bg);
-  ok(undo && /^rgb\(0, 13[0-9], 25[0-9]\)/.test(undo.bg), 'and the fill is the brand blue', undo&&undo.bg);
+  // BUILD 1836 — THE BLUE SPLIT IN TWO, so this check had to be reframed. It asserted the
+  // literal rgb(0,13x,25x), i.e. the IDENTITY blue #0088FF. This pill is a blue AREA carrying
+  // a white label, which is precisely the case --accent-fill exists for (#0088FF measures
+  // 3.52:1 under white; the fill is 4.73:1). The old assertion therefore demanded the fault
+  // that D1 fixed. Assert the CONTRAST, which is what was ever being protected, and that the
+  // fill really is a distinct token from the identity blue.
+  ok(undo && rgbEq(undo.bg, undo.fill), 'and the fill is the blue that carries white — --accent-fill',
+     undo && (undo.bg+' vs '+undo.fill));
+  ok(undo && undo.fill.toLowerCase() !== undo.ident.toLowerCase(),
+     'which is a different token from the identity blue', undo && (undo.fill+' vs '+undo.ident));
+  ok(undo && contrast(undo.color, undo.bg) >= 4.5,
+     'and its label clears the 4.5:1 floor on it',
+     undo && contrast(undo.color, undo.bg).toFixed(2)+':1');
   await p.screenshot({path:SP+'icons/P3-undo.png'});
   await p.evaluate(()=>{const t=document.getElementById('acUndoToast'); if(t) t.remove();});
 
