@@ -1748,7 +1748,7 @@ changes shape as the profile lands. It is shared with the circle and feed screen
 **THE RUNNER HAS UNDER-COVERED ITSELF THREE TIMES NOW, in three different ways** — worth
 naming as one pattern: a stale path in `/tmp` (it ran a frozen copy of every probe), probes
 missing from its list (gapmob, notifhdr, acctbug — and notifhdr then went stale unnoticed),
-and a probe present in the list that could only ever skip (lastseen, above). It is at **108
+and a probe present in the list that could only ever skip (lastseen, above). It is at **104
 probes** today. When you add one, add it to `run-all.sh` in the same commit, and check a
 full run for `skipped` and `MISSING` as well as `FAILED`.
 
