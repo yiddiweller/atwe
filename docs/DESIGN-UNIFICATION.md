@@ -96,7 +96,25 @@ Finished means this list is at zero.
   wallet freezes, course enrolments, webinars, gift cards, appeals, strikes. Plus a guard
   that diffs the server's emitted types against the client's routes, so type 154 cannot
   ship without a destination.
-- [ ] **C2 · Every page has a way back, and it goes back smoothly.**
+- [x] **C2 · Every page has a way back — and the phone's Back gesture was broken on
+  193 of them.** `wayback.js` opens 16 destinations, proves there is a control in the
+  panel's top-left that is genuinely hittable (`elementFromPoint` at its own centre must
+  land inside it — a probe that never asks *what is actually on top* proves the code
+  works, not that anybody can use it), presses it, and proves it left. Then it presses
+  the system Back.
+
+  **The real defect: `acSetPath` returns early when asked for the path already showing.**
+  Only 33 of the app's 226 destination panels own a route, so for the other 193 opening
+  them pushed **no history entry at all** — and Back therefore consumed whatever entry
+  came *before*, moving the world underneath while the panel stayed open. Measurably
+  worse than Back doing nothing. Fixed in `_navDismissModal`, which already exists for
+  exactly this shape ("Back cancels THAT, and the page stays put") and re-pushes the
+  entry itself, so nothing is consumed.
+
+  Two guards matter more than the fix and are asserted: **Back cannot trap you** (a
+  second press must not bring the sheet back) and **Back cannot open a locked door** —
+  the sign-in wall, onboarding and the passcode pad are excluded by name, because those
+  are not places you are visiting.
 - [ ] **D1 · Phone · tablet · desktop, one app.** The same battery at four widths and both
   themes.
 - [ ] **E1 · A guard per rule**, all in `run-all.sh`, so none of this drifts back.
