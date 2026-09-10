@@ -215,6 +215,16 @@ hover on the row beside it. Asking about the POINTER is what lets the tablet be 
 without touching desktop at all. Almost every one of these failed on **height alone**,
 which is the safe axis: they sit in horizontal rows with real gaps.
 
+**TWO CONTROLS WERE INVISIBLE TO THIS SWEEP UNTIL THE ACCOUNT HAD A HISTORY (build 1847).**
+`touchwide.js` had been green for builds and went red the first time it ran against an
+account with real data behind it: the **Recent-searches chips** (93x29) render only for
+somebody who has searched before, and the **Translate-post line** (92x19) only under a post
+that is not in the reader's language. On a fresh test account neither is on screen at all,
+so no sweep could ever have measured them. **A check that never sees a control reports a
+clean result** — the fourth route to that same lesson in this repo, after a check scoped to
+part of its subject, a probe missing from the runner, and a probe that could only ever skip.
+This one is ABSENT DATA. Both are in the block below now, vertical growth only.
+
 **Guarded by `scratchpad/touchwide.js`** (four widths, both directions): every on-screen
 control clears 44 on the three touch widths, no overlay steals the control next door, and
 the overlays are **absent on a mouse** — a guard that passes at every width is not testing
