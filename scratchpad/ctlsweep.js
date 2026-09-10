@@ -51,14 +51,16 @@ const ALLOWED = {
   'ac-translate':  'a text link under a post',
   'ac-jv': 'a tab — selected state is the white pill, rimless like Apple\'s',
   'ac-ptab': 'a tab', 'ev-tab': 'a tab', 'ntf-tab': 'a tab', 'bk-tab': 'a tab',
-  /* OPEN DECISION (docs/DESIGN-UNIFICATION.md B2): the profile's back arrow is a disc
-     and a sheet's is a bare margin-aligned chevron whose ink is parked on the gutter by
-     a measured 2.3px nudge. Both are deliberate and they disagree. Listed so the sweep
-     is honest about it rather than silently passing. */
-  'sheet-close': 'OPEN: back-arrow style undecided',
-  'iset-back':   'OPEN: back-arrow style undecided',
-  'notif-back':  'OPEN: back-arrow style undecided',
-  'ac-x':        'OPEN: back-arrow style undecided',
+  /* DECIDED (docs/DESIGN-UNIFICATION.md B2). A control floating over a PHOTO gets a
+     ground; a control sitting on the page beside its own title does not. A profile's
+     back arrow is a disc because it floats on the banner image — same reason the image
+     viewer's X and dots became discs. These four sit on plain black next to their own
+     title, where a disc adds a second shape to read and pushes the ink off the gutter
+     line a previous pass measured it onto. One rule, two outcomes; not a drift. */
+  'sheet-close': 'bare by design: page-header arrow beside its own title',
+  'iset-back':   'bare by design: page-header arrow beside its own title',
+  'notif-back':  'bare by design: page-header arrow beside its own title',
+  'ac-x':        'bare by design: page-header arrow beside its own title',
 };
 
 const SURFACES = [

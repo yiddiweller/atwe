@@ -68,11 +68,23 @@ Finished means this list is at zero.
   shade of the recipe so a disc there would be invisible, and `.ac-link-btn` is a blue
   text LINK rather than a button. Naming them is the point: a blanket "skip anything
   that looks like nav" would hide the next real one.
-- [ ] **B2 · Back arrows: disc or bare?** `.sheet-close` is deliberately a bare
-  margin-aligned arrow — its ink is parked on the gutter by a measured 2.3px nudge,
-  because a rotated square overhangs its own box by (√2−1)/2 of its side. The profile
-  page's back arrow is a **disc**. Both are deliberate and they disagree with each other.
-  Needs one decision and a picture, not a guess.
+- [x] **B2 · Back arrows — DECIDED, and the answer is that both were already right.**
+  They looked like a contradiction: a profile's back arrow is a grey **disc**, a sheet's
+  is a **bare chevron** on the margin beside its title. Shot side by side at 3×, one rule
+  explains both, and it is the rule iOS itself follows:
+
+  > **A control floating over a PHOTO gets a ground. A control sitting on the page
+  > beside its own title does not.**
+
+  A profile's arrow floats on the banner image and would be unreadable without a disc —
+  that is why it has one, and it is why the image viewer's ✕ and ⋯ just got one too. A
+  sheet's arrow sits on plain black next to the word "Wallet"; a disc there adds a second
+  shape to read and pushes the ink off the gutter line that a previous pass measured it
+  onto (2.3px, because a rotated square overhangs its own box by (√2−1)/2 of its side).
+
+  So this is **not** two systems, and forcing one would have made the app worse in one of
+  the two places. The rule is written down so the next person does not "fix" it either.
+  `ctlsweep.js` lists the four bare back arrows by name with this reason.
 - [x] **C1 · Every notification lands somewhere real.** The honest count was **89 of
   171**, not 71 — the first scan's regex counted `'sent'` and `'host'` as notification
   types and so under-reported. `NOTIF_GO` routes them and `notifguard.js` diffs its keys
