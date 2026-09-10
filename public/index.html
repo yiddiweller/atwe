@@ -14813,13 +14813,23 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
    not controls; `.story-add` keeps its own asymmetric overlay two rules above (a centred
    44 would steal the ring's view tap); `.tb-feedtab-add` is 41 wide by design. */
 @media (pointer:coarse){
+  /* .ac-recent-chip (93x29) and .ac-translate (92x19) joined this list in build 1847,
+     and the reason they were missing is the lesson: BOTH ONLY EXIST ONCE THE ACCOUNT HAS
+     THE DATA. A Recent-searches chip renders only for somebody who has searched before,
+     and Translate post only under a post that is not in the reader's language — so on a
+     fresh test account neither is on screen, and a sweep that never sees a control
+     reports a clean result. They turned up the first time a probe ran against an account
+     with a real history behind it. Growth is VERTICAL ONLY for both (each is already
+     past 44 wide), which is the safe axis: chips sit in a row with real gaps, and the
+     translate line sits between a post's words and its action pills. */
   .tb-feedtab:not(.tb-feedtab-add),.ac-jv,.ac-link-btn,.ac-pill-btn,.ac-follow-btn,
   .mkt-buy,.wallet-cashout,.rr-more,.sb-navbtn,.sb-btn,.sb-settings,.tb-ico,
-  .tb-brand,.ac-ptab,.ac-prof-back,.ac-sg-foot{position:relative;}
+  .tb-brand,.ac-ptab,.ac-prof-back,.ac-sg-foot,.ac-recent-chip,.ac-translate{position:relative;}
   .tb-feedtab:not(.tb-feedtab-add)::after,.ac-jv::after,.ac-link-btn::after,
   .ac-pill-btn::after,.ac-follow-btn::before,.mkt-buy::after,.wallet-cashout::after,
   .rr-more::after,.sb-navbtn::after,.sb-btn::after,.sb-settings::after,.tb-ico::after,
-  .tb-brand::after,.ac-ptab::after,.ac-prof-back::after,.ac-sg-foot::after{
+  .tb-brand::after,.ac-ptab::after,.ac-prof-back::after,.ac-sg-foot::after,
+  .ac-recent-chip::after,.ac-translate::after{
     content:'';position:absolute;z-index:0;pointer-events:auto;
     left:50%;top:50%;transform:translate(-50%,-50%);
     width:100%;min-width:44px;height:100%;min-height:44px;border-radius:inherit;}
@@ -22829,7 +22839,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1846'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1847'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —

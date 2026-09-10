@@ -61,6 +61,7 @@ list stays the honest measure of what is left.
 
 | # | what | where | state |
 |---|---|---|---|
+| P2-2 | **Two touch controls under the 44pt floor** — the Recent-searches chips (93x29) and the Translate-post line (92x19). Both only render once the account HAS the data, so no sweep had ever seen them | `public/index.html` `pointer:coarse` block | **fixed**, build 1847, guarded by `touchwide.js` |
 | P2-1 | **A block only worked in one direction** — the blocker could keep messaging AND calling the person they had blocked, while that person could not answer | `server.js` `canContact` + `dmAllowed` | **fixed**, build 1846, guarded by `twoperson.js` |
 
 ---
@@ -153,6 +154,24 @@ can never see that.
 Self-tested three ways: reverting the block fix fails it by name, commenting out the
 ship push fails it by name, and the whole call section fails if the two browsers never
 connect.
+
+### AND TWO MORE, FOUND BY THE REGRESSION RUN ITSELF
+
+`touchwide.js` had been green for builds and went red the first time it ran against an
+account with a REAL HISTORY behind it. Two controls sat under the 44pt touch floor:
+
+- **the Recent-searches chips on Engine — 93x29.** They only render for somebody who has
+  searched before. A fresh test account has no history, so the row is not on screen.
+- **the Translate-post line — 92x19.** It only renders under a post that is not in the
+  reader's language.
+
+Neither was ever reachable by a sweep on a clean account, and **a check that never sees a
+control reports a clean result** — the same lesson this file has now recorded four times,
+arriving by a fourth route: not scope, not a missing probe, not a skip, but ABSENT DATA.
+Both are in the app's own `pointer:coarse` block now, growing vertically only (each is
+already past 44 wide, and vertical is the safe axis for a chip row and for a line sitting
+between a post's words and its pills). Both pseudo-element slots were checked free first —
+the trap that shipped a visible bug on ~90 screens in build 1832.
 
 ---
 
