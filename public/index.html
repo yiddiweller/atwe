@@ -12557,6 +12557,13 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 .ac-place-go{width:17px;height:17px;flex:0 0 auto;color:var(--t4);}
 .ac-place-more{display:block;width:100%;padding:11px 10px;border:none;background:none;cursor:pointer;
   font-family:inherit;font-size:14px;font-weight:600;color:var(--accent);text-align:start;}
+/* The assistant asking which person you meant. Same card material as every other
+   answer it gives; the options are ordinary secondary pills, because picking one is
+   not the primary action on the screen — it is a step on the way to one. */
+.ai-clarify{background:var(--s2);border-radius:var(--set-card-r);padding:14px;margin-top:10px;}
+.ai-clarify-q{font-size:14.5px;font-weight:700;color:var(--t1);margin-bottom:10px;}
+.ai-clarify-opts{display:flex;flex-wrap:wrap;gap:8px;}
+.ai-clarify-opt{font-size:14px;}
 /* Skeleton loaders (replace bare loading text) */
 .skel{position:relative;overflow:hidden;background:var(--s2);border-radius:8px;}
 /* Inside a post card the placeholder needs its own grey — see --post-skel. Everywhere
@@ -22822,7 +22829,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1843'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1844'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -47788,6 +47795,28 @@ function acOpenAgent() {
   document.getElementById('agentChips').innerHTML = _AGENT_EXAMPLES.map(e => `<button class="ac-recent-chip" onclick="document.getElementById('agentInput').value=${jsAttr(e)};">${escHtml(e)}</button>`).join('');
   showOverlay('agentView'); setTimeout(() => document.getElementById('agentInput').focus(), 80);
 }
+/* "Did you mean @sarah-b?" — the assistant asks with buttons instead of picking a
+   person on a near-miss, which is the one guess that must never be silent when the
+   next step might message them or pay them. Tapping one re-asks the ORIGINAL
+   question with the chosen answer appended, so the model gets the full request back
+   rather than a bare word with no context. */
+function acAgentClarifyCard(c) {
+  return '<div class="ai-clarify"><div class="ai-clarify-q">' + escHtml(c.question) + '</div>'
+    + '<div class="ai-clarify-opts">'
+    + (c.options || []).map((o, i) => '<button class="ac-pill-btn ai-clarify-opt" onclick="acAgentClarifyPick(' + i + ')">'
+        + escHtml(o.label) + '</button>').join('')
+    + '</div></div>';
+}
+function acAgentClarifyPick(i) {
+  const box = document.getElementById('agentResult');
+  const opts = (AC._agentClarify && AC._agentClarify.options) || [];
+  const pick = opts[i];
+  if (!pick) return;
+  const input = document.getElementById('agentInput');
+  if (input) input.value = (AC._agentAsked || '') + ' — I mean ' + pick.value;
+  if (box) box.innerHTML = '';
+  acAgentGo();
+}
 async function acAgentGo() {
   const message = document.getElementById('agentInput').value.trim();
   if (!message) { showNotif('Tell Atwe AI what to do.'); return; }
@@ -47796,7 +47825,12 @@ async function acAgentGo() {
   result.innerHTML = '';
   try {
     const r = await API.req('POST', '/api/ai/agent', { message });
-    if (r.action) {
+    if (r.clarify) {
+      // It found more than one person who could be the one they meant, so it asks
+      // rather than guessing — each candidate is a real button.
+      AC._agentAsked = message; AC._agentClarify = r.clarify;
+      result.innerHTML = (r.text ? `<div class="ai-shop-summary">${escHtml(r.text)}</div>` : '') + acAgentClarifyCard(r.clarify);
+    } else if (r.action) {
       AC._agentAction = r.action;
       result.innerHTML = (r.text ? `<div class="ai-shop-summary">${escHtml(r.text)}</div>` : '') + acAgentActionCard(r.action);
     } else if (r.chart) {
@@ -47841,6 +47875,18 @@ async function acAgentConfirm() {
       await API.req('POST', '/api/social/posts', { body: i.body, scheduledAt: i.scheduledAt });
       acAiLog('schedule_post', 'Scheduled a post', (i.body || '').slice(0, 120));
       showNotif('Post scheduled.'); closeOverlay('agentView'); if (typeof acOpenScheduledPosts === 'function') acOpenScheduledPosts();
+    } else if (a.tool === 'send_message') {
+      /* The assistant proposes a @username; the app resolves it and sends through
+         the SAME authenticated route a person uses, so every rule that applies to
+         a message someone types by hand — blocks, contact privacy, chat requests —
+         applies here too, with nothing special-cased for the assistant. */
+      const uname = String(i.toUsername || '').replace(/^@/, '');
+      const prof = await API.req('GET', '/api/social/profile/' + encodeURIComponent(uname)).catch(() => null);
+      const pid = prof && prof.user && prof.user.id;
+      if (!pid) { showNotif('Couldn’t find @' + uname + '.'); return; }
+      await API.req('POST', '/api/atchat/with/' + pid, { body: i.text, clientId: acPayCid() });
+      acAiLog('send_message', 'Sent a message to @' + uname, (i.text || '').slice(0, 120));
+      showNotif('Message sent.'); closeOverlay('agentView'); acOpenChat(pid);
     } else if (a.tool === 'draft_invoice') {
       // Resolve the @username → id, then create the invoice via the normal route.
       const prof = await API.req('GET', '/api/social/profile/' + encodeURIComponent((i.customerUsername || '').replace(/^@/, '')));
