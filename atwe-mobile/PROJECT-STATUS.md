@@ -14,6 +14,40 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 > version scheme below), so six rounds of work have never been seen on a device. That section says what to do first, in order, and
 > names the two decisions of theirs not to reverse.
 
+## 10 Sep 2026 — THE WEB SPLIT ITS BLUE AND RED IN TWO. THE PHONE HAS NOT YET.
+
+**Do this first when the phone work resumes; it is a token change, not a redesign.**
+
+Web build 1836 closed the last item on the web finish list by giving each brand hue TWO
+tokens instead of one, because one value cannot do both jobs: **white content ON the colour
+wants it DARK, and the colour as TEXT on black wants it BRIGHT.**
+
+| web token | value | role | measures |
+|---|---|---|---|
+| `--accent` | `#0088FF` | identity — links, handles, active tab text, icons, borders | 5.97:1 on black |
+| `--accent-fill` | `#0071E0` | any AREA carrying white content | 4.73:1 under white |
+| `--red` | `#FF0033` | identity — destructive text, warning icons, live dots | 5.30:1 on black |
+| `--red-fill` | `#D4002D` | any AREA carrying white content | 5.47:1 under white |
+
+**`atwe-mobile/src/theme/tokens.ts` still has one `accent: '#0088FF'` and one
+`red: '#FF0033'` doing both jobs**, so every filled blue control on the phone — the selected
+tab, a toggle, an unread badge, a Follow button — is at **3.52:1** under its white label, and
+every filled destructive control at 3.96:1. It is the same fault the web had, and it is not
+visible to any probe: the phone app has no probes at all.
+
+**It was NOT fixed in the same pass on purpose.** The founder's order is web first and
+*"don't drift onto the phone app"*; the phone is paused on EAS build credits, and repointing
+its fills is a real sweep across the codebase rather than one line. Adding an unused token
+here would have been half a job.
+
+**When you do it:** add `accentFill` and `redFill` to `tokens.ts`, then move every
+`backgroundColor: accent` / `backgroundColor: red` to them, leaving every `color: accent` /
+`color: red` alone. The web's own rule and the full reasoning are under **"TWO COLOURS, TWO
+ROLES"** in `CLAUDE.md`; the measurements are in `docs/WEB-FINISH-LIST.md` D1 and
+`docs/ADMIN-SWEEP-LIST.md` D2.
+
+---
+
 ## 9 Sep 2026 — YEAR-STYLE VERSIONS (the founder's scheme)
 
 The app no longer counts releases; it names the year, the way iOS 26 does. Their

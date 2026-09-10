@@ -280,16 +280,26 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   say(grow.barTop > 0, `the search bar sits below the header, not under it (y=${grow.barTop})`);
 
   /* 8. The composer: a blue mic, and the SAME blue on send, so the control does not change
-        colour the moment you start typing. */
+        colour the moment you start typing.
+        IT IS `--accent-fill`, NOT `--accent`, AND THAT IS THE POINT (build 1836). These
+        are two filled discs carrying a white glyph, so they take the fill role; --accent
+        is the identity colour and stays where it belongs, on text and marks. This check
+        read --accent and therefore went red on correct code the moment the pair split —
+        the third time a probe here has gone stale against a decision it did not know
+        about. When you change a behaviour, grep the whole scratchpad for the OLD one. */
   const comp = await p.evaluate(() => {
-    const acc = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+    const cs = getComputedStyle(document.body);
+    const fill = cs.getPropertyValue('--accent-fill').trim();
+    const ident = cs.getPropertyValue('--accent').trim();
     const mic = document.querySelector('#acThreadScreen .ac-mic');
     const send = document.querySelector('#acThreadScreen .msg-send');
     const hex = (c) => { const m = c.match(/\d+/g); return m ? '#' + m.slice(0, 3).map(n => (+n).toString(16).padStart(2, '0')).join('') : c; };
-    return { accent: acc.toLowerCase(), mic: mic ? hex(getComputedStyle(mic).backgroundColor) : null,
+    return { fill: fill.toLowerCase(), ident: ident.toLowerCase(),
+      mic: mic ? hex(getComputedStyle(mic).backgroundColor) : null,
       send: send ? hex(getComputedStyle(send).backgroundColor) : null };
   });
-  say(comp.mic === comp.accent, `the mic is the accent blue (${comp.mic})`);
+  say(comp.mic === comp.fill, `the mic is the blue FILL, the one that carries white (${comp.mic})`);
+  say(comp.fill !== comp.ident, `and the fill is a distinct token from the identity blue (${comp.fill} vs ${comp.ident})`);
   say(comp.send === comp.mic, `and send is the same blue, so it does not flip colour as you type (${comp.send})`);
   /* THE BAR ITSELF — fully rounded ends, and the three things in it evenly placed.
      The + is a bare glyph and the mic is a filled circle, so matching their BOXES is not

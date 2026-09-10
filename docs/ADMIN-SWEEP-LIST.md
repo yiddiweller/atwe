@@ -176,60 +176,97 @@ Written down so the next pass does not redo them.
 
 ---
 
-## D · Waiting on the founder — not bugs, decisions
+## D · Two colour decisions — both made in build 1836
 
-### D1 · (the app's) white on the accent blue — still open
-Unchanged from `docs/WEB-FINISH-LIST.md`. Listed here only so the two lists agree.
+The founder asked for these to be decided here rather than waiting on them, and for the
+decision to follow what the big platforms actually do. Both come out the same way, and it
+is the same underlying cause.
 
-### D2 · the red destructive button reads at 3.22:1
-`--red-tint` (`#FFE0E6`) on `--red` (`#FF0033`) measures **3.22:1**, under the 4.5 floor.
-It is **four places**: the dashboard's *Remove lock* and *Cancel it* buttons, its unread
-badge on a user card, and the app's own *Delete account* button — so it is one pairing
-shared by both codebases, not an admin quirk.
+### D1 · (the app's) white on the accent blue ✅ DONE (build 1836)
+Fixed in full in `docs/WEB-FINISH-LIST.md`, and the dashboard moved with it: `--accent`
+stays the identity blue and a new `--accent-fill` (`#0071E0`, **4.73:1** under white) paints
+every area that carries white content. Seventeen fills in `admin.html` moved across. The
+dashboard's `--accent-tint` was a pale blue (`#CCE8FF`) measuring **2.77:1** on the old
+fill — under every floor there is — and is now white, as it already was in the app.
 
-**The arithmetic is what makes this a decision rather than a fix.** On `#FF0033` nothing
-light clears the floor: white itself is only **3.96:1**. The three ways out are genuinely
-different:
+### D2 · the red destructive button read at 3.22:1 ✅ DONE (build 1836)
+`--red-tint` (`#FFE0E6`) on `--red` (`#FF0033`) measured **3.22:1**. Four places: the
+dashboard's *Remove lock* and *Cancel it* buttons, its unread badge on a user card, and the
+app's own *Delete account* button — one pairing shared by both codebases.
 
-| | |
-|---|---|
-| **dark ink on the red** | the colour law's own answer for bright fills, and what `--green-ink` already does for lime. Pure black reaches **5.30:1**; `--text-black` gets **4.25** and still misses. A destructive button then reads as a warning label rather than a clean button. |
-| **darken the red** | clears the floor with the light ink it already has — and Atwe no longer has one red. `--red` is a named brand colour used across both codebases. |
-| **accept it** | it is a button label at 15px, on a control people press deliberately, and it is legible in practice — it just does not clear the written floor. |
+**It is the same fault as D1, one hue over.** A bright brand red is right as TEXT on black
+(`#FF0033` is 5.30:1) and wrong under white (3.96:1). One value cannot do both.
 
-Nothing has been changed. `scratchpad/adminsweep.js` carries it as **one exact-string
-exception on one selector**, so the guard is not permanently red on a call nobody has made.
-**Delete that exception the day it is decided.**
+**What the big platforms do:** Apple's systemRed `#FF3B30` is **3.55:1** under white and its
+own destructive alert button has been a documented accessibility complaint for years.
+Material Design 3 does not try — it pairs a bright `error` for text with a much darker
+`errorContainer` for a filled surface (`#B3261E`, **6.54:1** under white). The second is the
+model, and it is exactly what D1 adopted for the blue.
+
+**The decision:**
+
+| | is | measures |
+|---|---|---|
+| `--red` `#FF0033` | IDENTITY — destructive text, warning icons, live and recording dots | 5.30:1 on black |
+| `--red-fill` `#D4002D` | any AREA carrying white content | **5.47:1** under white, 3.84:1 on black |
+
+`--red-tint` — the ink on that fill, used in those four places and nowhere else — was a pale
+pink scoring **lower** than plain white, so it is white now. 37 red fills moved across
+(31 in the app, 6 in the dashboard); a recording dot at 3.84:1 still clears the 3:1 floor a
+UI component needs.
+
+*Guarded by* `scratchpad/fillroles.js`, which measures the same contract for both hues and
+additionally renders the real `.btn.danger` and `.u-badge` and scores them on screen.
+`adminsweep.js` carries **no exception at all** any more — a single word under the floor
+fails it. Self-tested: pointing `--red-fill` back at `--red` fails three checks by name.
 
 ---
 
-## E · Measured, and waiting on one fact only the team has
+## E · The touch floor
 
-### E1 · about fifty small controls are 24–31px tall
+### E1 · about fifty small controls were 24–31px tall ✅ DONE (build 1836)
 Measured across seven representative tabs, at both widths. The dashboard's main button
-(`.act`) is **40px** on a desktop and taller still on a phone, and the sidebar rows are
-**34px** — comfortable. Underneath that, one group is smaller:
+(`.act`) is **40px** on a desktop and taller on a phone, and the sidebar rows are **34px** —
+comfortable. Underneath that, one group was smaller:
 
 | control | height | where |
 |---|---|---|
 | `.fc-catbtn` | **24px** | the category buttons on Feature controls |
 | `.bc-aud` | **28px** | the audience chips on Users, Orders, Support, Catalog |
 | `.mod-scope` | **29px** | the scope pills on the AI content scan |
-| `.switch` | **30px** (50 wide) | every on/off toggle |
-| `.copy` | **30px** | copy-to-clipboard |
+| `.switch`, `.copy`, `.stp` | **30px** | every on/off toggle, copy-to-clipboard, the code-length steppers |
 | `.tf-r`, `.vt-tbtn` | **31px** | the date-range and vault segments |
 
-**On a laptop, with a mouse, this is fine** — a mouse is a single pixel and 24px is a big
-target for it. It is only short for a finger: the touch floor is **44pt**, which the app
-itself now meets everywhere.
+**On a laptop this was fine** — a mouse is a single pixel and 24px is a big target for it.
+It was only short for a finger, and the honest answer to "is the dashboard ever opened on a
+phone?" is that staff do reach for it on the move: to answer a support thread, or to freeze
+a wallet. Apple's floor is **44pt** and the app itself already meets it everywhere. Waiting
+for permission to make a control easier to press was the wrong shape of question.
 
-**Whether it matters depends on something only the team can say: is the dashboard ever
-used from a phone?** If it is, the fix is contained and cannot change how anything looks —
-an invisible overlay on each of those seven classes, **inside the phone media query only**,
-growing the hit area vertically (their widths are already 42px or more, so nothing has to
-grow sideways into its neighbour). It is the same technique the app uses, and all seven
-classes were checked and carry no pseudo-element of their own, so there is nothing for it
-to collide with. **Nothing has been changed** — say the word and it is one block of CSS.
+**The fix changes nothing about how anything looks.** An invisible `::after` on each of
+those classes, **inside the phone media query only**, centred and at least 44×44 — the same
+technique the app uses. Three things make it safe, and each is a mistake this repo has
+already made:
+
+- **every class was checked to have no `::before` AND no `::after` of its own.** A
+  pseudo-element is a slot and it can already be taken — claiming one a chevron was using
+  shipped a visible bug on ~90 screens in build 1832.
+- **it grows at most 1px sideways.** The narrowest control, `.bc-aud` at 42px, sits in a
+  6px-gap row and the `.stp` steppers are 38px apart. Growing over the control next door
+  trades one fault for a worse one.
+- **it is phone-only.** At a desktop width a 44px invisible box around a 30px button would
+  swallow hover on whatever sits beside it.
+
+Native checkboxes are deliberately NOT in it: an `<input>` cannot carry a reliable
+pseudo-element, and every one of them sits inside a `<label>` whose whole row is already the
+target. They are simply drawn a size up on a phone (22px).
+
+*Guarded by* `scratchpad/admintouch.js` (40 checks). It builds each control off-screen in a
+real page rather than hunting for it across 68 views — several only exist once there is data,
+and a probe that quietly finds nothing reports a clean result — and it hit-tests each
+control's NEIGHBOUR to prove nothing was stolen. It also asserts the overlay is **absent** at
+a desktop width: a guard that passes at both widths is not testing the media query.
+Self-tested: removing the block fails 17 of its 40 checks.
 
 ---
 

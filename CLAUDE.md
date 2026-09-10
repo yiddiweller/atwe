@@ -105,11 +105,11 @@ scrolled the whole page sideways on a phone** (Users 417px and Support 615px aga
 could write into a box a staffer had already navigated away from, throwing a real JS error,
 and now go through `liveBox(id)`; and **the dashboard did not report its own faults** while
 the app has since build 1830, which was the wrong way round for the surface where money and
-moderation live — it now lands in the same Site-tab list, marked `admin / <tab>`. **One item
-is open and it is the founder's call, not ours: D2**, the red destructive button at 3.22:1;
-**one more waits on a fact only they have (E1)** — about fifty small controls are 24–31px,
-fine for a mouse, short for a finger, and whether that matters depends on whether the team
-ever opens the dashboard on a phone.
+moderation live — it now lands in the same Site-tab list, marked `admin / <tab>`. **Two more
+items (D2 and E1) were closed in build 1836** when the founder handed the decisions over:
+the red destructive button at 3.22:1 became `--red-fill`, and about fifty controls at
+24–31px — fine for a mouse, short for a finger — got the app's own invisible 44pt overlay,
+phone-only.
 
 **The pass's own three lessons** — all of them a probe being wrong rather than the app:
 a wait that is too SHORT reports a fault on working code (five tabs read as "empty" while
@@ -118,9 +118,12 @@ Wording tab's 14-language row scrolls its own box); and, for the third time in t
 **a check scoped to part of its subject reports a clean result** — scoring only the content
 column found two faults, scoring the whole page found thirteen.
 
-**WHERE WE ARE RIGHT NOW:** the web app's list is at one item (**D1**, the founder's own
-decision) and the **admin dashboard sweep is done**, with one item of the same shape
-(**D2**). Both are recorded in `docs/WEB-FINISH-LIST.md` and `docs/ADMIN-SWEEP-LIST.md`.
+**WHERE WE ARE RIGHT NOW: BOTH LISTS ARE AT ZERO.** `docs/WEB-FINISH-LIST.md` is **13 of
+13** and `docs/ADMIN-SWEEP-LIST.md` is done. The last three items were colour and
+touch-target decisions the founder handed over deliberately (*"go ahead with everything we
+still have open and close it down, make your own decision, make some good research what
+other big platforms do"*), and all three were decided, applied and guarded in build 1836 —
+see **"TWO COLOURS, TWO ROLES"** below.
 Next in the founder's order is the **iPhone**, which needs two things from them and nothing
 from the code: EAS build credits, and the `ship` push that is theirs to give.
 **Progress: run `node tools/features.js`.** It prints the only two numbers that exist,
@@ -539,6 +542,55 @@ networking & jobs marketplace"** below.
 | **Purple** | `#AA00FF` (`--purple`) | **Reserve only** — on hand for a future need the ladder doesn't cover. Not used yet. |
 
 Green/red/yellow lettered text sits on their fills with **dark** text (bright hues) — never white-on-lime.
+
+**TWO COLOURS, TWO ROLES — `--accent` / `--accent-fill` and `--red` / `--red-fill`
+(build 1836, closing D1 and D2).** A brand colour has to do two opposite jobs and one value
+cannot do both: **white content ON it wants it DARK, and it as TEXT on black wants it
+BRIGHT.** `#0088FF` is 5.97:1 on black — right, and worth keeping — and only **3.52:1**
+under white, which is every selected blue control in the app. `#FF0033` is the same story
+one hue over (5.30 on black, 3.96 under white).
+
+| token | is | measures |
+|---|---|---|
+| `--accent` `#0088FF` | IDENTITY — links, usernames, the active tab's text, the verified seal, icons, borders. **Never darkened.** | 5.97:1 on black |
+| `--accent-fill` `#0071E0` | any AREA carrying white content | 4.73:1 under white · 4.44:1 on black |
+| `--red` `#FF0033` | IDENTITY — destructive text, warning icons, live/recording dots | 5.30:1 on black |
+| `--red-fill` `#D4002D` | any AREA carrying white content | 5.47:1 under white · 3.84:1 on black |
+
+**The rule when you write a rule: `color:var(--accent)` keeps the identity colour;
+`background:var(--accent)` becomes `background:var(--accent-fill)`.** Same for red. A flat
+`linear-gradient(…,var(--accent),var(--accent))` is a solid fill written the long way and
+takes the fill too — the ONE exception is `background-clip:text`, where the gradient IS the
+letters and is therefore identity.
+
+**This is Material Design 3's own model** (a brand tone plus a darker `primary` tone
+guaranteed to carry `on-primary`), and **Atwe had already reached the same answer once on
+its own** — `--bubble-out` is `#0071E0` for exactly this reason. Apple ships the near-miss
+we did: systemBlue `#007AFF` is 4.02:1 under white and systemRed `#FF3B30` is 3.55:1, a
+long-standing complaint about its own destructive alert button.
+
+**Both fills are still legible AS marks** (4.44 and 3.84 on black, clear of the 3:1 floor
+SC 1.4.11 sets for a UI component), which is what made one uniform substitution safe —
+123 + 17 blue fills and 31 + 6 red ones — rather than 177 judgement calls about which of
+them happen to carry text today.
+
+**Light theme is untouched.** It already deepens `--accent` to `#006ACF` (5.30:1 under
+white), so there the fill IS the accent and every screen renders byte-identically.
+**`--accent-tint` and `--red-tint` are the INK on those fills and nothing else** — the
+dashboard's tint was a pale blue at 2.77:1 and the app's red tint a pale pink scoring lower
+than plain white; both are `#FFFFFF` now.
+
+**A custom accent derives its own fill.** `applyAccent()` runs `_accentFill(hex)`, which
+steps the chosen colour until the ink it carries clears 4.5:1 — without it, picking orange
+would turn the links orange while every selected control stayed blue. `--accent-hover` is
+derived from the FILL, not the accent, or hover would be indistinguishable from rest.
+
+**Guarded by `scratchpad/fillroles.js`** (48 checks, both themes, both files): each fill
+carries its ink at 4.5:1, each is still a 3:1 UI mark on the page, the identity colour is
+never darker than its fill, **no solid fill anywhere in either source file still uses the
+identity colour** (read out of the FILE, so it covers screens no probe opens), and four
+custom accents each derive a passing fill. Self-tested: pointing either fill back at its
+identity colour fails it by name.
 
 **The rules (every one, everywhere):**
 1. **Buttons are always full pills** — both ends fully rounded (`border-radius:999px`).
@@ -1696,7 +1748,7 @@ changes shape as the profile lands. It is shared with the circle and feed screen
 **THE RUNNER HAS UNDER-COVERED ITSELF THREE TIMES NOW, in three different ways** — worth
 naming as one pattern: a stale path in `/tmp` (it ran a frozen copy of every probe), probes
 missing from its list (gapmob, notifhdr, acctbug — and notifhdr then went stale unnoticed),
-and a probe present in the list that could only ever skip (lastseen, above). It is at **96
+and a probe present in the list that could only ever skip (lastseen, above). It is at **108
 probes** today. When you add one, add it to `run-all.sh` in the same commit, and check a
 full run for `skipped` and `MISSING` as well as `FAILED`.
 
@@ -2136,13 +2188,33 @@ did not, which was the wrong way round for the surface where money and moderatio
 that breaks. It sends **the tab name, not the URL** (the URL is the same for every view) and
 `platform:'admin'`, so a row on the Site tab reads *"on admin / refunds"*.
 
-**Kept standing by two probes**, both in `run-all.sh`: `scratchpad/admindead.js` (every
+**A FINGER NEEDS 44pt IN HERE TOO (E1, build 1836).** Chips, toggles and steppers ran
+24–31px tall — fine for a mouse, short for a thumb, and staff really do open this on a
+phone. One block at the end of the stylesheet gives `.fc-catbtn .bc-aud .mod-scope .switch
+.copy .tf-r .vt-tbtn .stp .refresh` an invisible `::after` that is centred and at least
+44x44, **inside the phone media query only**. Nothing changes size and nothing moves. Three
+things are load-bearing: every one of those classes was checked to carry **no `::before`
+AND no `::after`** of its own (a pseudo-element is a slot and can already be taken — that
+shipped a visible bug on ~90 screens in build 1832); it grows at most **1px sideways** (the
+narrowest, `.bc-aud` at 42px, sits in a 6px-gap row and the `.stp` steppers are 38px apart);
+and it is **phone-only**, or a 44px invisible box around a 30px desktop button would swallow
+hover on its neighbour. Native checkboxes are deliberately excluded — an `<input>` cannot
+carry a reliable pseudo-element, and each sits inside a `<label>` whose whole row is already
+the target; they are simply drawn at 22px on a phone.
+
+**Kept standing by four probes**, all in `run-all.sh`: `scratchpad/admindead.js` (every
 handler names a real function — resolved in PAGE scope, because the dashboard declares many
 of them as top-level `const`, which are not `window` properties — every view has a button
 and a branch, and no `api()` call passes its path where the method goes) and
 `scratchpad/adminsweep.js` (all 68 views at a desktop AND a phone width: opens, no console
 error, not showing its failure line, actually reached the server, nothing spills, nothing
-under the legibility floor). **`adminsweep` scopes to the whole page, not `.main`** — scoped
+under the legibility floor), `scratchpad/admintouch.js` (the 44pt overlays — it builds each
+control OFF-SCREEN rather than hunting for it across 68 views, because several only exist
+once there is data and a probe that quietly finds nothing reports a clean result; it
+hit-tests each control's NEIGHBOUR to prove nothing was stolen, and asserts the overlay is
+**absent** at a desktop width, since a guard that passes at both widths is not testing the
+media query) and `scratchpad/fillroles.js` (the two colour roles, both files).
+**`adminsweep` scopes to the whole page, not `.main`** — scoped
 to the content column it found two faults; scoped to the page it found thirteen.
 
 ### Account enforcement — suspend / ban / reinstate
@@ -2766,6 +2838,14 @@ skipped forever. Grep a regression run for `skipped` as well as for `FAILED`.
 stack trace rather than the `N FAILED` line every check-counting probe ends with.
 A monitor grepping only for `failed|FAILED` reports a green run over a crashed
 one. Watch for `CRASH|TypeError|ReferenceError|MISSING` as well.
+
+**A PROBE THAT READS A REPO FILE MUST RESOLVE IT FROM `__dirname`, NOT THE WORKING
+DIRECTORY.** `run-all.sh` `cd`s into `scratchpad/` before running each probe, so a relative
+`fs.readFileSync('public/index.html')` throws ENOENT there while working perfectly when the
+probe is run by hand from the repo root — **green standalone, CRASHED in the suite**, which
+prints a stack trace instead of the `N FAILED` line. `fillroles.js` shipped that way for one
+run. That is the FOURTH shape of quiet runner gap recorded here, after a stale path, a probe
+missing from the list, and a probe that could only ever skip.
 
 (The one that surfaced this — `apperrors.js` — passes 19/19 run alone; it is the
 same batch-interaction flake already recorded for `skelgrey`, `sendundo`,
