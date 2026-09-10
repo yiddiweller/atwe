@@ -7496,7 +7496,12 @@ part of its subject reports a clean result.**
 **AND THE DEV-LOOP ONE: THE SERVER PRE-COMPRESSES `index.html` AT BOOT.** `sendShell`
 serves a brotli buffer built once at startup, so **an edit to `public/index.html` is not
 served until the server is restarted** — a fix can look like it did nothing. Restart before
-believing a browser measurement.
+believing a browser measurement. **`/api/capabilities` is cached the same way**
+(`_capsPayload`, built on the first request from the `FEATURES_DATA` loaded at boot), so a
+feature added with `tools/features.js` is invisible to search until the server restarts —
+which cost two false `aiknows` failures reading *"1 built features find NOTHING in search"*
+about a row that was plainly in `features-data.js`. Correct in production, where a deploy
+restarts; a dev-loop trap here.
 
 ## Performance — what was measured, and what it cost
 
