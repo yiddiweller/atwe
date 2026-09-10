@@ -21,7 +21,15 @@
     --s1:#0B0B0D; --s2:#141416; --s3:#1C1C1E; --s4:#242426;
     --b1:rgba(255,255,255,.05); --b2:rgba(255,255,255,.08); --b3:rgba(255,255,255,.14);
     --divider:#3A3A3C;
-    --t1:#ffffff; --t2:#8E8E93; --t3:#7E7E83; --t4:#48484A;
+    --t1:#ffffff; --t2:#8E8E93; --t3:#7E7E83;
+    /* --t4 IS AN ICON TINT AND MAY NEVER CARRY TEXT. It measures 2.30:1 on black,
+       2.02:1 on --s2 — under the 4.5 floor for words and under the 3 floor even for a
+       UI mark. Thirteen rules were painting text with it: every field placeholder in
+       the dashboard, the sidebar's own group labels (MONEY, PEOPLE, …), the support
+       timestamps, the chat day markers and the gate hint. All thirteen are --t3 now,
+       which is what the app uses for the same job (4.87:1 on --s1, 5.20:1 on black).
+       Nothing reads it today; it stays declared for a genuine icon tint. */
+    --t4:#48484A;
     --text-black:#1D1D1F;
     --accent:#0088FF; --accent-dim:rgba(0,136,255,.12); --accent-mid:rgba(0,136,255,.22);
     --accent-tint:#CCE8FF;
@@ -82,7 +90,7 @@
   nav#tabs{display:flex;flex-direction:column;gap:1px;flex:1;min-height:0;margin-top:4px;
     overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;
     padding-right:2px;}
-  .nav-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t4);
+  .nav-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);
     padding:0 10px;margin:15px 0 5px;}
   .nav-label:first-of-type{margin-top:6px;}
   .tab{position:relative;display:flex;align-items:center;gap:10px;width:100%;text-align:left;
@@ -129,7 +137,7 @@
   .toolbar input{flex:1;min-width:0;background:var(--s1);border:1px solid var(--b2);border-radius:var(--r-pill);
     color:var(--t1);padding:11px 16px;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
   .toolbar input:focus{border-color:var(--b3);}
-  .toolbar input::placeholder{color:var(--t4);}
+  .toolbar input::placeholder{color:var(--t3);}
   .refresh{background:var(--s1);color:var(--t2);border:none;border-radius:var(--r-pill);
     padding:11px 16px;font-size:13px;font-weight:600;transition:all .15s var(--ease);white-space:nowrap;}
   .refresh:hover{color:var(--t1);border-color:var(--b3);}
@@ -163,7 +171,7 @@
   .u-meta{display:flex;gap:20px;flex-shrink:0;text-align:right;}
   .u-meta .mv{font-size:13px;font-weight:600;}
   .u-meta .mk{font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;}
-  .chev{color:var(--t4);flex-shrink:0;}
+  .chev{color:var(--t3);flex-shrink:0;}
   .chev svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
 
   .pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:var(--r-pill);font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:capitalize;}
@@ -207,7 +215,7 @@
   .lock-form input{flex:1;min-width:130px;background:var(--s1);border:1px solid var(--b2);border-radius:var(--r-pill);
     color:var(--t1);padding:11px 16px;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
   .lock-form input:focus{border-color:var(--b3);}
-  .lock-form input::placeholder{color:var(--t4);}
+  .lock-form input::placeholder{color:var(--t3);}
   .lock-form .act{border-radius:var(--r-pill);}
   .lock-item{display:flex;align-items:center;gap:10px;background:var(--s1);border:none;
     border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px;}
@@ -223,7 +231,7 @@
   .tier .tc.warn{color:var(--amber);font-weight:600;}
   #lockSearch,#lockBulk{background:var(--s1);border:1px solid var(--b2);border-radius:var(--r-md);color:var(--t1);padding:11px 14px;font-size:14px;outline:none;font-family:inherit;}
   #lockSearch:focus,#lockBulk:focus{border-color:var(--b3);}
-  #lockSearch::placeholder,#lockBulk::placeholder{color:var(--t4);}
+  #lockSearch::placeholder,#lockBulk::placeholder{color:var(--t3);}
   .act.ghost{background:transparent;border:none;color:var(--t2);}
 
   /* ── Traffic analytics ── */
@@ -550,7 +558,7 @@
   .custom-row input{flex:1;min-width:0;background:var(--s1);border:1px solid var(--b2);border-radius:var(--r-pill);
     color:var(--t1);padding:11px 16px;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
   .custom-row input:focus{border-color:var(--b3);}
-  .custom-row input::placeholder{color:var(--t4);}
+  .custom-row input::placeholder{color:var(--t3);}
   /* Site-lock allowlist: tick a person to let them in without the code. */
   .allow-cb{width:20px;height:20px;flex:0 0 auto;cursor:pointer;accent-color:var(--accent);margin:0;}
   .allow-pick{display:flex;align-items:center;gap:12px;min-width:0;flex:1;cursor:pointer;}
@@ -563,7 +571,7 @@
   .ann-f input,.ann-f select{background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);
     padding:10px 12px;font:inherit;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
   .ann-f input:focus,.ann-f select:focus{border-color:var(--b3);}
-  .ann-f input::placeholder{color:var(--t4);}
+  .ann-f input::placeholder{color:var(--t3);}
 
   /* ── Broadcast + support ── */
   .panel{background:var(--s1);border:none;border-radius:var(--r-md);padding:16px;margin-bottom:22px;}
@@ -574,7 +582,7 @@
   .bc-box textarea{resize:vertical;min-height:84px;}
   .bc-box input{margin-bottom:8px;font-weight:600;}
   .bc-box textarea:focus,.bc-box input:focus{border-color:var(--b3);}
-  .bc-box textarea::placeholder,.bc-box input::placeholder{color:var(--t4);font-weight:400;}
+  .bc-box textarea::placeholder,.bc-box input::placeholder{color:var(--t3);font-weight:400;}
   /* Retention cohort grid — colour intensity carries the number, not decoration. */
 .ret-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
 .ret-tbl th{text-align:left;padding:7px 10px;color:var(--muted);font-weight:700;white-space:nowrap;}
@@ -641,7 +649,7 @@
   .sup-top{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
   .sup-from{font-size:13.5px;font-weight:600;}
   .sup-email{font-size:12px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .sup-date{font-size:11.5px;color:var(--t4);margin-left:auto;white-space:nowrap;flex-shrink:0;}
+  .sup-date{font-size:11.5px;color:var(--t3);margin-left:auto;white-space:nowrap;flex-shrink:0;}
   .sup-msg{font-size:13.5px;line-height:1.55;color:var(--t1);white-space:pre-wrap;word-break:break-word;}
   .sup-cat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:2px 8px;border-radius:999px;background:var(--s3);color:var(--t2);}
   .sup-cat-bug{background:rgba(255,0,51,.15);color:#ff6b81;}
@@ -736,7 +744,7 @@
   .chat-attach svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.2;fill:none;}
   .chat-attach:hover{color:var(--t1);border-color:var(--b3);}
   .hidden-input{display:none;}
-  .dm-time{align-self:center;font-size:10.5px;color:var(--t4);margin:8px 0 2px;}
+  .dm-time{align-self:center;font-size:10.5px;color:var(--t3);margin:8px 0 2px;}
   .chat-empty{margin:auto;text-align:center;color:var(--t3);font-size:14px;padding:30px;}
   .chat-compose{display:flex;gap:9px;align-items:flex-end;padding:12px 14px;border-top:1px solid var(--b1);
     background:rgba(20,20,22,.6);flex-shrink:0;}
@@ -744,7 +752,7 @@
     color:var(--t1);padding:10px 16px;font-size:14.5px;font-family:inherit;line-height:1.4;outline:none;resize:none;
     min-height:42px;max-height:130px;transition:border-color .15s var(--ease);}
   .chat-compose textarea:focus{border-color:var(--accent);}
-  .chat-compose textarea::placeholder{color:var(--t4);}
+  .chat-compose textarea::placeholder{color:var(--t3);}
   .chat-send{width:42px;height:42px;border-radius:50%;background:var(--accent);color:#fff;border:none;flex-shrink:0;
     display:flex;align-items:center;justify-content:center;transition:all .15s var(--ease);}
   .chat-send svg{width:20px;height:20px;stroke:#fff;stroke-width:2.4;fill:none;}
@@ -779,7 +787,7 @@
   .gate-mark:focus-visible{outline:2px solid var(--accent);outline-offset:6px;}
   .gate-title{font-size:23px;font-weight:800;letter-spacing:-.03em;line-height:1.2;margin:26px 0 9px;color:var(--t1);}
   .gate-sub{font-size:14px;line-height:1.6;color:var(--t3);margin:0;}
-  .gate-hint{margin-top:22px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--t4);}
+  .gate-hint{margin-top:22px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);}
   @keyframes gateIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
   @keyframes gatePulse{0%,100%{filter:none;}50%{filter:drop-shadow(0 0 2px rgba(255,255,255,.10));}}
   /* Admin device lock — 4-digit PIN pad. Native-passcode style: the Atwe mark up top,
@@ -902,7 +910,7 @@
   .vt-crumbs{font-size:14px;color:var(--t2);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .vt-crumb{cursor:pointer;color:var(--t1);font-weight:600;}
   .vt-crumb:hover{color:var(--accent);}
-  .vt-sep{color:var(--t4);}
+  .vt-sep{color:var(--t3);}
   .vt-tools{display:flex;gap:7px;flex-wrap:wrap;}
   .vt-tbtn{background:var(--card);border:1px solid var(--line);border-radius:9px;color:var(--t1);font-size:12.5px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;white-space:nowrap;}
   .vt-tbtn:hover{border-color:var(--accent);}
@@ -1069,6 +1077,26 @@
   .tf-ranges::-webkit-scrollbar{display:none;}
   .tf-r{flex:0 0 auto;white-space:nowrap;}
   #content table{display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border-collapse:collapse;}
+
+  /* NOTHING MAY PUSH THE PAGE SIDEWAYS. Two rows could, and only on a phone, because both
+     hold a cluster of items that refuses to shrink beside text that does:
+       • a user card's status pills (`.u-pills`, flex-shrink:0) — a member carrying several
+         at once shoved the row's own chevron 27px past the screen;
+       • a support item's action buttons (`.sup-acts`) — three of them measured 615px wide
+         on a 390px phone, i.e. the whole page scrolled sideways to reach the last one.
+     Wrapping is the fix in both cases and it costs nothing at a desktop width, where they
+     have never come close to filling the row. Measured at 390×780: page 417→390 and
+     615→390. */
+  .u-pills{flex-wrap:wrap;justify-content:flex-end;min-width:0;flex-shrink:1;}
+  .sup-acts{flex-wrap:wrap;}
+
+  /* EVERY PLACEHOLDER, not just the handful with a rule of their own. Most fields in the
+     dashboard had no placeholder colour at all and fell back to the browser's own #757575,
+     which is 3.99:1 on a --s2 field and 4.27:1 on --s1 — under the 4.5 floor for text
+     somebody has to read to know what the field is for. --t3 is 4.56:1 and 4.87:1, and is
+     what the app uses for the same job. The per-component rules further up are now
+     redundant but harmless. */
+  input::placeholder,textarea::placeholder{color:var(--t3);}
 </style>
 </head>
 <body>
@@ -1232,6 +1260,47 @@
 <script>
 let token = localStorage.getItem('atwe_token');
 
+/* WHEN THE DASHBOARD BREAKS FOR A STAFFER, THE OWNER SHOULD HEAR ABOUT IT.
+ * The app has reported its own faults since build 1830 — one row per distinct fault in
+ * `client_errors`, shown on this very dashboard's Site tab. The dashboard itself was the
+ * one place still reporting nothing, which is the wrong way round: this is where money,
+ * moderation and members are handled, and a staffer is far less likely than a member to
+ * say anything when a screen misbehaves.
+ *
+ * Same route, same shape, same rules as the app's `_reportError`: it sends the fault ONCE
+ * per session per distinct message, at most eight in a session, and it is wrapped so the
+ * reporter can never be the thing that breaks. It sends `platform:'admin'` and the tab
+ * name — NOT the URL, which is the same for every view anyway — so nothing identifying a
+ * member goes with it. A cross-origin "Script error." carries nothing to act on and is
+ * dropped. `admin` needs no build number: it ships with the app it is served beside. */
+const _ERR_MAX = 8; const _errSeen = new Set(); let _errSent = 0;
+function _adminReportError(message, source, stack){
+  try {
+    if (_errSent >= _ERR_MAX) return;
+    message = String(message || '').slice(0, 300);
+    if (!message || /^script error\.?$/i.test(message)) return;
+    const key = message + '|' + String(source || '');
+    if (_errSeen.has(key)) return;
+    _errSeen.add(key); _errSent++;
+    fetch('/api/client-error', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ message, source: String(source || '').slice(0, 200),
+        stack: String(stack || '').slice(0, 2000),
+        path: 'admin / ' + (typeof VIEW === 'string' ? VIEW : 'boot'), platform: 'admin' }),
+    }).catch(() => {});
+  } catch (e) { /* a reporter must never be the thing that breaks */ }
+}
+window.addEventListener('error', (e) => {
+  if (!e) return;
+  if (e.target && e.target !== window && e.target.tagName) return;   // a failed image/script tag, not a fault
+  _adminReportError(e.message, (e.filename || '') + ':' + (e.lineno || 0) + ':' + (e.colno || 0),
+    e.error && e.error.stack);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e && e.reason;
+  _adminReportError(r && r.message ? r.message : String(r), 'promise', r && r.stack);
+});
+
 // "Back to app" should leave the admin subdomain for the main app.
 (function setBackLink(){
   const link = document.getElementById('backLink');
@@ -1266,6 +1335,21 @@ async function api(method, path, body){
 function esc(s){
   return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;');
 }
+/* WRITING INTO A BOX THAT MAY HAVE GONE. Every view fetches its own data, so a render
+   — or the error message for a failed one — can land after a staffer has already
+   clicked another tab and #content has been replaced. The box the write was aimed at
+   no longer exists and `getElementById(...).innerHTML` throws. Nothing visible goes
+   wrong (the view really did change) but it IS a JS error, and the dashboard now
+   reports its own errors, so it would arrive in the owner's Site tab as news.
+   `liveBox(id)` hands back a stand-in that swallows the write instead. NB it is NOT
+   called `box` — that name is already a local `const` inside about thirty functions in
+   this file, and a global of the same name would simply be shadowed inside any of them. Deliberately shaped
+   like an element so the call sites stay plain assignments: rewriting them as
+   `setBody(id, …)` means finding the end of each statement to close the call, and two
+   of them are multi-line template literals — a paren in the wrong place there is a
+   silent syntax error in an 8,700-line file. #content itself never needs this. */
+const _GONE = { set innerHTML(_) {}, get innerHTML() { return ''; }, style: {}, classList: { add(){}, remove(){}, toggle(){} } };
+function liveBox(id){ return document.getElementById(id) || _GONE; }
 // A string safe to drop into an inline onclick="" attribute: JSON-quoted so the
 // JS parser sees a string, then HTML-escaped so the attribute itself holds.
 function jstr(v){ return esc(JSON.stringify(String(v == null ? '' : v))); }
@@ -2313,7 +2397,7 @@ async function renderSetupView(){
   document.getElementById('content').innerHTML = '<div id="setupBody"><div class="ld"><span class="ab-mark"></span></div></div>';
   let d;
   try { d = await api('GET', '/api/admin/setup'); }
-  catch (e){ document.getElementById('setupBody').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; return; }
+  catch (e){ liveBox('setupBody').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; return; }
   const pct = d.total ? Math.round((d.connected / d.total) * 100) : 0;
   const card = (it) => `<div class="site-row" style="display:block;border-top:1px solid var(--b1);padding:12px 0;">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -2327,7 +2411,7 @@ async function renderSetupView(){
         <div class="srs" style="margin-top:4px;">Where to get it: ${esc(it.where)}</div>
         <div class="srs" style="margin-top:4px;opacity:.75;">Railway variable${it.env.length > 1 ? 's' : ''}: <code>${it.env.map(esc).join('</code>, <code>')}</code></div>`}
     </div>`;
-  document.getElementById('setupBody').innerHTML = `
+  liveBox('setupBody').innerHTML = `
     <div class="panel">
       <h3>Setup <span class="muted">· ${d.connected} of ${d.total} connected</span></h3>
       <div class="sub">Everything outside Atwe that it can plug into. Each one is optional — without it the app keeps running and quietly does less. This page is where that "quietly" stops. Add a key in Railway → Variables, redeploy, and the light turns green.</div>
@@ -2422,7 +2506,7 @@ function renderSite(){
         <span class="jdot ${e.resolved ? 'grey' : 'red'}"></span>
         <div style="min-width:0;">
           <div class="srt">${esc(e.message)}</div>
-          <div class="srs">${who} · ${times} · last ${esc(fmtDateTime(e.lastSeen))} · build ${esc(e.build || '?')}${e.path ? ' · on ' + esc(e.path) : ''}</div>
+          <div class="srs">${who} · ${times} · last ${esc(fmtDateTime(e.lastSeen))}${e.build ? ' · build ' + esc(e.build) : ''}${e.path ? ' · on ' + esc(e.path) : ''}</div>
           <div class="srs muted">${esc(e.source || '')}</div>
         </div>
       </div>
@@ -2432,7 +2516,7 @@ function renderSite(){
   const errPanel = `
     <div class="panel">
       <h3>App errors <span class="muted">· what broke for someone</span></h3>
-      <div class="sub">Every time the app throws an error in somebody's browser it lands here — one line per distinct fault, with how many DIFFERENT people hit it. A brand-new one also sends you a notification. Mark one fixed and it only comes back if it happens again on a newer build.</div>
+      <div class="sub">Every time the app — or this dashboard — throws an error in somebody's browser it lands here; a line starting <b>admin /</b> broke for a staffer, in here. One line per distinct fault, with how many DIFFERENT people hit it. A brand-new one also sends you a notification. Mark one fixed and it only comes back if it happens again on a newer build.</div>
       ${errRows || '<div class="empty" style="padding:14px 0;">Nothing has broken. 🎉</div>'}
     </div>`;
   const crashPanel = `
@@ -5600,7 +5684,7 @@ function renderAdsAdminView(){
 }
 async function loadAdsAdmin(){
   try { ADSA = await api('GET', '/api/admin/ads' + (ADSA_FILTER ? '?status=' + ADSA_FILTER : '')); renderAdsAdmin(); }
-  catch (e){ document.getElementById('adsBody').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+  catch (e){ liveBox('adsBody').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 function setAdFilter(s){ ADSA_FILTER = s; loadAdsAdmin(); }
 function renderAdsAdmin(){
@@ -5608,7 +5692,7 @@ function renderAdsAdmin(){
   const counts = d.counts || {};
   const filters = [['','All'],['requested','In review'],['approved','Approved'],['active','Active'],['rejected','Rejected']];
   document.getElementById('adFilters').innerHTML = filters.map(([v,l]) => `<button class="tf-r ${ADSA_FILTER===v?'on':''}" onclick="setAdFilter('${v}')">${l}${v && counts[v] ? ' ('+counts[v]+')' : ''}</button>`).join('');
-  document.getElementById('adsBody').innerHTML = d.ads.length ? d.ads.map(adRow).join('') : '<div class="empty">No ads here.</div>';
+  liveBox('adsBody').innerHTML = d.ads.length ? d.ads.map(adRow).join('') : '<div class="empty">No ads here.</div>';
 }
 function adRow(a){
   const thumb = a.media ? (a.mediaKind==='video' ? `<video class="ad-thumb" src="${a.media}" muted></video>` : `<img class="ad-thumb" src="${a.media}" alt=""/>`) : '<span class="ad-thumb"></span>';
@@ -5712,14 +5796,14 @@ function renderAffAdminView(){
 }
 async function loadAffAdmin(){
   try { AFFA = await api('GET', '/api/admin/affiliations'); renderAffAdmin(); }
-  catch (e){ document.getElementById('affaBody').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+  catch (e){ liveBox('affaBody').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 function renderAffAdmin(){
   const d = AFFA; if (!d) return;
   const pend = d.uploads.filter(u => u.status === 'pending');
   const pendHtml = pend.length ? pend.map(u => `<div class="ad-row"><img class="ad-thumb" style="width:52px;height:52px;border-radius:12px;" src="${u.badge}" alt=""/><div class="ad-main"><div class="ad-title">${esc(u.user.name)} <span class="muted">@${esc(u.user.username)}</span></div><div class="ad-sub">${u.label ? esc(u.label) + ' · ' : ''}${u.link ? esc(u.link) : 'no link'}</div><div class="ad-acts"><button class="ok" onclick="affAct(${u.id},'approve')">Approve</button><button class="warn" onclick="affReject(${u.id})">Reject</button></div></div></div>`).join('') : '<div class="empty">No pending badge uploads.</div>';
   const activeHtml = d.active.length ? d.active.map(a => `<div class="ad-row"><img class="ad-thumb" style="width:44px;height:44px;border-radius:11px;" src="${a.badge}" alt=""/><div class="ad-main"><div class="ad-title">${esc(a.name)} <span class="muted">@${esc(a.username)}</span></div><div class="ad-sub">${a.kind === 'business' ? 'Business affiliation' : 'Custom badge'}${a.label ? ' · ' + esc(a.label) : ''}</div><div class="ad-acts"><button class="warn" onclick="affRevoke(${a.id})">Revoke badge</button></div></div></div>`).join('') : '<div class="empty">No active badges.</div>';
-  document.getElementById('affaBody').innerHTML = `
+  liveBox('affaBody').innerHTML = `
     <div class="panel"><h3>Badge uploads · pending review${pend.length ? ' (' + pend.length + ')' : ''}</h3>${pendHtml}</div>
     <div class="panel"><h3>Active badges (${d.active.length})</h3>${activeHtml}</div>`;
 }
@@ -7414,13 +7498,13 @@ async function renderRetentionView(){
     <div id="retBox"><div class="ld"><span class="ab-mark"></span></div></div>`;
   try {
     const { cohorts, weeks } = await api('GET', '/api/admin/retention?weeks=' + (window.RET_WEEKS || 8));
-    if (!cohorts.length) { document.getElementById('retBox').innerHTML = '<div class="empty">Not enough history yet.</div>'; return; }
+    if (!cohorts.length) { liveBox('retBox').innerHTML = '<div class="empty">Not enough history yet.</div>'; return; }
     const head = ['<th>Joined</th><th>People</th>'].concat(Array.from({ length: weeks }, (_, i) => `<th>W${i}</th>`)).join('');
     const rows = cohorts.map(c => `<tr><td>${fmtDate(c.week)}</td><td><b>${c.size}</b></td>` +
       c.cells.map(x => x == null ? '<td class="ret-na">–</td>'
         : `<td class="ret-c" style="background:rgba(0,136,255,${Math.min(0.6, x.pct / 160).toFixed(2)})" title="${x.active} of ${c.size}">${x.pct}%</td>`).join('') + '</tr>').join('');
-    document.getElementById('retBox').innerHTML = `<div class="panel" style="overflow:auto;"><table class="ret-tbl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
-  } catch (e){ document.getElementById('retBox').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+    liveBox('retBox').innerHTML = `<div class="panel" style="overflow:auto;"><table class="ret-tbl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  } catch (e){ liveBox('retBox').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 // Linked accounts — a LEAD, never a verdict. Households, offices and phone
 // networks share IPs legitimately, so the UI says how strong each signal is.

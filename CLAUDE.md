@@ -87,15 +87,42 @@ appears only in TestFlight, as `26.8 (7)`. So uploading `26.8` five times is nor
 public number stays `26.8` — the owner asked this directly and the answer is that they can
 write exactly the version they want.
 
-**THE ADMIN DASHBOARD GETS ITS OWN SHORT PASS, right after the web app** (owner, 9 Sep
-2026): *"once the web app is finished, I would like to go over a little bit to finalize and
-make sure the admin dashboard app is perfect as well… just a small sweep over, make sure
+**THE ADMIN DASHBOARD PASS IS DONE — `docs/ADMIN-SWEEP-LIST.md`** (owner, 9 Sep 2026):
+*"once the web app is finished, I would like to go over a little bit to finalize and make
+sure the admin dashboard app is perfect as well… just a small sweep over, make sure
 everything is perfect there as well."* Deliberately SMALL — it is `public/admin.html`, staff
 only, and it is not a fifth platform. It matters because the owner and their team live in it
-daily and it is where money, moderation and members are actually handled. Do it as its own
-pass once the web list is at zero, not woven through the web work.
+daily and it is where money, moderation and members are actually handled.
 
-**WHERE WE ARE RIGHT NOW:** step 1 of 4 — the web app.
+All **68 views** were opened at a desktop width and again at a phone width and asked the
+same objective battery the web pass used. **Five things were wrong and all five are fixed**:
+`--t4` (the ICON tint, 2.02–2.30:1) was carrying real text in thirteen rules — the sidebar's
+own group labels, the support timestamps, the gate hint — and is now `--t3`, what the app
+uses for the same job; **most fields had no placeholder colour at all** and fell back to the
+browser's `#757575` (3.99:1), now `--t3` in one rule that covers every field; **two tabs
+scrolled the whole page sideways on a phone** (Users 417px and Support 615px against a
+390px screen — seven un-wrappable action buttons in one row), both now wrap; four views
+could write into a box a staffer had already navigated away from, throwing a real JS error,
+and now go through `liveBox(id)`; and **the dashboard did not report its own faults** while
+the app has since build 1830, which was the wrong way round for the surface where money and
+moderation live — it now lands in the same Site-tab list, marked `admin / <tab>`. **One item
+is open and it is the founder's call, not ours: D2**, the red destructive button at 3.22:1;
+**one more waits on a fact only they have (E1)** — about fifty small controls are 24–31px,
+fine for a mouse, short for a finger, and whether that matters depends on whether the team
+ever opens the dashboard on a phone.
+
+**The pass's own three lessons** — all of them a probe being wrong rather than the app:
+a wait that is too SHORT reports a fault on working code (five tabs read as "empty" while
+they were still fetching); **a child inside a horizontal scroller is not a spill** (the
+Wording tab's 14-language row scrolls its own box); and, for the third time in this repo,
+**a check scoped to part of its subject reports a clean result** — scoring only the content
+column found two faults, scoring the whole page found thirteen.
+
+**WHERE WE ARE RIGHT NOW:** the web app's list is at one item (**D1**, the founder's own
+decision) and the **admin dashboard sweep is done**, with one item of the same shape
+(**D2**). Both are recorded in `docs/WEB-FINISH-LIST.md` and `docs/ADMIN-SWEEP-LIST.md`.
+Next in the founder's order is the **iPhone**, which needs two things from them and nothing
+from the code: EAS build credits, and the `ship` push that is theirs to give.
 **Progress: run `node tools/features.js`.** It prints the only two numbers that exist,
 built and to-do. **Never quote a number from this file.**
 
@@ -2076,6 +2103,47 @@ so a scoped staffer's sidebar collapses to just their sections. Signed-out
 (login / 2FA gate) collapses the shell to a centered card (`body:not(.authed)`).
 On mobile (≤900px) the sidebar is **off-canvas** — a hamburger (`.nav-toggle`) +
 scrim toggle `body.nav-open` to slide it in.
+
+### Three rules the dashboard's own sweep left behind (`docs/ADMIN-SWEEP-LIST.md`)
+
+**`--t4` IS AN ICON TINT AND MAY NOT CARRY TEXT.** It measures **2.30:1 on black, 2.16:1 on
+`--s1`, 2.02:1 on `--s2`** — under the 4.5 floor for words and under the 3 floor even for a
+UI mark. Thirteen rules were painting real text with it: **every field placeholder in the
+dashboard**, the sidebar's own group labels (`.nav-label` — MONEY, PEOPLE, …), the support
+and disputes timestamps (`.sup-date`), the chat day markers (`.dm-time`), the sign-in gate's
+hint, the row chevrons. All thirteen are **`--t3`** now, which is exactly what the app uses
+for the same job, so the two are in lockstep. `--t4` is still declared, with the reason
+written above it. This is the same misuse that once made the muted-group unread badge
+illegible, and the same one the "Add" tab's colour rule guards against.
+
+**A LATE RENDER MUST GO THROUGH `liveBox(id)`.** Every view fetches its own data, so a
+render — or the error message for a failed one — can land after a staffer has clicked
+another tab and `#content` has been replaced. `getElementById('adsBody').innerHTML` then
+throws. `liveBox` returns the element or a stand-in that swallows the write; it is shaped
+like an element on purpose so the call sites stay plain assignments (two of them are
+multi-line template literals, where closing a call in the wrong place is a silent syntax
+error in an 8,700-line file — that was tried first and it broke the file). **It is NOT
+called `box`:** `box` is already a local `const` in about thirty functions here and a global
+of that name is simply shadowed inside any of them, so the call would have thrown *"box is
+not a function"* on exactly the paths it was meant to make safe. **Grep a name before
+declaring it** — the rule this repo already has for CSS classes and custom properties
+applies to functions too.
+
+**THE DASHBOARD REPORTS ITS OWN FAULTS.** The app has done since build 1830; the dashboard
+did not, which was the wrong way round for the surface where money and moderation live.
+`_adminReportError` is the same reporter, same route (`POST /api/client-error`), same rules
+— once per session per distinct fault, at most eight, wrapped so it can never be the thing
+that breaks. It sends **the tab name, not the URL** (the URL is the same for every view) and
+`platform:'admin'`, so a row on the Site tab reads *"on admin / refunds"*.
+
+**Kept standing by two probes**, both in `run-all.sh`: `scratchpad/admindead.js` (every
+handler names a real function — resolved in PAGE scope, because the dashboard declares many
+of them as top-level `const`, which are not `window` properties — every view has a button
+and a branch, and no `api()` call passes its path where the method goes) and
+`scratchpad/adminsweep.js` (all 68 views at a desktop AND a phone width: opens, no console
+error, not showing its failure line, actually reached the server, nothing spills, nothing
+under the legibility floor). **`adminsweep` scopes to the whole page, not `.main`** — scoped
+to the content column it found two faults; scoped to the page it found thirteen.
 
 ### Account enforcement — suspend / ban / reinstate
 
