@@ -67304,6 +67304,33 @@ function _navDismissModal() {
   }
   const sb = document.getElementById('sidebar');
   if (sb && sb.classList.contains('open')) { closeSidebar(); return true; }
+  /* AND FINALLY, A DESTINATION PANEL THAT OWNS NO ROUTE — which is 193 of the app's 226.
+     `acSetPath` returns early when the path it is asked for is the one already showing,
+     so opening such a panel pushed NO history entry at all. Back therefore consumed
+     whatever entry came BEFORE it: the world underneath moved and the panel stayed open,
+     which is worse than Back doing nothing. Measured on Splits and Pools; the same was
+     true of every unrouted sheet.
+
+     Treating it as "Back closes this panel" is right and it is also free: the caller
+     re-pushes the entry when we return true, so nothing is consumed and the page stays
+     exactly where it was. The alternative — inventing a URL for all 193 — would mean 193
+     new reserved usernames kept in step across three files, for panels nobody links to.
+
+     noHistory IS LOAD-BEARING: closeOverlay walks history back for a panel whose entry it
+     pushed, and we are already inside a popstate. Letting it walk again would eat a second
+     entry and take the member somewhere they never asked to go.
+
+     THE GATES ARE EXCLUDED. Back must not dismiss the login wall, the onboarding flow or
+     the passcode pad — those are not places you are visiting, they are places you have to
+     get through. */
+  const NEVER_BACK = ['loginOverlay', 'signupOverlay', 'onboardingFlow', 'appLockView',
+                      'splashOverlay', 'introSheet'];
+  const sheets = [...document.querySelectorAll('.overlay:not(.hidden):not(.closing)')]
+    .filter((o) => !ROUTE_BY_VIEW[o.id] && !NEVER_BACK.includes(o.id));
+  if (sheets.length) {
+    try { closeOverlay(sheets[sheets.length - 1].id, true); } catch (e) {}
+    return true;
+  }
   return false;
 }
 
