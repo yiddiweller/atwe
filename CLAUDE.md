@@ -7423,6 +7423,18 @@ features find NOTHING**).
 - **`_caps` is a top-level `let` in the page, not a window property** — `window._caps`
   waits for ever on working code. Same trap as `S`.
 
+**AND IT MUST HAVE A REAL CONVERSATION — `scratchpad/seed-fixtures.js`, run first by
+`run-all.sh`.** Build 1845's regression came back with FOUR red probes — `chatscroll`,
+`openbottom` and two more — and the app was perfectly fine: the account they sign in as
+had a NINE-message thread, so *"can a reduced-motion user scroll a conversation"*
+measured **0 -> 0** and reported a broken scroller. With a real 79-message thread the
+same check reads **6683 -> 6043** and passes. The runner now tops that conversation up
+to 80 messages before anything runs, idempotently. Same lesson as the admin token one
+line up, and as `lastseen`'s: **a probe that depends on somebody having seeded
+something by hand will eventually run against nothing and say so in the language of a
+bug.** Four red probes that all touch one surface is a fixture, not four regressions —
+check what the account HAS before reading the failures.
+
 **THE REGRESSION'S TOKEN MUST BE A BUSINESS ADMIN, OR WHOLE ROWS ARE NEVER MEASURED.**
 `run-all.sh` picks `TOK` up from `/tmp/tok.txt`, and what that account IS decides what the
 probes can see. Minting it as an admin for build 1843's run made `legible` fail for the
