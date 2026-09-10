@@ -7311,6 +7311,18 @@ features find NOTHING**).
 - **`_caps` is a top-level `let` in the page, not a window property** — `window._caps`
   waits for ever on working code. Same trap as `S`.
 
+**THE REGRESSION'S TOKEN MUST BE A BUSINESS ADMIN, OR WHOLE ROWS ARE NEVER MEASURED.**
+`run-all.sh` picks `TOK` up from `/tmp/tok.txt`, and what that account IS decides what the
+probes can see. Minting it as an admin for build 1843's run made `legible` fail for the
+first time on **`.iset-row.iset-staff .iset-sub`** — the Admin dashboard row's subtitle in
+Settings, painted with the ICON tint at **1.86:1** in Light. It is not a new fault; it is a
+shipped one that no probe had ever been able to reach, because the row only renders for an
+admin. Twelve more app rules were painting text with `--t4` and are now `--t3`; the three
+that keep it are genuine SVG marks, which is its job. Same shape as the lesson `mehub.js`
+already records — *"it runs the completeness pass as a business ADMIN, the only account
+that can see every row"* — and the third time this repo has found that **a check scoped to
+part of its subject reports a clean result.**
+
 **AND THE DEV-LOOP ONE: THE SERVER PRE-COMPRESSES `index.html` AT BOOT.** `sendShell`
 serves a brotli buffer built once at startup, so **an edit to `public/index.html` is not
 served until the server is restarted** — a fix can look like it did nothing. Restart before
