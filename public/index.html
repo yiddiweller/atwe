@@ -22839,7 +22839,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1847'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1848'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -67226,7 +67226,12 @@ let _brandH = 44, _bcHide = 0;
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
-  const tb = document.querySelector('.topbar');
+  /* One layout read, before any style is written — see the note in _onWinScroll: measured
+     with LayoutCount, this ordering saves nothing today and is kept so it can never stop
+     being true. What it does save is real if small: the `.topbar` lookup and the scrim's
+     getElementById below ran on every frame of every fling and are cached now. */
+  const _atBottom = sc.scrollTop >= (sc.scrollHeight - sc.clientHeight - 12);
+  const tb = _pgTb || (_pgTb = document.querySelector('.topbar'));
   if (tb && !tb.classList.contains('hidden')) {        // drill-in screens own their header
     // Use the cached bar height — do NOT read tb.offsetHeight here. Reading layout
     // inside the scroll handler forces a synchronous reflow on every frame (worst on
@@ -67251,8 +67256,8 @@ function _onListScroll(e) {
   // handle the top cleanly.
   if (sc.id === 'acFeed') {
     _navScrollActive();                                // frost off while scrolling (Home only)
-    const scrim = document.getElementById('acTopScrim');
-    if (scrim) scrim.style.opacity = 0;
+    if (!_pgScrim) _pgScrim = document.getElementById('acTopScrim');   // cached: never look it up per frame
+    if (_pgScrim && _pgScrim.style.opacity !== '0') _pgScrim.style.opacity = 0;
   }
   // Collapsing brand header (Home feed + every Beam pane): translate the topbar UP as you
   // scroll DOWN and back DOWN as you scroll UP — DELTA-tracked so it reverses the exact
@@ -67260,7 +67265,7 @@ function _onListScroll(e) {
   // forced fully shown at the very top. ONE composited transform per frame, so it's smooth.
   if (document.body.classList.contains('brand-collapse') &&
       (sc.id === 'acFeed' || sc.id === 'acList' || sc.id === 'acCallList2' || sc.id === 'acContactsList2' || sc.id === 'acSearchScroll')) {
-    const _tbc = document.querySelector('.topbar');
+    const _tbc = tb || _pgTb;
     if (_tbc) {
       const st = sc.scrollTop;
       const prev = (sc._bcLast != null) ? sc._bcLast : st; sc._bcLast = st;
@@ -67281,7 +67286,7 @@ function _onListScroll(e) {
     // pop the ball back into the full bar even though the finger never scrolled up. While
     // we're at the bottom, ignore up-deltas: only a real scroll-up (which moves scrollTop
     // clearly BELOW the bottom) reverts to the bar.
-    const atBottom = st >= (sc.scrollHeight - sc.clientHeight - 12);
+    const atBottom = _atBottom;
     if (st <= 40) _setNavBall(false);
     else if (dy > 3) _setNavBall(true);
     else if (dy < -3 && !atBottom) _setNavBall(false);
@@ -67303,6 +67308,16 @@ function _onWinScroll() {
   _navScrollActive();                                  // frost off while scrolling (Home only)
   const se = document.scrollingElement || document.documentElement;
   const st = se.scrollTop, dy = st - _winNbLast; _winNbLast = st;
+  /* THE ONE LAYOUT READ HAPPENS HERE, BEFORE THE FIRST STYLE WRITE. `atBottom` used to be
+     computed further down, after the bar's transform and --tb-hide had been written, which
+     LOOKS like the classic read-after-write reflow the comment below forbids. It was A/B'd
+     with Chrome's own LayoutCount over a fixed 60-frame fling and it is NOT: 24 layouts
+     either way, 3.3ms either way. A transform and a custom property dirty compositing and
+     style, not layout, so the later read was already free — the suspicion was wrong and the
+     measurement is recorded here so nobody spends the afternoon on it twice. The ordering is
+     kept because it makes the invariant REAL: the day someone adds a write above this line
+     that does dirty layout, it cannot quietly become a per-frame reflow. */
+  const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
   // COLLAPSING HEADER on the WINDOW scroll — Home AND Beam (both have the brand + tabs bar):
   // slide the brand row UP as you scroll down, back DOWN as you scroll up, delta-tracked 1:1
   // (stays where you stop), clamped to the brand-row height so the tabs pin at the top. One
@@ -67321,7 +67336,6 @@ function _onWinScroll() {
   // the new black-under-nav effect tracking it). The compose-FAB slide stays Home-only —
   // Beam's morphed "+" ball opens a new chat via acNavBallTap.
   if (_appTab === 'home' || _appTab === 'chat') {
-    const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
     if (NAV_MORPH) {                                   // pill ⇄ ball, same thresholds as _onListScroll
       if (st <= 40) _setNavBall(false);
       else if (dy > 3) _setNavBall(true);
@@ -67333,7 +67347,11 @@ function _onWinScroll() {
       if (_pgFab) _pgFab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / _pgTbH)) * 68) + 'px)'; // FAB → corner
     }
   }
-  const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = 0;
+  /* The scrim is held at 0 while the page scrolls. It was re-written every frame, on every
+     tab, whether or not it had drifted — a style write is never free, and this one was a no-op
+     on all but the first frame of a fling. Cache the node and write only on a real change. */
+  if (!_pgScrim) _pgScrim = document.getElementById('acTopScrim');
+  if (_pgScrim && _pgScrim.style.opacity !== '0') _pgScrim.style.opacity = 0;
   _syncNavBlack();
 }
 // Solid black under the floating pill (mobile browser). Measures the pill's REAL rendered
@@ -67341,7 +67359,7 @@ function _onWinScroll() {
 // bottom. Re-measured on scroll / Safari-bar shrink / resize so it always tracks the pill —
 // env(safe-area) proved unreliable on real iOS Safari, so we read the actual rect instead.
 // rAF-coalesced so multiple triggers in a frame do one measurement.
-let _navBlackRAF = 0, _navGap = 23, _navProbe = null;
+let _navBlackRAF = 0, _navGap = 23, _navProbe = null, _pgNavBd = null;
 // Resolve the pill's real side gap (--nav-inset, a calc()) to px ONCE via a hidden probe,
 // so the gap UNDER the pill is the exact same space as the gap on its SIDES (owner request),
 // even if --feed-gutter/--nav-inset ever change. parseFloat on the raw calc() string is NaN.
@@ -67386,7 +67404,7 @@ function _navBackdropProbe() {
 // so there is NO per-frame JS. This is a no-op kept so its call sites stay valid; it only
 // clears any stale inline styles a prior JS-positioned build may have left, so CSS always wins.
 function _syncNavBlack() {
-  const bd = document.getElementById('navBackdrop');
+  const bd = _pgNavBd || (_pgNavBd = document.getElementById('navBackdrop'));
   if (bd && (bd.style.top || bd.style.background || bd.style.height)) {
     bd.style.top = ''; bd.style.bottom = ''; bd.style.height = ''; bd.style.background = '';
   }
