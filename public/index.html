@@ -14729,6 +14729,25 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
 .mkt-card-save::after,.pf-cam::after{inset:-7px;}                                 /* 30 → 44 */
 .mkt-cart::after,.pf-top-x::after,.pf-bcam::after{inset:-2px;}                    /* 40 → 44 */
 .feed-im-btn::after{inset:-1px;}                                                   /* 42 → 44 */
+
+/* AN INSET OVERLAY RESOLVES AGAINST THE PADDING BOX, so a control that carries a BORDER
+   comes out 2x its border SHORT of the arithmetic above — and the comments above were
+   written as if no border existed. Three of these do, and all three had been claiming a
+   size they never had: `.tb-brand-act` (1px border) reached 42 not 44, `.pf-bcam` (1px)
+   42, and `.pf-cam` (2px) only 40.
+
+   WORSE, `touchsize.js` GUARDED THEM BY REDOING THE SAME SUM — element rect plus the two
+   negative insets — instead of asking the browser what the overlay actually measures, so
+   it reported a confident 44 on all three for as long as they were wrong. A guard that
+   repeats the calculation it is checking cannot fail. It measures the pseudo's own used
+   size now.
+
+   These three are therefore sized rather than inset: centred on the padding box (which
+   is concentric with the border box) and floored at 44 in each axis, so the border can
+   never be part of the arithmetic again. */
+.tb-brand-act::after,.pf-bcam::after,.pf-cam::after{
+  inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:100%;min-width:44px;height:100%;min-height:44px;}
 /* The immersive rail stacks vertically with a small gap, so this one grows sideways
    only — reaching 44 tall would overlap the button above and below it. */
 .frail-btn::after{top:-2px;bottom:-2px;left:-6px;right:-6px;}
@@ -14739,7 +14758,61 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
    would swallow the ring's middle and steal the view tap, so it grows only DOWN and OUT,
    away from the ring's centre and into the tray's 12px gap. Instagram makes the same
    compromise for the same reason; the shortfall is recorded rather than claimed as 44. */
-.story-add::before{content:'';position:absolute;z-index:0;top:-6px;left:-6px;right:-10px;bottom:-10px;}
+.story-add::before{content:'';position:absolute;z-index:0;top:-6px;left:-6px;right:-12px;bottom:-12px;}
+/* The right/bottom reach is 12, not 10, because the 34 recorded above was COMPUTED
+   from the 20px border box when an inset resolves against the PADDING box — and
+   `.story-add` carries a 2px ring, so 16+6+10 measured 32. Two more each way on the
+   outward sides only makes the recorded number true; `touchsize.js` hit-tests the
+   neighbouring cell, which is what proves the tray's gap still absorbs it. */
+
+/* ── D1: A TABLET IS A TOUCH DEVICE, AND NOBODY HAD EVER SIZED FOR ONE ─────────────
+   docs/DESIGN-UNIFICATION.md D1. A four-width sweep (390x844 phone, 768x1024 tablet
+   portrait, 1024x768 tablet landscape, 1440x900 desktop) found no sideways spill
+   anywhere, exactly one nav at every width, and a clean desktop — but 17 control
+   families under the 44pt touch floor on every TOUCH width, including the DESKTOP
+   SIDEBAR, which a 1024px iPad in landscape gets in full because the layout switches
+   on width+height and 768 tall is a tablet, not a phone. Those rows were drawn for a
+   mouse and had never been opened with a thumb.
+
+   THE GATE IS `pointer:coarse`, NOT A WIDTH, and that is the whole D1 lesson. A 1024px
+   iPad wants big targets; a 1024px laptop does not, and a 44px invisible box around a
+   34px desktop row would swallow hover on the row beside it (the reason the dashboard's
+   own E1 block is phone-only). `pointer:coarse` asks the question that actually matters,
+   and it is what lets the sidebar be fixed for the tablet without touching desktop.
+
+   THE RECIPE IS THE APP'S OWN and costs nothing: an invisible ::after, centred, that
+   lifts ONLY the axis that is short — `height:100%;min-height:44px` never shrinks a tall
+   control and `min-width:44px` only fires on one that is genuinely narrow. Nothing
+   changes size, nothing moves, no layout is recomputed.
+
+   ALMOST EVERY ONE OF THESE FAILS ON HEIGHT ALONE (32px tab pills, 29px follow buttons,
+   34px sidebar rows) and that is the safe axis here: they sit in horizontal rows with
+   real gaps, so nothing grows over the control beside it. `touchwide.js` hit-tests every
+   neighbour's centre anyway — growing over the control next door trades one fault for a
+   worse one, and it is the cheap way to "pass" this check.
+
+   EVERY CLASS BELOW WAS CHECKED FOR A FREE PSEUDO SLOT. Two were taken and are handled:
+   `.ac-follow-btn::after` IS the word "Follow" (so it takes ::before), and
+   `.tb-feedtab-add::before` is the Add label's own overlay (so `.tb-feedtab` is scoped
+   :not(.tb-feedtab-add), which also leaves its deliberate 41px width alone). A
+   pseudo-element is a slot and it can already be taken — claiming one a chevron was
+   using shipped a visible bug on ~90 screens in build 1832.
+
+   NAMED EXCEPTIONS, not oversights: `.ac-post-av` and `.story-cell` are profile pictures,
+   not controls; `.story-add` keeps its own asymmetric overlay two rules above (a centred
+   44 would steal the ring's view tap); `.tb-feedtab-add` is 41 wide by design. */
+@media (pointer:coarse){
+  .tb-feedtab:not(.tb-feedtab-add),.ac-jv,.ac-link-btn,.ac-pill-btn,.ac-follow-btn,
+  .mkt-buy,.wallet-cashout,.rr-more,.sb-navbtn,.sb-btn,.sb-settings,.tb-ico,
+  .tb-brand,.ac-ptab,.ac-prof-back,.ac-sg-foot{position:relative;}
+  .tb-feedtab:not(.tb-feedtab-add)::after,.ac-jv::after,.ac-link-btn::after,
+  .ac-pill-btn::after,.ac-follow-btn::before,.mkt-buy::after,.wallet-cashout::after,
+  .rr-more::after,.sb-navbtn::after,.sb-btn::after,.sb-settings::after,.tb-ico::after,
+  .tb-brand::after,.ac-ptab::after,.ac-prof-back::after,.ac-sg-foot::after{
+    content:'';position:absolute;z-index:0;pointer-events:auto;
+    left:50%;top:50%;transform:translate(-50%,-50%);
+    width:100%;min-width:44px;height:100%;min-height:44px;border-radius:inherit;}
+}
 
 </style>
 </head>
@@ -22745,7 +22818,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1836'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1841'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —

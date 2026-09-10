@@ -190,6 +190,47 @@ over the control next door trades one fault for a worse one, so `touchsize.js` h
 neighbour's centre, and it reads the CSS block itself so a renamed class cannot orphan its
 overlay silently.
 
+**AN INSET OVERLAY RESOLVES AGAINST THE PADDING BOX, so a control with a BORDER comes out
+`2 x border` SHORT of the arithmetic — and the guard redid the same sum instead of
+measuring.** `inset:-4px` on a 36px control reads as "36 -> 44" and really renders **42**
+when the control carries a 1px border. Four did: `.tb-brand-act` 42, `.pf-bcam` 42,
+`.pf-cam` (2px border) **40**, and `.story-add` 32 against a recorded 34. **`touchsize.js`
+computed `rect + (-left) + (-right)` — the identical sum the stylesheet comment does — so
+it could only ever agree with the CSS, never with the screen, and reported a confident 44
+on all four for as long as they were wrong. A guard that repeats the calculation it is
+checking cannot fail.** It asks the browser for the pseudo's own used size now (the inset
+sum survives only as a fallback for a pseudo on a surface that is not laid out, where
+`width` computes `auto`). The three bordered ones are **sized rather than inset** — centred
+on the padding box and floored at 44 in each axis — so a border can never re-enter the
+arithmetic.
+
+**A TABLET IS A TOUCH DEVICE, AND IT IS THE DEVICE CLASS NOBODY HAD SIZED FOR (D1).** The
+layout switches on width AND height, so **1024x768 — an iPad in landscape — correctly gets
+the DESKTOP layout**, sidebar included, and those rows were drawn for a mouse
+(`.sb-btn` 36, `.sb-settings` 34, `.tb-ico` 38). Across the touch widths **17 control
+families** sat under the floor, `.tb-feedtab` (32px, the most-pressed row in the app) among
+them. **The gate is `pointer:coarse`, NOT a width** — a 1024px iPad wants big targets and a
+1024px laptop does not, and a 44px invisible box around a 34px desktop row would swallow
+hover on the row beside it. Asking about the POINTER is what lets the tablet be fixed
+without touching desktop at all. Almost every one of these failed on **height alone**,
+which is the safe axis: they sit in horizontal rows with real gaps.
+
+**Guarded by `scratchpad/touchwide.js`** (four widths, both directions): every on-screen
+control clears 44 on the three touch widths, no overlay steals the control next door, and
+the overlays are **absent on a mouse** — a guard that passes at every width is not testing
+the media query. Four of its own bugs are worth knowing, because each reported a fault on
+correct code: **`getComputedStyle` returns `left`/`right` BEFORE any transform**, so a
+centred overlay reports a used `right` of about -50% and reading that as outward reach cried
+theft on seven perfectly-placed overlays; **"the control next door" means the same layer**,
+or a modal covering the page beneath it reads as theft; **a child inside a horizontal
+scroller is not on screen** (`checkVisibility` says nothing about clipping, so four Engine
+scope tabs scrolled past the end of `#tbSearchScopes` still reported their laid-out position
+— which lands under the desktop right rail and looked exactly like a rail covering four
+untappable tabs), and the clip must be tested at the control's **centre**, since a tab
+straddling the scroller's edge is partly visible with its centre already gone; and the
+allowlist must **match on every class**, not `classes[0]`, or `.tb-feedtab-add` walks past
+its own named exception.
+
 **A PSEUDO-ELEMENT IS A SLOT, AND IT CAN ALREADY BE TAKEN — this shipped WRONG, visibly, on
 ~90 screens.** The block first claimed `::before`, and **`.job-card-modal .sheet-close::before`
 IS the sheet back chevron** (an 11×11 box with two borders, rotated 45°). The chevron's rule is
