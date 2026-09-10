@@ -14427,6 +14427,19 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    is what keeps a chosen chip white, a primary white, and a delete button red. Same
    discrimination `.tb-feedtab:not(.tb-feedtab-add)` already uses one block above.
 
+   THE CHAT HEADER IS DELIBERATELY NOT IN THIS LIST — `.ac-h3-btn`, `.ac-h3-pill` and
+   `.ac-head-more` (its own ⋯). All three FLOAT OVER THE SCROLLING CONVERSATION.
+   Those three shapes carry a material the founder specified and corrected across five
+   passes (`--h3-size`, `--h3-gap`, `--h3-inner`, a 1px rim, a measured fill), and the
+   recipe's `border:none` stripped that rim: `chathead.js` measured 0 / 0 / 1 instead of
+   1 / 1 / 1, and the lost pixel also slid the presence dot 19 -> 18 from the pill's end,
+   breaking the concentric placement two builds had been spent getting right. Worse, the
+   recipe's `backdrop-filter` would put a live blur on controls that FLOAT OVER THE
+   SCROLLING CONVERSATION — `chatscroll.js` bans that on measured grounds (every blur
+   allowed over a thread was benchmarked at a 6x CPU throttle first, and its allowlist is
+   four elements long). "Every button looks the same" does not mean overriding a surface
+   somebody designed by hand; both probes caught it, and both were right.
+
    GLASS ON CHROME ONLY. A button is chrome, so it gets the frost. A card, a post, a
    message bubble and anything carrying body text stay solid — the founder's own line was
    "all the text that is not a button should be with a full black background", and this
@@ -14434,9 +14447,6 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 .ac-cat-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-err-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
-.ac-h3-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
-.ac-h3-pill:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
-.ac-head-more:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-icon-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-lchip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-pill-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
@@ -14484,9 +14494,6 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 .ac-cat-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
 .ac-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
 .ac-err-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
-.ac-h3-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
-.ac-h3-pill:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
-.ac-head-more:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
 .ac-icon-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
 .ac-lchip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
 .ac-pill-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
@@ -14532,9 +14539,6 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 .ac-cat-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-err-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
-.ac-h3-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
-.ac-h3-pill:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
-.ac-head-more:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-icon-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-lchip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
 .ac-pill-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
@@ -22818,7 +22822,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1841'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1842'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —

@@ -231,6 +231,37 @@ straddling the scroller's edge is partly visible with its centre already gone; a
 allowlist must **match on every class**, not `classes[0]`, or `.tb-feedtab-add` walks past
 its own named exception.
 
+**"EVERY BUTTON LOOKS THE SAME" DOES NOT MEAN OVERRIDING A SURFACE SOMEBODY DESIGNED BY
+HAND.** The `--ctl-*` control recipe named `.ac-h3-btn`, `.ac-h3-pill` and `.ac-head-more`
+— the conversation header's back button, name pill and ⋯ — and two probes caught it in the
+same run. `chathead` measured the rim at **0 / 0 / 1** instead of 1 / 1 / 1 (the recipe's
+`border:none` stripped a 1px border the founder specified) and that lost pixel also slid
+the presence dot **19 → 18** from the pill's end, undoing a concentric placement two builds
+had been spent on. `chatscroll` failed separately because the recipe's `backdrop-filter`
+put a live blur on controls that **float over the scrolling conversation** — a ban that is
+MEASURED, not stylistic: every blur allowed over a thread was benchmarked at a 6× CPU
+throttle first and the allowlist is four elements long. All three classes are exempt and
+the reason is written into the recipe's own comment. **A sweeping rule needs a list of what
+it must not touch, and the surfaces with their own signed-off design are that list.**
+
+**AN UNDERLINE IS PAINTED, SHORT, AND AT THE BOTTOM — not "has a pseudo-element".**
+`tabpills.js` called any `::after` with a height an underline, which was safe only while no
+tab had one. The 44pt touch block gives every tab a **transparent, full-height** `::after`
+for the tap target, and the check then reported **8 underlines on tabs that draw none**. It
+now asks the three things that make a line a line (painted — a real background, image or
+bottom border; no taller than half the tab). Self-tested by injecting a genuine 3px accent
+underline, which fails it by name. **A probe that infers a visual from the mere existence
+of an element will misfire the moment anything else uses that element.**
+
+**THE APP'S STYLESHEET ENDS AT THE FIRST `</style>`, NOT THE LAST — the same trap the
+`<script>` note above records.** `index.html` contains **seven** closing style tags; six of
+them are inside JS template literals that build print windows (the packing slip, the
+invoice, the customs declaration). A self-test that appended CSS at `rindex('</style>')`
+landed inside the packing-slip string, so the rule never applied and the probe "passed" on
+an injection that was never live — twice, before it was noticed. Insert before the FIRST
+one, and confirm with `curl -s localhost:3262/ | grep -c SELFTEST` **and** a measurement
+that the rule actually won.
+
 **A PSEUDO-ELEMENT IS A SLOT, AND IT CAN ALREADY BE TAKEN — this shipped WRONG, visibly, on
 ~90 screens.** The block first claimed `::before`, and **`.job-card-modal .sheet-close::before`
 IS the sheet back chevron** (an 11×11 box with two borders, rotated 45°). The chevron's rule is
