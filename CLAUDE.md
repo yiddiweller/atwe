@@ -6662,13 +6662,55 @@ velocity caps, a frozen wallet and idempotency all apply with nothing special-ca
 `send_message` posts to `/api/atchat/with/:id` — the identical route a typed message
 takes.
 
-**Guarded by `scratchpad/aiagent.js` (17 checks), and it needs no API key.** The SDK
+**WHAT IT CAN DO IS "ANYTHING A FINGER CAN DO WITHOUT A PASSWORD" (the founder's own
+rule, build 1845), and 14 tools were added to make that true**: post_now (the biggest
+miss — only `schedule_post` existed, so it could plan a post but not publish one),
+follow · block · mute · save_contact, request_money, create_payment_link, set_status,
+create_group, create_coupon, update_profile, set_privacy, respond_to_booking,
+mark_order_shipped. **Every one still ends at a confirm card.**
+
+**Everything acting ON a person shares one shape — `AI_PERSON_ACTS`** — so there is one
+implementation rather than six near-copies: the model proposes a **@username**, the
+CLIENT resolves it to a real account, and the real route runs. **The model never
+supplies an id.** The two tools that genuinely need one (`respond_to_booking`,
+`mark_order_shipped`) take it from `needs_attention`, which now returns real rows this
+member owns rather than only counts.
+
+**WHAT IT REFUSES IS A LIST, NOT A HOPE.** Deleting or hibernating the account,
+changing the password or email, two-factor, signing other devices out, cashing out to a
+bank — Atwe asks the member for their password or an emailed code and will not take it
+from the assistant. The prompt names them and tells it to say so and point at the page;
+and there is **no tool for any of them**, so it could not if it tried. Changing the
+@username is left to the member too, deliberately: it is their address and other
+people's links depend on it.
+
+**GENERAL BUSINESS COMES FIRST IN THE CHAT PROMPT, and that ordering is the fix.** The
+app material had grown to ~500 words and pushed "you are an assistant for people
+running a business" to the very end — backwards for the thing people mostly ask, which
+has nothing to do with Atwe. Identity and *"most questions you are asked are not about
+the app"* now lead; the pages, features and lookups follow.
+
+**THE DO-IT-FOR-ME SURFACE KNEW NOTHING ABOUT THE APP.** `appGuideBlock`,
+`appHintsBlock` and `capabilityBlock` were on `/api/chat` only, so the surface that can
+ACT could not answer "where is X" or "does Atwe do Y". It gets all three now, from the
+same sources.
+
+**Guarded by `scratchpad/aiagent.js` (42 checks), and it needs no API key.** The SDK
 honours `ANTHROPIC_BASE_URL`, so the probe stands a **scripted model** in front of the
 REAL server and the REAL loop. That is *better* than a live model for a safety test: a
 script performs the attack every single run, where a real model might simply decline
 that time and leave the hole untested. It seeds a real attacker, a real poisoned DM,
 and asserts the money did not move. Self-tested — removing the boundary fails three
 checks with `it proposed send_money`.
+
+**Three probe bugs, and every one reported a failure on correct code:**
+`AI_READ_TOOLS` is declared BETWEEN `AGENT_TOOLS` and the labels, so slicing "to the
+labels" swept the lookups in and demanded a confirm-card label for things that never
+show one; **`users.status` is the ACCOUNT status (`active`), not the status message** —
+two different things sharing a word, and asserting on the wrong one is a false red; and
+**`indexOf` with no offset finds the FIRST match in the whole file**, so slicing the
+chat route to `messages: convo,` landed on the AGENT route's copy, which appears
+~27,000 lines earlier, and produced an empty slice. Pass a start offset.
 
 **Two column names were wrong and only the real database found them** (`follows` is
 `following_id` not `followed_id`; `notifications` is `read` not `seen`). Eleven lookups

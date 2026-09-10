@@ -22829,7 +22829,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1844'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1845'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -47824,7 +47824,7 @@ async function acAgentGo() {
   if (btn) { btn.disabled = true; btn.textContent = 'Thinking…'; }
   result.innerHTML = '';
   try {
-    const r = await API.req('POST', '/api/ai/agent', { message });
+    const r = await API.req('POST', '/api/ai/agent', { message, appGuide: acAiGuide(), appHints: acAiHints(message) });
     if (r.clarify) {
       // It found more than one person who could be the one they meant, so it asks
       // rather than guessing — each candidate is a real button.
@@ -47863,6 +47863,30 @@ function acAgentWhen(iso) { try { return new Date(iso).toLocaleString([], { week
 function acAgentCancel() { AC._agentAction = null; document.getElementById('agentResult').innerHTML = '<div class="ac-disc-sub" style="padding:8px 2px;">Cancelled. Ask for something else above.</div>'; }
 function acAgentCopy() { const t = AC._agentAction && AC._agentAction.input && AC._agentAction.input.text; if (t) navigator.clipboard.writeText(t).then(() => showNotif('Copied.')).catch(() => {}); }
 // Execute the confirmed action via the matching existing API route.
+/* Everything the assistant can do TO a person shares one shape, so there is one
+   implementation rather than six near-copies: it proposes a @username, this resolves
+   it to a real account, and the real route runs. The model never supplies an id. */
+const AI_PERSON_ACTS = {
+  follow_person: { path: (id) => '/api/social/follow/' + id, off: true,
+    said: (u, on) => (on ? 'Followed @' : 'Unfollowed @') + u },
+  block_person: { path: (id) => '/api/social/block/' + id, off: true,
+    said: (u, on) => (on ? 'Blocked @' : 'Unblocked @') + u },
+  mute_person: { path: (id) => '/api/social/mute/' + id, off: true,
+    said: (u, on) => (on ? 'Muted @' : 'Unmuted @') + u },
+  save_contact: { path: (id) => '/api/contacts/' + id,
+    said: (u) => 'Saved @' + u + ' to your contacts' },
+};
+/* Only these may be flipped from a sentence. Anything absent — the app lock, a
+   section lock, two-factor — is deliberately not reachable this way. */
+const AI_PRIVACY_KEYS = ['readReceipts', 'privateProfileViews', 'silenceUnknownCallers',
+  'dmConnectionsOnly', 'shareProfileUpdates', 'personalized'];
+async function acAiResolve(username) {
+  if (!username) return null;
+  try {
+    const p = await API.req('GET', '/api/social/profile/' + encodeURIComponent(username));
+    return (p && p.user && p.user.id) || null;
+  } catch (e) { return null; }
+}
 async function acAgentConfirm() {
   const a = AC._agentAction; if (!a) return;
   const i = a.input || {};
@@ -47875,6 +47899,88 @@ async function acAgentConfirm() {
       await API.req('POST', '/api/social/posts', { body: i.body, scheduledAt: i.scheduledAt });
       acAiLog('schedule_post', 'Scheduled a post', (i.body || '').slice(0, 120));
       showNotif('Post scheduled.'); closeOverlay('agentView'); if (typeof acOpenScheduledPosts === 'function') acOpenScheduledPosts();
+    } else if (AI_PERSON_ACTS[a.tool]) {
+      /* Everything that acts ON a person. One shape: the assistant proposes a
+         @username, the app resolves it to a real account, and the real route runs.
+         Never an id from the model — it names, we resolve. */
+      const spec = AI_PERSON_ACTS[a.tool];
+      const uname = String(i.username || '').replace(/^@/, '');
+      const pid = await acAiResolve(uname);
+      if (!pid) { showNotif('Couldn’t find @' + uname + '.'); return; }
+      const on = i.on !== false;
+      await API.req(spec.off && !on ? 'DELETE' : 'POST', spec.path(pid), spec.body ? spec.body(i, on) : undefined);
+      acAiLog(a.tool, spec.said(uname, on));
+      showNotif('Done.'); closeOverlay('agentView');
+      if (spec.then) spec.then(pid, uname);
+    } else if (a.tool === 'post_now') {
+      const { post } = await API.req('POST', '/api/social/posts', { body: i.body });
+      acAiLog('post_now', 'Posted for you', (i.body || '').slice(0, 120));
+      showNotif('Posted.'); closeOverlay('agentView');
+      if (post && post.id) acOpenPostView(post.id); else appTab('home');
+    } else if (a.tool === 'request_money') {
+      const uname = String(i.fromUsername || '').replace(/^@/, '');
+      const pid = await acAiResolve(uname);
+      if (!pid) { showNotif('Couldn’t find @' + uname + '.'); return; }
+      await API.req('POST', '/api/wallet/request', { toId: pid, amount: (i.amountCents || 0) / 100, note: i.note || '' });
+      acAiLog('request_money', 'Asked @' + uname + ' for ' + acMoney(i.amountCents || 0), i.note || '');
+      showNotif('Request sent.'); closeOverlay('agentView'); acOpenMoneyRequests();
+    } else if (a.tool === 'create_payment_link') {
+      const { link } = await API.req('POST', '/api/payment-links',
+        { amountCents: i.amountCents || null, note: i.note || '' });
+      acAiLog('create_payment_link', 'Made a payment link', i.amountCents ? acMoney(i.amountCents) : 'any amount');
+      showNotif('Link created.'); closeOverlay('agentView'); acOpenPayLinks();
+    } else if (a.tool === 'set_status') {
+      // Clearing is its own route — POSTing an empty status is refused, correctly.
+      const txt = String(i.text || '').trim();
+      if (txt) await API.req('POST', '/api/status', { text: txt });
+      else await API.req('DELETE', '/api/status');
+      if (S.user) S.user.status = txt ? { text: txt } : null;
+      acAiLog('set_status', txt ? 'Set your status to “' + txt + '”' : 'Cleared your status');
+      showNotif('Status updated.'); closeOverlay('agentView'); acGoProfileHub();
+    } else if (a.tool === 'create_group') {
+      const ids = [];
+      for (const u of (i.usernames || []).slice(0, 20)) {
+        const id = await acAiResolve(String(u).replace(/^@/, ''));
+        if (id) ids.push(id);
+      }
+      const { group } = await API.req('POST', '/api/atchat/groups', { name: i.name, members: ids });
+      acAiLog('create_group', 'Started the group “' + (i.name || '') + '”', ids.length + ' added');
+      showNotif('Group created.'); closeOverlay('agentView'); if (group && group.id) acOpenGroup(group.id);
+    } else if (a.tool === 'create_coupon') {
+      const pct = Number(i.percentOff) > 0;
+      await API.req('POST', '/api/coupons', { code: String(i.code || '').toUpperCase(),
+        kind: pct ? 'percent' : 'fixed', value: pct ? Number(i.percentOff) : Number(i.amountOffCents || 0) });
+      acAiLog('create_coupon', 'Created the code ' + String(i.code || '').toUpperCase(),
+        pct ? i.percentOff + '% off' : acMoney(i.amountOffCents || 0) + ' off');
+      showNotif('Code created.'); closeOverlay('agentView'); acOpenCoupons();
+    } else if (a.tool === 'update_profile') {
+      /* The profile route needs name AND username in every payload — a
+         long-standing requirement of that whitelist, not something new here.
+         Leaving either out CLEARS it. */
+      const u = S.user || {};
+      await API.req('PUT', '/api/auth/profile', { name: u.name, username: u.username,
+        headline: i.headline != null ? i.headline : (u.headline || ''),
+        bio: i.bio != null ? i.bio : (u.bio || '') });
+      if (i.headline != null) S.user.headline = i.headline;
+      if (i.bio != null) S.user.bio = i.bio;
+      acAiLog('update_profile', 'Updated your profile', i.headline || i.bio || '');
+      showNotif('Profile updated.'); closeOverlay('agentView'); acGoProfile();
+    } else if (a.tool === 'set_privacy') {
+      const key = String(i.setting || '');
+      if (!AI_PRIVACY_KEYS.includes(key)) { showNotif('I don’t know that setting.'); return; }
+      await setAccPriv(key, !!i.on);
+      acAiLog('set_privacy', 'Turned ' + key + ' ' + (i.on ? 'on' : 'off'));
+      showNotif('Setting changed.'); closeOverlay('agentView');
+    } else if (a.tool === 'respond_to_booking') {
+      const st = i.decision === 'confirmed' ? 'confirmed' : 'declined';
+      await API.req('PATCH', '/api/appointments/' + Number(i.appointmentId), { status: st });
+      acAiLog('respond_to_booking', st === 'confirmed' ? 'Confirmed a booking' : 'Declined a booking');
+      showNotif('Done.'); closeOverlay('agentView'); acOpenAppointments('incoming');
+    } else if (a.tool === 'mark_order_shipped') {
+      await API.req('POST', '/api/orders/' + Number(i.orderId) + '/ship',
+        { carrier: i.carrier || '', tracking: i.tracking || '' });
+      acAiLog('mark_order_shipped', 'Marked an order as sent', i.tracking ? String(i.tracking) : '');
+      showNotif('Marked as sent.'); closeOverlay('agentView'); acOpenOrders('seller');
     } else if (a.tool === 'send_message') {
       /* The assistant proposes a @username; the app resolves it and sends through
          the SAME authenticated route a person uses, so every rule that applies to

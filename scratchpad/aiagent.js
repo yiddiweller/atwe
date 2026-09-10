@@ -165,6 +165,53 @@ const wait = (port, tries) => new Promise((resolve, reject) => {
     ok(chatTools && !chatTools.includes('clarify'), 'nor clarify, whose buttons the chat cannot draw');
 
     // 8. The loop cannot spin for ever.
+    /* 9. Everything a finger can do, the assistant can propose — and every one of
+       them still ends at a confirm card rather than happening. Read out of the
+       shipped tool list, so a tool added without a label, or a label with no tool,
+       is caught here rather than rendering as a raw function name to a member. */
+    const srcS = require('fs').readFileSync(ROOT + '/server.js', 'utf8');
+    const atStart = srcS.indexOf('const AGENT_TOOLS = [');
+    const toolNames = (srcS.slice(atStart, srcS.indexOf('\n];', atStart))
+      .match(/name: '([a-z_]+)'/g) || []).map((m) => m.slice(7, -1));
+    const labelBlock = srcS.slice(srcS.indexOf('const AGENT_ACTION_LABELS = {'), srcS.indexOf('};', srcS.indexOf('const AGENT_ACTION_LABELS = {')));
+    const unlabelled = toolNames.filter((n) => !new RegExp('\\b' + n + ':').test(labelBlock));
+    ok(unlabelled.length === 0, unlabelled.length
+      ? 'these tools would show a raw name on the confirm card: ' + unlabelled.join(', ')
+      : 'every one of the ' + toolNames.length + ' doing-tools has a label a person can read');
+
+    // Each one, proposed for real, must come back as a confirm card and change nothing.
+    for (const t of ['post_now', 'follow_person', 'block_person', 'request_money', 'create_coupon', 'set_status', 'set_privacy']) {
+      SCRIPT = [say([use(t, { body: 'hello', username: attacker.username, on: true, fromUsername: attacker.username,
+        amountCents: 500, code: 'TEST10', percentOff: 10, text: 'Away', setting: 'readReceipts' })])];
+      turn = 0;
+      const rr = await ask(srvPort, token, 'do ' + t);
+      ok(rr.action && rr.action.tool === t, t + ' reaches a confirm card');
+      ok(rr.action && rr.action.label && rr.action.label !== t, '…labelled “' + (rr.action ? rr.action.label : '') + '”');
+    }
+    // Nothing above may have actually happened — the server only ever proposes.
+    const [fl] = (await pool.query('SELECT COUNT(*)::int AS n FROM follows WHERE follower_id = $1', [me.id])).rows;
+    ok(fl.n === 0, 'none of those actually happened — the server proposes, it never performs (no follow was created)');
+    const [posts] = (await pool.query('SELECT COUNT(*)::int AS n FROM posts WHERE user_id = $1', [me.id])).rows;
+    ok(posts.n === 0, 'and no post was published by proposing one');
+
+    // 10. The things that need a password are named in the prompt so it refuses
+    //     rather than trying — checked in the source, since no live model runs here.
+    const agentSys = srcS.slice(srcS.indexOf("const sys = aiPrompt('agent'"), srcS.indexOf('const convo = [{ role:'));
+    for (const phrase of ['password', 'two-factor', 'cashing out', 'hibernating']) {
+      ok(agentSys.includes(phrase), 'it is told it cannot do things needing a ' + phrase);
+    }
+    ok(!toolNames.some((n) => /delete_account|change_password|change_email|disable_2fa|cash_out/.test(n)),
+      'and there is no tool for any of them, so it could not if it tried');
+
+    // 11. Both surfaces know the app, not just the chat.
+    ok(agentSys.includes('appGuideBlock') || srcS.slice(srcS.indexOf("app.post('/api/ai/agent'"), srcS.indexOf('const convo = [{ role:')).includes('appGuideBlock'),
+      'the Do-it-for-me surface is given the app’s pages and features too');
+    const chatStart = srcS.indexOf("app.post('/api/chat'");
+    const chatSys = srcS.slice(chatStart, srcS.indexOf('messages: convo,', chatStart));
+    ok(/assistant for people running a business/.test(chatSys), 'the chat leads with being a business assistant, not with the app');
+    ok(chatSys.indexOf('running a business') < chatSys.indexOf('appGuideBlock'),
+      'and that comes BEFORE the app material — most questions are not about Atwe');
+
     SCRIPT = [() => say([use('whoami', {})])];
     turn = 0;
     r = await ask(srvPort, token, 'loop please');
