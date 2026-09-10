@@ -1799,6 +1799,28 @@ app.get('/api/admin/features-data', auth.requireAdmin, (_req, res) => {
   res.json({ features: FEATURES_DATA });
 });
 
+/* ── The same catalogue, for the app's own search bar ────────────────────────
+   The search bar knew 154 places; the app has 437 built features. So typing
+   "disappearing", "escrow" or "close friends" found nothing at all, even though
+   every one of them is real and shipped. This is what closes that gap, and it
+   reads the SAME catalogue the assistant is grounded on and `tools/features.js`
+   maintains — so a feature recorded in the commit that ships it is searchable and
+   answerable from that moment, with nobody remembering to do anything.
+
+   Members only, and app features only: the dashboard's own tools are not part of a
+   member's app and the dashboard has its own palette. Cached hard and stamped with
+   the build, because it only changes when a build does. */
+let _capsPayload = null;
+app.get('/api/capabilities', auth.requireAuth, (_req, res) => {
+  if (!_capsPayload) {
+    _capsPayload = JSON.stringify({ build: APP_BUILD, items: FEATURES_DATA
+      .filter((f) => f.phase === 'inv')
+      .map((f) => ({ n: f.name, d: f.desc, c: f.cat })) });
+  }
+  res.set('Cache-Control', 'private, max-age=3600');
+  res.type('application/json').send(_capsPayload);
+});
+
 /* ── The owner's decisions ON that catalog — kept on the account, not the phone.
    The Features page used to save its Keep/Skip choices, notes, added features
    and deletions only to the device's localStorage, which meant the owner's
@@ -44023,6 +44045,142 @@ function appGuideBlock(guide) {
     + 'the list, and add no marker at all when the question is not about finding somewhere in Atwe. '
     + 'For anything else — writing, business questions, general help — answer normally and ignore the list.\n\n';
 }
+/* The client's own search ranker has already read the member's words and picked the
+   places that match, keywords and all. Passing its answer through is far cheaper than
+   shipping 154 keyword sets, and it means the assistant and the search bar can never
+   disagree about where something lives. Bounded hard — it is client input. */
+const APP_HINTS_MAX = 900;
+function appHintsBlock(hints) {
+  const h = typeof hints === 'string' ? hints.slice(0, APP_HINTS_MAX).trim() : '';
+  if (!h) return '';
+  return "Atwe's own search ranks these places highest for the exact words they used, so prefer "
+    + 'them when the question is about where to go:\n' + h + '\n\n';
+}
+/* ── WHAT ATWE CAN DO — grounding the assistant in the real product ──────────
+   The guide above is a list of PLACES. It says nothing about what the app can DO,
+   so "can I sell tickets to an event?" or "does Atwe hold the money until the
+   buyer confirms?" were answered from the model's own guesswork — confidently, and
+   sometimes wrongly, about our own product.
+
+   `features-data.js` is the catalogue `tools/features.js` already keeps current in
+   the same commit that ships a feature, so grounding on it costs NOTHING to
+   maintain: build something, record it, and the assistant knows it. That is the
+   whole reason this reads the catalogue rather than a second hand-written list.
+
+   It is RETRIEVED, never dumped. 437 built features is ~60KB — it would blow
+   APP_GUIDE_MAX on its own, and the research is explicit that a focused context
+   beats a comprehensive one: burying the question under everything we have ever
+   built makes the answer worse, not better. So the member's own words pick the
+   handful that matter. */
+const CAP_SEND = 24;        // how many features reach the model
+const CAP_MIN_SCORE = 3;    // a rarity-weighted score; under it, nothing here is worth sending
+/* Words that match everything and therefore mean nothing. Without these, "how do I
+   do this" scores against half the catalogue and the real answer never surfaces. */
+const CAP_STOP = new Set(('a about an and any are as at be been but by can could did do does doing done for from get gets '
+  + 'got had has have how i if in into is it its just like make makes me my need not of on once only or our out over see '
+  + 'set should so some that the their them then there these they thing things this those to up us use used uses want was '
+  + 'way we were what when where which who why will with would you your atwe app').split(' '));
+/* A crude stem, and it earns its place: without it "messaging" and "messages" share
+   no prefix in either direction, so a prefix rule alone silently misses the pair —
+   which is exactly how "how do I make messages disappear" first failed to find
+   Disappearing messages by name. */
+function _capStem(w) {
+  if (w.length > 5 && w.endsWith('ing')) return w.slice(0, -3);
+  if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
+  if (w.length > 4 && (w.endsWith('ers') || w.endsWith('ies'))) return w.slice(0, -3);
+  if (w.length > 4 && (w.endsWith('es') || w.endsWith('ed') || w.endsWith('ly'))) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+  return w;
+}
+const _capTok = (s) => String(s || '').toLowerCase().split(/[^a-z0-9]+/)
+  .filter((w) => w.length > 2 && !CAP_STOP.has(w)).map(_capStem);
+/* Prepared once at boot — 437 rows is nothing to score, but there is no reason to
+   re-lowercase the whole catalogue on every message. */
+const CAP_ROWS = FEATURES_DATA
+  .filter((f) => f.phase === 'inv' || f.phase === 'admin_have')
+  .map((f) => ({ name: f.name, desc: f.desc, cat: f.cat, admin: f.phase === 'admin_have',
+    nameToks: new Set(_capTok(f.name)), catToks: new Set(_capTok(f.cat)), descToks: new Set(_capTok(f.desc)) }));
+/* A query word counts for a feature word when one is a prefix of the other, so
+   "message" finds "messages"/"messaging" and "refund" finds "refunds" — the
+   cheapest thing that behaves like stemming and never needs a dictionary. */
+/* Rarity matters more than count. Without it a coupon question ranked "Custom
+   reports" first — "customer" prefix-matches "custom", and a flat +4 for any name
+   hit cannot tell a word that appears in 200 features from one that appears in
+   three. So every query word is weighted by how rare it is in the catalogue, which
+   is the oldest trick in search and needs no dictionary and no dependency. */
+const CAP_N = CAP_ROWS.length;
+const CAP_DF = new Map();
+for (const r of CAP_ROWS) {
+  for (const t of new Set([...r.nameToks, ...r.catToks, ...r.descToks])) CAP_DF.set(t, (CAP_DF.get(t) || 0) + 1);
+}
+function _capIdf(w) {
+  let df = CAP_DF.get(w) || 0;
+  // A prefix match reaches several catalogue words, so its rarity is their sum.
+  if (w.length >= 5) { for (const [t, c] of CAP_DF) { if (t !== w && t.length >= 5 && (t.startsWith(w) || w.startsWith(t))) df += c; } }
+  return Math.max(0.3, Math.log(CAP_N / (1 + df)));
+}
+function _capHit(word, toks) {
+  if (toks.has(word)) return true;
+  if (word.length < 5) return false;               // short words must land exactly
+  for (const t of toks) { if (t.length >= 5 && (t.startsWith(word) || word.startsWith(t))) return true; }
+  return false;
+}
+function capabilityBlock(messages, isAdmin) {
+  let q = '';
+  try {
+    // The last thing they actually asked. Content may be a block array (text + image).
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (!m || m.role !== 'user') continue;
+      q = typeof m.content === 'string' ? m.content
+        : (Array.isArray(m.content) ? m.content.filter((b) => b && b.type === 'text').map((b) => b.text).join(' ') : '');
+      break;
+    }
+  } catch { return ''; }
+  const words = [...new Set(_capTok(q))].slice(0, 24);
+  if (!words.length) return '';
+  const idf = words.map(_capIdf);
+  /* The one word in the question that narrows it most. "how do I get paid out to my
+     bank account" is mostly common words — "account" alone drags in a dozen
+     unrelated features and buries the only row that says "bank". Anything matching
+     the rarest word is kept whatever it scores, because that word is the question. */
+  const rarest = idf.reduce((best, v, i) => (v > idf[best] ? i : best), 0);
+  const hits = [];
+  for (const r of CAP_ROWS) {
+    if (r.admin && !isAdmin) continue;             // dashboard tools are not a member's app
+    let score = 0, named = false, rare = false;
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      let hit = true;
+      if (_capHit(w, r.nameToks)) { score += 3 * idf[i]; named = true; }        // its own name is the strongest signal
+      else if (_capHit(w, r.catToks)) { score += 2 * idf[i]; named = true; }    // then the part of Atwe it belongs to
+      else if (_capHit(w, r.descToks)) { score += 1 * idf[i]; }                 // a word only in the description still counts
+      else hit = false;
+      if (hit && i === rarest) rare = true;
+    }
+    if (score > 0) hits.push({ r, score, named, rare });
+  }
+  /* Nothing was named — every match was a passing word in some description — so the
+     question was not about Atwe at all and the model is better off without a list. */
+  if (!hits.some((h) => h.named)) return '';
+  hits.sort((a, b) => b.score - a.score || a.r.name.length - b.r.name.length);
+  /* The floor is RELATIVE to the best match, not absolute. A feature mentioned only
+     in another's description ("bank" appears in Top-up & cash-out's) scores 2 and
+     would never clear a fixed bar — but next to a best of 3 it is plainly the thing
+     they meant. A long question that merely glances off one feature is noise, so it
+     has to clear a higher bar before anything is sent at all. */
+  const top = hits[0].score;
+  if (top < CAP_MIN_SCORE) return '';
+  const floor = top * 0.45;
+  const lines = hits.filter((h) => h.rare || h.score >= floor).slice(0, CAP_SEND)
+    .map((h) => '- ' + h.r.name + (h.r.admin ? ' [admin dashboard]' : '') + ' — ' + h.r.desc);
+  return 'These parts of Atwe look relevant to what they just asked. They are all REAL and already built:\n'
+    + lines.join('\n') + '\n\n'
+    + 'Use them to answer accurately about what Atwe can and cannot do. They are the closest matches to '
+    + 'this question, NOT the whole product, so their absence proves nothing — but never invent a feature. '
+    + 'If you are asked whether Atwe does something and you cannot tell from what you have been given, say '
+    + 'plainly that you are not certain and offer to point them at the nearest thing that does exist.\n\n';
+}
 app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFeature('ai'), requireGeo('ai'), async (req, res) => {
   const { messages, plan: clientPlan } = req.body;
 
@@ -44060,6 +44218,8 @@ app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFea
       max_tokens: maxTokens,
       system: aiPrompt('chat',
         appGuideBlock(req.body.appGuide) +
+        appHintsBlock(req.body.appHints) +
+        capabilityBlock(messages, !!(req.user && req.user.is_admin)) +
         'You are Atwe AI, an intelligent assistant for modern businesses. Give clear, accurate, well-structured answers. Be professional, concise, and genuinely helpful — thorough when it matters, brief when it does not. Use markdown (bold, lists, headings, code) only when it improves clarity. Keep a clean, classy, understated tone; do not use emojis unless the user uses them first.'),
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });

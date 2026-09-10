@@ -7210,6 +7210,112 @@ actually type. `test/`-style coverage lives in the scratchpad probes; the index
 test asserts every entry's opener is a real function — a search result that does
 nothing is worse than no result.
 
+### THE SEARCH BAR AND ATWE AI ARE FED, NOT MAINTAINED — three sources, one rule each
+
+The founder asked the question that matters: *"every time we update stuff, do I need to
+come afterwards and update the AI and the search engines as well, or does it go
+automatically?"* Before build 1843 the honest answer was **half** — and the half that was
+manual had gone stale by 388 items.
+
+| what is known | where it comes from | who reads it |
+|---|---|---|
+| **content** — people, posts, listings, jobs, messages | the database, live | search |
+| **places** — 160 pages, features and settings you can go to | `PLACES_EXTRA` + `ME_SECTIONS` + `SET_SEARCH_INDEX` | search AND the assistant |
+| **capabilities** — 437 things the app can DO | **`features-data.js`**, written by `tools/features.js` in the commit that ships the feature | the assistant, and search |
+
+**THE ASSISTANT KNEW PLACES AND NOTHING ELSE.** `acAiGuide()` sent 154 NAMES — no
+descriptions, no capabilities — so *"can I sell tickets to an event?"*, *"does Atwe hold
+the money until the buyer confirms?"* and *"can I make messages disappear?"* were answered
+from the model's own guesswork, confidently, about our own product. **`capabilityBlock()`
+in `server.js` grounds it on the real catalogue.** Grounding on `features-data.js`
+specifically is what makes this self-maintaining: the owner's own two-number system
+already demands a row in the same commit that ships a feature, so the assistant learns it
+the moment it exists and nobody has to remember anything.
+
+**IT IS RETRIEVED, NEVER DUMPED, AND THAT IS NOT A SIZE COMPROMISE — IT IS BETTER.** 437
+features is ~60KB, over `APP_GUIDE_MAX` on its own; but the research is explicit that a
+focused context beats a comprehensive one, so burying the question under everything ever
+built would make the answer worse even if it fitted. The member's own words pick ~24.
+
+The ranking is the oldest trick in search and needs no dictionary and no dependency:
+- **rarity, not count** (`_capIdf`). A flat "+4 for a name hit" cannot tell a word in 200
+  features from one in three — a coupon question ranked *"Custom reports"* first, because
+  "customer" prefix-matches "custom".
+- **the rarest word of the question is kept whatever it scores.** *"how do I get paid out
+  to my bank account"* is mostly common words; "account" alone drags in a dozen features
+  and buried the one row that says **bank**.
+- **a crude stem** (`_capStem`), because "messaging" and "messages" share no prefix in
+  either direction — a prefix rule alone silently missed that pair.
+- **nothing is sent when nothing was NAMED.** If every match was a passing word in some
+  description, the question was not about Atwe and the model is better off without a list.
+
+**THE PROMPT'S HONESTY RULE IS THE POINT OF THE WHOLE THING.** The block tells the model
+these are the closest matches and NOT the whole product, so their absence proves nothing —
+and that if it cannot tell whether Atwe does something, it must say so rather than invent
+a feature. A grounded assistant that confabulates is worse than an ungrounded one.
+
+**THE APP'S HAND-WRITTEN SYNONYMS NOW REACH THE ASSISTANT WITHOUT BEING SENT.** The guide
+carries names only; the `kw` strings — what makes the search bar understand "cash out",
+"cv", "incognito" — would roughly double it. So `acAiHints(text)` runs the question through
+**the app's OWN ranker** and sends the handful of places that won (`appHintsBlock`). The
+assistant inherits the synonyms, and it can never disagree with the search bar about where
+something lives.
+
+**`acFindPlaces` IS BUILT FOR A SEARCH BOX, NOT A SENTENCE**, and that broke the first
+version of this: its every-word test fails on filler, so *"how do I cash out to my bank"*
+matched **nothing at all** while "cash out" found the Wallet instantly. `acAiHints` strips
+the filler and asks the remainder as a phrase and then word by word, merging the answers.
+
+**SEARCH GAINED THE SAME CATALOGUE — `/api/capabilities` + `acFindCaps`.** Measured before:
+**388 of 437 built features returned nothing at all** from the app's own search, so the app
+quietly denied having escrow, disappearing messages or Close Friends. It is now **0**, and
+436 of 437 return themselves first. The route is `requireAuth`, app features only (the
+dashboard has its own palette), fetched once per build and cached under a build-stamped
+localStorage key that sweeps the previous build's copy.
+
+Three rules keep that layer honest:
+- **it never invents a destination.** `_CAP_WHERE` maps a category to a place NAME which is
+  then looked up in the index; a renamed or removed place yields no chip rather than a
+  button that goes nowhere. With no match the row hands the question to Atwe AI — which,
+  reading the same catalogue, can actually answer it.
+- **a feature that shares its name with a real page IS that page** and never appears as a
+  capability — checked against the WHOLE index, not the query's hits, or "Invoices" shows
+  up twice under "wallet".
+- **it ranks on the same ladder as `acFindPlaces`**, so a feature can never outrank the
+  actual page it lives on.
+
+**A FEATURE'S DESCRIPTION IS ITS SEARCHABLE SURFACE — write it in the words a member would
+use.** `Coupons` read *"Percent/fixed codes with min-order, caps, expiry"* and therefore
+could not be found by **discount**, which is the word everybody types. One word in one
+description fixed it for the assistant AND the search bar at once.
+
+**Guarded by `scratchpad/aiknows.js` (36 checks)**, and the fourth of its four sections is
+the one that answers the founder's question: it diffs **every no-argument opener that shows
+a real overlay** against the index, and fails naming anything new that nothing indexes.
+`NOT_A_DESTINATION` holds the ~34 screens that legitimately have none — each contextual (it
+needs something already open) or chrome — with the reason written next to it. *Do not add a
+name there to make the probe quiet.* It also asserts the retrieval is **wired into the chat
+route**, not merely present: a function that exists and is never called is exactly the trap
+this repo has recorded four times. Self-tested three ways — unwiring the retrieval,
+inventing an unindexed screen, and removing the capability layer (which reports **387
+features find NOTHING**).
+
+**Four probe mistakes, and every one reported a failure on correct code:**
+- **the expected name must be the CATALOGUE's, not the page's.** The place is "Split a
+  bill" and the feature "Split bills".
+- **the dedupe happens at QUERY time**, so asserting the raw catalogue holds no page names
+  failed on five perfectly-handled rows.
+- **"an off-topic question sends nothing" is two different properties.** "email",
+  "capital" and "translate" are all real Atwe words, so a question using one legitimately
+  matches something; what must always hold is that it is never BURIED.
+- **`_caps` is a top-level `let` in the page, not a window property** — `window._caps`
+  waits for ever on working code. Same trap as `S`.
+
+**AND THE DEV-LOOP ONE: THE SERVER PRE-COMPRESSES `index.html` AT BOOT.** `sendShell`
+serves a brotli buffer built once at startup, so **an edit to `public/index.html` is not
+served until the server is restarted** — a fix can look like it did nothing. Restart before
+believing a browser measurement.
+
 ## Performance — what was measured, and what it cost
 
 Measured against a deliberately realistic database (28k accounts, 250k posts,

@@ -148,7 +148,7 @@ module.exports = [{"id":"b1","phase":"inv","cat":"Platform · Accounts & Identit
 {"id":"b146","phase":"inv","cat":"Engine · Marketplace & Commerce","name":"Product reviews","desc":"Verified-buyer star reviews with photo/video media; seller (business) reviews; buyer ratings — two-way."},
 {"id":"b147","phase":"inv","cat":"Engine · Marketplace & Commerce","name":"Trust score","desc":"0–100 marketplace credibility from tenure, completed orders, ratings, verification."},
 {"id":"b148","phase":"inv","cat":"Engine · Marketplace & Commerce","name":"Product Q&A","desc":"Amazon-style questions with seller-flagged answers."},
-{"id":"b149","phase":"inv","cat":"Engine · Marketplace & Commerce","name":"Coupons","desc":"Percent/fixed codes with min-order, caps, expiry, one-per-buyer atomic claims."},
+{"id":"b149","phase":"inv","cat":"Engine · Marketplace & Commerce","name":"Coupons","desc":"Discount codes for your shop — percent or fixed off, with min-order, caps, expiry and one-per-buyer atomic claims."},
 {"id":"b150","phase":"inv","cat":"Engine · Marketplace & Commerce","name":"Bundles","desc":"Multi-product saver packs priced as one, riding the whole order pipeline."},
 {"id":"b151","phase":"inv","cat":"Engine · Marketplace & Commerce","name":"Subscribe & Save","desc":"Recurring product delivery with discount, interval control, pause/resume, failure handling."},
 {"id":"b152","phase":"inv","cat":"Engine · Marketplace & Commerce","name":"Wishlist + alerts","desc":"Saved products double as price-drop and back-in-stock watchers."},
@@ -582,4 +582,7 @@ module.exports = [{"id":"b1","phase":"inv","cat":"Platform · Accounts & Identit
 {"id":"n12","phase":"inv","cat":"Design","name":"Every press grows","desc":"Pressing anything eases up instead of shrinking, on one shared curve."},
 {"id":"n13","phase":"inv","cat":"Notifications","name":"Every notification lands somewhere real","desc":"Tapping a notification opens the thing it is about — money, refunds, quotes, ads and 68 more that used to drop you on a profile."},
 {"id":"n14","phase":"inv","cat":"Navigation","name":"Every page has a way back","desc":"Back works on all 226 destinations, not only the 33 that own a web address."},
-{"id":"n15","phase":"inv","cat":"Design","name":"Sized for a tablet","desc":"Every control clears the 44pt touch floor on phone and tablet, including the desktop sidebar an iPad shows in landscape."}];
+{"id":"n15","phase":"inv","cat":"Design","name":"Sized for a tablet","desc":"Every control clears the 44pt touch floor on phone and tablet, including the desktop sidebar an iPad shows in landscape."},
+{"id":"n16","phase":"inv","cat":"Platform · Atwe AI","name":"Atwe AI knows the whole product","desc":"Every question is answered against the real feature catalogue: the assistant is handed the features that match what was asked, and told to say it is unsure rather than invent one."},
+{"id":"n17","phase":"inv","cat":"Engine · Search, Discovery & Personalization","name":"Search finds every feature, not just every page","desc":"Typing what a feature is called — disappearing messages, escrow, close friends — now finds it, with a line saying what it does and where it lives."},
+{"id":"n18","phase":"inv","cat":"Platform · Atwe AI","name":"The assistant inherits the search bar's synonyms","desc":"A question is run through Atwe's own ranker first, so the words people really use — cash out, cv, incognito — reach the assistant without shipping every synonym."}];
