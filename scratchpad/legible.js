@@ -27,7 +27,7 @@ const SURFACES=[
  ["acGoSettingsPage('display')",'Display'],["openProfileEdit()",'Edit profile'],
  ["acOpenDashboard()",'Dashboard'],
 ];
-let pass=0,fail=0,known=0; const unopened=[];
+let pass=0,fail=0; const unopened=[];
 (async()=>{
  const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
  for(const theme of ['black','light']){
@@ -93,21 +93,15 @@ let pass=0,fail=0,known=0; const unopened=[];
      });
      return [...new Set(out)].slice(0,4);
    });
-   /* ONE NAMED, EXACT EXCEPTION — docs/WEB-FINISH-LIST.md item D1, the founder's decision.
-      White on the accent blue is 3.52:1, which clears the 3:1 floor for large text and
-      misses the 4.5:1 floor for small. It is 17 rules and a design call (white pill /
-      darken the accent / large-text only), not a bug to fix unilaterally, so it must not
-      make this guard permanently red and mask the next real fault.
-      It is matched by EXACT STRING on ONE surface. An allowlist is how a genuine fault
-      gets hidden, so anything else on the till — or this same text anywhere else — still
-      fails. Delete this the day D1 is decided. */
-   const KNOWN = name==='The till' ? bad.filter(t=>t!=='Atwe wallet [3.52:1 @14px]') : bad;
-   if(KNOWN.length){ fail++; console.log('  FAIL '+theme.padEnd(6)+name.padEnd(20)+JSON.stringify(KNOWN)); }
-   else { pass++; if(bad.length) known++; }
+   /* D1 IS DECIDED AND THIS EXCEPTION IS GONE (build 1836). The app now has two blues:
+      --accent for identity and --accent-fill (#0071E0, 4.73:1 under white) for any area
+      that carries white content. Nothing is excused here any more. */
+   if(bad.length){ fail++; console.log('  FAIL '+theme.padEnd(6)+name.padEnd(20)+JSON.stringify(bad)); }
+   else pass++;
   }
   await p.close();
  }
  if(unopened.length) console.log('  --   could not open: '+unopened.join(', '));
- console.log('\n'+pass+' surfaces legible, '+fail+' FAILED'+(known?', '+known+' known (D1, awaiting the founder)':'')+(unopened.length?', '+unopened.length+' could not open':''));
+ console.log('\n'+pass+' surfaces legible, '+fail+' FAILED'+(unopened.length?', '+unopened.length+' could not open':''));
  await b.close(); process.exit(fail?1:0);
 })().catch(e=>{console.error('CRASH',e.message);process.exit(1);});

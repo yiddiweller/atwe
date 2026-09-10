@@ -8,10 +8,11 @@ whole site, written up as a real list; finished means this list is at zero.**
 **Every item here is MEASURED, not judged.** A list built on taste can never reach zero.
 Each entry says the screen, the exact fault, the number, and what "done" looks like.
 
-Progress: **12 of 13 done.**  ·  The one left is **D1**, and it is not a bug — it is a
-design decision about the brand's blue that only the owner can make. Everything this pass
-found and could fix, is fixed, measured on real screens in both themes, and guarded by a
-probe that fails if it comes back.
+Progress: **13 of 13 done.**  ·  The last one, **D1**, was decided and applied in build
+1836 — the founder asked for the decision to be made here rather than waiting on them, and
+for it to follow what the big platforms actually do. Everything this pass found is fixed,
+measured on real screens in both themes, and guarded by a probe that fails if it comes
+back.
 
 ---
 
@@ -74,13 +75,13 @@ the screen.
 *Done when:* ≥4.5:1 in both themes.
 **Fixed:** `.dlv-state.wait` used raw `--amber`; it now uses **`--amber-txt`**, the token that exists for a coloured word and whose own declaration says "use these — never raw --green/--amber". Re-measured: Black **11.57:1**, Light **6.11:1**.
 
-### A4 — "The till": the payment-method labels ⚠️ PART DONE — the rest became D1
+### A4 — "The till": the payment-method labels ✅ DONE (build 1836, with D1)
 **I aimed the first fix at the wrong rule, and the re-measurement caught it.** The
 UNSELECTED labels were changed from `--t2` to `--t1` (Black 6.03 → **19.66:1**) and that
 stands. But the 3.52:1 the sweep reported was the **selected** pill — white text on the
 accent blue — which is a different rule and turns out not to be a till problem at all.
-See **D1**.
-*Done when:* D1 is decided; the unselected half is already done.
+See **D1** — decided and applied in build 1836, so this is done too.
+*Done:* the selected half now paints `--accent-fill` (4.73:1 under white); the unselected half was already done.
 
 ### A5 — the "Log out" row is at 3.99:1 in Light ✅ DONE (build 1830)
 Measured from real pixels: red `245,0,51` on near-white. Red is required here by the colour
@@ -168,23 +169,61 @@ subject reports a clean result.**
 
 ## D · One for the owner to decide
 
-### D1 — white text on the accent blue is 3.52:1, in 17 places ⬜ **NEEDS A DECISION**
-White on `--accent` (#0088FF) measures **3.52:1** — under the 4.5 floor for normal text.
-It is **not one screen**: `background:var(--accent);color:#fff` appears in **17 rules**, so
-every selected blue control in the app is the same. Fixing one and not the rest would leave
-the app inconsistent, which is worse than the fault.
+### D1 — white text on the accent blue is 3.52:1, in 17 places ✅ DONE (build 1836)
+White on `--accent` (#0088FF) measured **3.52:1** — under the 4.5 floor for normal text.
+It was not one screen: `background:var(--accent)` with white content appeared in **123
+rules in the app and 17 in the dashboard**, so every selected blue control was the same.
 
-Three ways out, and they are genuinely different products, not one right answer:
-1. **Make a selected choice the WHITE pill**, which is already the app's own law for a row
-   of choices (`--tab-fill-on` / `--tab-ink-on`) and passes easily. Cost: the colour law
-   says white is *the one primary action per screen*, and on a screen that already has a
-   real primary (a Charge button) this spends it twice.
-2. **Darken the blue** behind white text until it passes. Cost: the accent is the brand's
-   identity colour and would no longer be one blue.
-3. **Accept it for large/bold text only.** At 18.66px bold or 24px the floor drops to 3:1
-   and 3.52 passes. Cost: it does not help the 13–14px labels, which are most of them.
+**THE CAUSE IS THAT ONE COLOUR WAS DOING TWO OPPOSITE JOBS.** White text ON the blue wants
+it DARK; the blue as text ON black wants it BRIGHT. #0088FF is 5.97:1 on black — right, and
+worth keeping — and 3.52:1 under white. No single value satisfies both, so no amount of
+picking a better blue could have worked.
 
-*Done when:* the owner picks one and it is applied to all 17 consistently.
+**What the big platforms do**, measured rather than remembered:
+
+| | white ON it | it ON black |
+|---|---|---|
+| Apple systemBlue (light) `#007AFF` | **4.02** | 5.23 |
+| Apple systemBlue (dark) `#0A84FF` | **3.65** | 5.76 |
+| Material 3 primary `#6750A4` | 6.44 | 3.26 |
+| Atwe brand `#0088FF` | **3.52** | 5.97 |
+| Atwe's own chat bubble `#0071E0` | **4.73** | 4.44 |
+
+Apple ships the same near-miss we did and has been criticised for it for years. **Material
+Design 3 solves it structurally**: a brand tone for identity and a separate, darker
+`primary` tone (tone 40) guaranteed to carry `on-primary` (tone 100). That is the model
+adopted here — and the app had already reached the same answer once, on its own, for the
+outgoing message bubble.
+
+**The decision.** Two tokens per hue, one role each:
+
+| | is | measures |
+|---|---|---|
+| `--accent` `#0088FF` | IDENTITY — links, usernames, the active tab's text, the verified seal, icons, borders. Never darkened. | 5.97:1 on black |
+| `--accent-fill` `#0071E0` | any AREA carrying white content | 4.73:1 under white, 4.44:1 on black |
+
+`--accent-fill` is deliberately the same value the outgoing bubble already used, so the app
+has one blue fill rather than two. **Light theme is untouched**: it already deepens its
+accent to `#006ACF` (5.30:1 under white), so there the fill IS the accent and every screen
+renders byte-identically.
+
+**A dot or a bar painted with the fill is still legible** — 4.44:1 against black, clear of
+the 3:1 floor a UI component needs (WCAG SC 1.4.11) — which is what made a single uniform
+substitution safe rather than 123 judgement calls about which fills carry text.
+
+**The custom accent picker derives its own fill.** `applyAccent()` steps the chosen colour
+until the ink it carries clears 4.5:1. Without that, picking orange would have turned the
+links orange while every selected control in the app stayed blue.
+
+*Guarded by* `scratchpad/fillroles.js` (48 checks): the fill really carries its ink, it is
+still a legible UI mark on the page, the identity colour was never darkened along with it,
+**no solid fill anywhere in either file is still painted with the identity colour** (read
+out of the source, so it covers screens no probe opens), and four custom accents each
+derive a fill that passes. Self-tested: pointing `--accent-fill` back at `--accent` fails
+it by name at 3.52:1.
+
+*Also closed:* **A4**, the till's payment-method labels, whose unselected half was already
+done and whose selected half was waiting on this.
 
 ---
 
@@ -212,9 +251,10 @@ exits 0. **All 60 open.**
 *Self-tested:* putting A1's `color:#fff` back makes it fail Your studio by name, on all
 three labels, at 1.00:1.
 
-*It carries exactly one exception, D1, matched by exact string on one surface* — so the
-guard is not permanently red on a decision nobody has made, and anything else still fails.
-Delete the exception the day D1 is decided.
+*It carries no exceptions at all any more.* It held one — D1, matched by exact string on
+one surface — so it would not sit permanently red on a decision nobody had made. D1 was
+decided in build 1836 and the exception is deleted; a single word under the floor now fails
+this guard.
 
 ---
 

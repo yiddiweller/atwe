@@ -25,12 +25,10 @@
  *     reported the 14-language row on the Wording tab as broken when it behaves exactly
  *     as designed. Only a PAGE that scrolls sideways is a fault.
  *
- * ONE NAMED EXCEPTION, and it is a decision the founder has to make, not this file:
- * the destructive red button paints `--red-tint` on `--red` and measures 3.22:1. On
- * #FF0033 nothing light clears 4.5 — white is 3.96 — so the only ways out are a darker
- * ink (the colour law's own answer for bright fills) or a darker red, and both change
- * how the brand's red reads. Recorded as D2 in docs/ADMIN-SWEEP-LIST.md. Delete the
- * exception the day it is decided.
+ * NO EXCEPTIONS. D2 (the destructive red button, once 3.22:1) was decided in build 1836:
+ * the app has --red for identity and --red-fill (#D4002D, 5.47:1 under white) for a solid
+ * destructive button, exactly as it now has --accent and --accent-fill. Nothing here is
+ * excused any more, so a single word under the floor fails this file.
  */
 const { chromium } = require('playwright-core');
 const crypto = require('crypto');
@@ -43,7 +41,6 @@ const DEAD = /Could not check|Could not load|could not run/i;
 /* Views with nothing to fetch — they are a form, an embedded page or a local list.
    Everything else must reach the server, and that is the check that matters. */
 const NO_FETCH = new Set(['features', 'aistudio', 'emailbrand', 'developers']);
-const D2 = /^\.btn\.danger /;                       // the one founder decision, exact prefix
 
 const SCORE = `(${function () {
   const lum = (c) => { const [r, g, bl] = c.map((v) => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * r + .7152 * g + .0722 * bl; };
@@ -135,8 +132,7 @@ const SCORE = `(${function () {
     [crypto.createHash('sha256').update(tok).digest('hex'), u.id, 'adminsweep', '127.0.0.1']);
 
   const b = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
-  const badContrast = new Map(); const badSpill = new Map(); let d2seen = 0;
-
+  const badContrast = new Map(); const badSpill = new Map();
   for (const [label, W, H] of [['desktop', 1280, 900], ['phone', 390, 780]]) {
     const ctx = await b.newContext({ viewport: { width: W, height: H } });
     const p = await ctx.newPage();
@@ -153,7 +149,7 @@ const SCORE = `(${function () {
     for (const [what, run] of [['the gate', null], ['the sign-in form', 'showLogin()']]) {
       if (run) { await p.evaluate((r) => { (0, eval)(r); }, run); await p.waitForTimeout(400); }
       const r = await p.evaluate(SCORE);
-      r.contrast.forEach((x) => { if (D2.test(x)) { d2seen++; return; } (badContrast.get(x) || badContrast.set(x, new Set()).get(x)).add(label + ' ' + what); });
+      r.contrast.forEach((x) => (badContrast.get(x) || badContrast.set(x, new Set()).get(x)).add(label + ' ' + what));
       r.spill.forEach((x) => (badSpill.get(x) || badSpill.set(x, new Set()).get(x)).add(label + ' ' + what));
     }
 
@@ -189,7 +185,7 @@ const SCORE = `(${function () {
       chk(errs.length === 0, `${label}/${t}: no JS error`, [...new Set(errs)].join(' | '));
       chk(!r.dead, `${label}/${t}: is not showing its failure line`, r.dead);
       if (!NO_FETCH.has(t)) chk(reqs.some((x) => x.includes('/api/')), `${label}/${t}: actually asked the server`, 'no request at all');
-      r.contrast.forEach((x) => { if (D2.test(x)) { d2seen++; return; } (badContrast.get(x) || badContrast.set(x, new Set()).get(x)).add(label + '/' + t); });
+      r.contrast.forEach((x) => (badContrast.get(x) || badContrast.set(x, new Set()).get(x)).add(label + '/' + t));
       r.spill.forEach((x) => (badSpill.get(x) || badSpill.set(x, new Set()).get(x)).add(label + '/' + t));
     }
     await ctx.close();
@@ -199,9 +195,6 @@ const SCORE = `(${function () {
       [...badContrast].slice(0, 6).map(([k, v]) => k + ' [' + [...v][0] + ']').join(' ; '));
   chk(badSpill.size === 0, 'nothing spills sideways',
       [...badSpill].slice(0, 6).map(([k, v]) => k + ' [' + [...v][0] + ']').join(' ; '));
-  /* The exception must stay HONEST: if the red button ever stops being a fault the
-     exception is dead wood and should go, so say so rather than passing quietly. */
-  console.log(`  (the one known exception — the red destructive button, D2 — was seen ${d2seen} times)`);
 
   await b.close(); await pool.end();
   if (fails.length) console.log('== FAILS ==\n' + fails.map((f) => '  FAIL ' + f).join('\n'));

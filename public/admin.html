@@ -32,9 +32,31 @@
     --t4:#48484A;
     --text-black:#1D1D1F;
     --accent:#0088FF; --accent-dim:rgba(0,136,255,.12); --accent-mid:rgba(0,136,255,.22);
-    --accent-tint:#CCE8FF;
+    /* THE BLUE HAS TWO ROLES — see the same block in public/index.html, which this
+       mirrors exactly (the dashboard keeps the app's palette in lockstep).
+       --accent      = IDENTITY: links, the active tab's bar, icons, borders. 5.97:1 on
+                       black, which is where it belongs and where it must stay bright.
+       --accent-fill = any AREA carrying white content: 4.73:1 under white, still 4.44:1
+                       against black so an indicator painted with it clears the 3:1 UI floor.
+       --accent-tint was a pale blue (#CCE8FF) measuring 2.77:1 on the old fill — under
+       every floor there is. It is white now, as it already was in the app. */
+    --accent-fill:#0071E0;
+    --accent-tint:#FFFFFF;
     --green:#88FF00; --green-edge:#A6FF4D; --green-tint:#F1FFDC; --green-ink:#132a00;
-    --red:#FF0033; --red-edge:#FF3355; --red-tint:#FFE0E6;
+    --red:#FF0033; --red-edge:#FF3355; --red-tint:#FFFFFF;
+    /* THE RED HAS THE SAME TWO ROLES AS THE BLUE (docs/ADMIN-SWEEP-LIST.md item D2).
+       #FF0033 is 5.30:1 as text on black — right for a "Delete" label, a warning line, a
+       recording dot. Under white it is only 3.96:1, so the four SOLID destructive buttons
+       were under the floor. Apple ships the same near-miss (systemRed #FF3B30 is 3.55:1
+       under white, and its own destructive alert button is a long-standing complaint);
+       Material Design 3 avoids it by pairing a bright error colour with a darker
+       error CONTAINER, which is exactly what this is.
+         --red      = IDENTITY: destructive text, warning icons, live/recording dots.
+         --red-fill = any AREA carrying white content: 5.47:1 under white, and still
+                      3.84:1 against black so a dot painted with it clears the 3:1 UI floor.
+       --red-tint is the ink ON that fill and is used nowhere else; it was a pale pink
+       (#FFE0E6) which scored LOWER than plain white, so it is white now. */
+    --red-fill: #D4002D;
     --amber:#FFBB00; --amber-edge:#FFE066; --purple:#AA00FF;
     --r-sm:9px; --r-md:13px; --r-lg:18px; --r-pill:9999px;
     --ease:cubic-bezier(.22,.68,0,1);
@@ -100,7 +122,7 @@
   .tab:hover{background:var(--s1);color:var(--t1);}
   .tab.active{background:var(--s2);color:var(--t1);font-weight:600;}
   .tab.active::before{content:"";position:absolute;left:2px;top:50%;transform:translateY(-50%);
-    width:3px;height:16px;border-radius:2px;background:var(--accent);}
+    width:3px;height:16px;border-radius:2px;background:var(--accent-fill);}
   /* Sidebar footer — role + back to app */
   .side-foot{margin-top:12px;padding-top:12px;border-top:1px solid var(--b1);display:flex;flex-direction:column;gap:9px;}
   .side-role{display:flex;align-items:center;gap:8px;padding:2px 8px;font-size:12px;color:var(--t3);}
@@ -148,7 +170,7 @@
     border-radius:var(--r-md);padding:13px 15px;cursor:pointer;transition:border-color .15s var(--ease),background .15s var(--ease);}
   .u-card:hover{border-color:var(--b3);background:var(--s2);}
   .avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
-    font-size:15px;font-weight:700;color:var(--accent-tint);background:var(--accent);}
+    font-size:15px;font-weight:700;color:var(--accent-tint);background:var(--accent-fill);}
   .avatar.has-img{background-size:cover;background-position:center;color:transparent;}
   /* AtChat activity */
   .ac-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 14px;}
@@ -238,7 +260,7 @@
   .tf-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
   .tf-ranges{display:inline-flex;background:var(--s1);border:none;border-radius:var(--r-pill);padding:3px;}
   .tf-r{background:transparent;border:none;color:var(--t2);padding:8px 16px;font-size:13.5px;font-weight:600;border-radius:var(--r-pill);cursor:pointer;transition:.15s var(--ease);}
-  .tf-r.on{background:var(--accent, var(--accent));color:#fff;}
+  .tf-r.on{background:var(--accent-fill);color:#fff;}
   /* Who is online — a member shown as themselves, a visitor shown as a Guest. */
   .on-row{display:flex;align-items:center;gap:12px;width:100%;text-align:start;background:none;border:none;
     padding:11px 4px;border-bottom:1px solid var(--b1);color:inherit;font-family:inherit;cursor:pointer;}
@@ -303,7 +325,7 @@
   .tf-loc-bar > div{height:100%;background:var(--accent,var(--accent));border-radius:4px;}
   .tf-loc-v{flex:0 0 auto;color:var(--t2);font-variant-numeric:tabular-nums;font-weight:600;}
   /* Revenue hero + ads admin */
-  .rev-hero{background:linear-gradient(135deg,var(--accent),var(--bg));border-radius:var(--r-md);padding:22px;margin-bottom:16px;color:var(--accent-tint);}
+  .rev-hero{background:linear-gradient(135deg,var(--accent-fill),var(--bg));border-radius:var(--r-md);padding:22px;margin-bottom:16px;color:var(--accent-tint);}
   .rev-hero .rl{font-size:13px;opacity:.85;}
   .rev-hero .rv{font-size:42px;font-weight:800;letter-spacing:-.03em;line-height:1.05;margin-top:4px;font-variant-numeric:tabular-nums;}
   .rev-hero .rd{font-size:13px;margin-top:8px;opacity:.9;font-weight:600;}
@@ -335,7 +357,7 @@
   /* ── Batch 34 ── */
   /* Alert severity dot (the site-status one is scoped to that panel). */
   .ref-top .dot{display:inline-block;width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:var(--t3);vertical-align:middle;}
-  .ref-top .dot.red{background:var(--red);box-shadow:0 0 0 4px rgba(255,0,51,.14);}
+  .ref-top .dot.red{background:var(--red-fill);box-shadow:0 0 0 4px rgba(255,0,51,.14);}
   .ref-top .dot.amber{background:var(--amber);box-shadow:0 0 0 4px rgba(255,204,0,.16);}
   /* Impersonation: two identical columns, so a copy is obvious at a glance. */
   .imp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
@@ -353,7 +375,7 @@
   .roll-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;}
   .roll-pct{width:82px;margin:0;}
   .roll-bar{flex:1;min-width:120px;height:6px;border-radius:999px;background:var(--s2);overflow:hidden;}
-  .roll-fill{height:100%;background:var(--accent);border-radius:999px;transition:width .25s ease;}
+  .roll-fill{height:100%;background:var(--accent-fill);border-radius:999px;transition:width .25s ease;}
   /* Overview card picker. */
   .ovp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:10px;}
   .ovp-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2);background:var(--s1);padding:9px 12px;border-radius:var(--r-pill);cursor:pointer;}
@@ -391,7 +413,7 @@
   .act-time{flex:0 0 auto;font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums;}
   /* AI content scan */
   .mod-scan-btn{display:inline-flex;align-items:center;gap:10px;margin:14px 0 10px;padding:14px 24px;border:none;border-radius:13px;
-    background:linear-gradient(135deg,var(--accent),var(--accent));color:#fff;font-size:16px;font-weight:800;font-family:inherit;cursor:pointer;box-shadow:0 4px 16px rgba(0,136,255,.3);transition:transform .12s var(--ease),box-shadow .12s var(--ease);}
+    background:linear-gradient(135deg,var(--accent-fill),var(--accent-fill));color:#fff;font-size:16px;font-weight:800;font-family:inherit;cursor:pointer;box-shadow:0 4px 16px rgba(0,136,255,.3);transition:transform .12s var(--ease),box-shadow .12s var(--ease);}
   .mod-scan-btn:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(0,136,255,.4);}
   .mod-scan-btn:disabled{opacity:.6;cursor:default;transform:none;}
   .mod-scan-btn svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2.2;stroke-linecap:round;}
@@ -498,7 +520,7 @@
   .adb-active{background:rgba(136,255,0,.16);color:var(--green);} .adb-paused,.adb-completed,.adb-rejected{background:var(--b1);color:var(--t3);}
   .ad-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;}
   .ad-acts button{font:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:8px;border:none;background:var(--s1);color:var(--t1);cursor:pointer;}
-  .ad-acts button.ok{background:var(--accent);border-color:transparent;color:var(--accent-tint);}
+  .ad-acts button.ok{background:var(--accent-fill);border-color:transparent;color:var(--accent-tint);}
   .ad-acts button.warn{color:var(--red);}
   .in{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--divider);border-radius:10px;background:var(--s2);color:var(--t1);font:inherit;font-size:14px;}
   /* Secondary (grey glass): fill + 0.5px hairline, per the color law's button recipe. */
@@ -508,19 +530,19 @@
   .btn:hover{filter:brightness(1.15);}
   .btn:active{filter:brightness(.85);}
   /* Primary (blue): solid fill, tint text, no border/edge. */
-  .btn.primary{background:var(--accent);border-color:transparent;color:var(--accent-tint);box-shadow:none;}
+  .btn.primary{background:var(--accent-fill);border-color:transparent;color:var(--accent-tint);box-shadow:none;}
 
   /* ── Site lock ── */
   .site-status{display:flex;align-items:center;gap:9px;font-size:14px;background:var(--bg-2);
     border:none;border-radius:var(--r-md);padding:13px 15px;margin-bottom:18px;}
   .site-status .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
   .site-status .dot.green{background:var(--green);box-shadow:0 0 0 4px rgba(136,255,0,.14);}
-  .site-status .dot.red{background:var(--red);box-shadow:0 0 0 4px rgba(255,0,51,.14);}
+  .site-status .dot.red{background:var(--red-fill);box-shadow:0 0 0 4px rgba(255,0,51,.14);}
   .site-status .dot.amber{background:var(--amber);box-shadow:0 0 0 4px rgba(255,204,0,.16);}
   .site-row{display:flex;align-items:center;justify-content:space-between;gap:14px;}
   .jdot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;display:inline-block;}
   .jdot.green{background:var(--green);box-shadow:0 0 0 3px rgba(136,255,0,.14);}
-  .jdot.red{background:var(--red);box-shadow:0 0 0 3px rgba(255,0,51,.14);}
+  .jdot.red{background:var(--red-fill);box-shadow:0 0 0 3px rgba(255,0,51,.14);}
   .jdot.amber{background:var(--amber);box-shadow:0 0 0 3px rgba(255,204,0,.16);}
   .jdot.grey{background:var(--t3);box-shadow:0 0 0 3px rgba(110,110,115,.14);}
   .srt{font-size:14px;font-weight:600;}
@@ -529,10 +551,10 @@
     cursor:pointer;flex:0 0 auto;transition:background .18s var(--ease),border-color .18s var(--ease);padding:0;}
   .switch span{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;
     box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .2s cubic-bezier(.22,.61,.36,1);}
-  .switch.on{background:var(--red);border-color:var(--red);}
+  .switch.on{background:var(--red-fill);border-color:var(--red);}
   .switch.on span{transform:translateX(20px);}
   .switch.demo.on{background:var(--amber);border-color:var(--amber);}
-  .switch.flag.on{background:var(--accent);border-color:var(--accent);}
+  .switch.flag.on{background:var(--accent-fill);border-color:var(--accent);}
   .switch.busy{opacity:.55;pointer-events:none;}
   .dur-row{display:flex;gap:8px;flex-wrap:wrap;}
   .dur{background:var(--s1);border:none;color:var(--t1);border-radius:var(--r-pill);
@@ -610,7 +632,7 @@
 .fn-row{display:grid;grid-template-columns:150px 1fr 110px;align-items:center;gap:12px;padding:6px 0;}
   .fn-lbl{font-size:13px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .fn-track{height:9px;border-radius:999px;background:var(--b1);overflow:hidden;}
-  .fn-fill{height:100%;background:var(--accent);border-radius:999px;}
+  .fn-fill{height:100%;background:var(--accent-fill);border-radius:999px;}
   .fn-n{font-size:13px;font-weight:700;color:var(--t1);text-align:end;font-variant-numeric:tabular-nums;}
   @media(max-width:700px){.fn-row{grid-template-columns:110px 1fr 84px;gap:8px;}}
 /* Header actions: search everything, and what needs you. */
@@ -639,11 +661,11 @@
 /* Demand — unmet searches + waitlists */
 .dm-term{font-variant-numeric:tabular-nums;}
   .dm-track{height:6px;border-radius:999px;background:var(--b1);overflow:hidden;margin-top:7px;max-width:420px;}
-  .dm-track > div{height:100%;background:var(--accent);border-radius:999px;}
+  .dm-track > div{height:100%;background:var(--accent-fill);border-radius:999px;}
 .bc-row{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:10px;}
   .bc-row .ct{color:var(--t3);font-size:12px;margin-right:auto;}
-  .send-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 20px;font-size:13.5px;font-weight:700;transition:all .15s var(--ease);}
-  .send-btn:hover{background:var(--accent);}
+  .send-btn{background:var(--accent-fill);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 20px;font-size:13.5px;font-weight:700;transition:all .15s var(--ease);}
+  .send-btn:hover{background:var(--accent-fill);}
   .send-btn:disabled{opacity:.5;}
   .sup-item{background:var(--s1);border:none;border-radius:var(--r-md);padding:14px 15px;margin-bottom:8px;}
   .sup-top{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
@@ -726,7 +748,7 @@
   .dm-row.gap{margin-top:11px;}
   .dm-msg{max-width:74%;padding:8px 14px;border-radius:19px;font-size:14.5px;line-height:1.4;
     white-space:pre-wrap;word-break:break-word;}
-  .dm-row.admin .dm-msg{background:var(--accent);color:#fff;}
+  .dm-row.admin .dm-msg{background:var(--accent-fill);color:#fff;}
   .dm-row.user .dm-msg{background:var(--s3);color:var(--t1);}
   .dm-row.admin.tail .dm-msg{border-bottom-right-radius:6px;}
   .dm-row.user.tail .dm-msg{border-bottom-left-radius:6px;}
@@ -753,15 +775,15 @@
     min-height:42px;max-height:130px;transition:border-color .15s var(--ease);}
   .chat-compose textarea:focus{border-color:var(--accent);}
   .chat-compose textarea::placeholder{color:var(--t3);}
-  .chat-send{width:42px;height:42px;border-radius:50%;background:var(--accent);color:#fff;border:none;flex-shrink:0;
+  .chat-send{width:42px;height:42px;border-radius:50%;background:var(--accent-fill);color:#fff;border:none;flex-shrink:0;
     display:flex;align-items:center;justify-content:center;transition:all .15s var(--ease);}
   .chat-send svg{width:20px;height:20px;stroke:#fff;stroke-width:2.4;fill:none;}
-  .chat-send:hover{background:var(--accent);}
+  .chat-send:hover{background:var(--accent-fill);}
   .chat-send:disabled{opacity:.4;}
 
   /* Unread-reply badge on a user card */
   .u-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;
-    border-radius:var(--r-pill);background:var(--red);color:var(--red-tint);font-size:11px;font-weight:700;flex-shrink:0;}
+    border-radius:var(--r-pill);background:var(--red-fill);color:var(--red-tint);font-size:11px;font-weight:700;flex-shrink:0;}
 
   /* ── Login ── */
   .login{max-width:380px;margin:6vh auto 0;background:rgba(18,18,20,.9);border:none;
@@ -773,7 +795,7 @@
   .login input{width:100%;background:var(--s2);border:1px solid var(--divider);border-radius:var(--r-sm);color:var(--t1);
     padding:12px 14px;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
   .login input:focus{border-color:var(--accent);}
-  .login button{width:100%;margin-top:20px;background:var(--accent);color:var(--accent-tint);border:none;border-radius:var(--r-pill);
+  .login button{width:100%;margin-top:20px;background:var(--accent-fill);color:var(--accent-tint);border:none;border-radius:var(--r-pill);
     padding:13px;font-size:14.5px;font-weight:700;transition:filter .15s var(--ease);}
   .login button:hover{filter:brightness(1.05);}
   .login button:disabled{opacity:.6;}
@@ -846,7 +868,7 @@
   .lock-actions{display:flex;flex-direction:column;gap:11px;max-width:264px;margin:8px auto 0;}
   .lock-actions .btn{width:100%;}
   /* Destructive (red): solid fill + 0.5px lighter-edge hairline + tinted text, per the color law's semantic-button recipe. */
-  .btn.danger{background:var(--red);color:var(--red-tint);box-shadow:0 0 0 .5px var(--red-edge) inset;}
+  .btn.danger{background:var(--red-fill);color:var(--red-tint);box-shadow:0 0 0 .5px var(--red-edge) inset;}
   .btn.danger:hover{filter:brightness(1.1);}
   .btn.danger:active{filter:brightness(.85);}
   .side-lock{background:none;border:none;color:var(--t2);font-size:12.5px;font-weight:500;
@@ -995,7 +1017,7 @@
   .switch{background:var(--s4);border:none;}
   .switch span{width:24px;height:24px;top:3px;left:3px;box-shadow:0 2px 6px rgba(0,0,0,.35);}
   .switch.on span{transform:translateX(20px);}
-  .switch.flag.on{background:var(--accent);}
+  .switch.flag.on{background:var(--accent-fill);}
   .switch.on{border:none;}
 
   /* ── Cards: one soft 20px radius family, borderless fills ── */
@@ -1097,6 +1119,33 @@
      what the app uses for the same job. The per-component rules further up are now
      redundant but harmless. */
   input::placeholder,textarea::placeholder{color:var(--t3);}
+  /* A FINGER NEEDS 44pt AND THE DASHBOARD'S CHIPS ARE 24-31px TALL
+     (docs/ADMIN-SWEEP-LIST.md item E1). Fine for a mouse, short for a thumb — and staff
+     do open this on a phone to answer a support thread or freeze a wallet on the move.
+     Same technique as the app: an INVISIBLE ::after that enlarges the HIT area only, so
+     nothing changes size, nothing moves, and no layout is recomputed. It is the app's own
+     44pt overlay, one surface further in.
+     Three rules make it safe, and each of them is a mistake this repo has already made:
+       - EVERY class here was checked to have NO ::before AND NO ::after of its own. A
+         pseudo-element is a slot and it can already be taken — claiming one that a chevron
+         is using shipped a visible bug on ~90 screens in build 1832.
+       - It is CENTRED and grows at most 1px sideways past the control (min-width only
+         lifts the few that are under 44 wide; the narrowest, .bc-aud at 42px, sits in a
+         6px-gap row, and the .stp steppers are 38px apart). Growing sideways over the
+         control next door trades one fault for a worse one.
+       - It is PHONE-ONLY. On a desktop these are mouse targets and a 44px invisible box
+         around a 30px button would swallow hover on whatever sits beside it.
+     Native checkboxes are NOT in this list: an <input> cannot carry a reliable
+     pseudo-element, and every one of them sits inside a <label> whose whole row is already
+     the target. They are simply drawn a size up here. */
+  @media(max-width:900px),(max-height:500px){
+    .fc-catbtn,.bc-aud,.mod-scope,.switch,.copy,.tf-r,.vt-tbtn,.stp,.refresh{position:relative;}
+    .fc-catbtn::after,.bc-aud::after,.mod-scope::after,.switch::after,.copy::after,
+    .tf-r::after,.vt-tbtn::after,.stp::after,.refresh::after{
+      content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+      width:calc(100% + 2px);min-width:44px;height:44px;border-radius:inherit;}
+    input[type=checkbox]{min-width:22px;min-height:22px;}
+  }
 </style>
 </head>
 <body>
@@ -2416,7 +2465,7 @@ async function renderSetupView(){
       <h3>Setup <span class="muted">· ${d.connected} of ${d.total} connected</span></h3>
       <div class="sub">Everything outside Atwe that it can plug into. Each one is optional — without it the app keeps running and quietly does less. This page is where that "quietly" stops. Add a key in Railway → Variables, redeploy, and the light turns green.</div>
       <div class="tf-chart" style="height:8px;margin-top:12px;background:var(--s2);border-radius:99px;overflow:hidden;">
-        <div style="height:100%;width:${pct}%;background:var(--accent);"></div>
+        <div style="height:100%;width:${pct}%;background:var(--accent-fill);"></div>
       </div>
     </div>
     ${d.groups.map(g => `<div class="panel"><h3>${esc(g.group)}</h3>${g.items.map(card).join('')}</div>`).join('')}`;
@@ -7811,7 +7860,7 @@ async function renderFeedSignalsView(){
         <td style="padding:9px 10px;text-align:right;color:var(--t2);">${s.engaged.toLocaleString()}</td>
         <td style="padding:9px 10px;min-width:160px;">
           <div style="display:flex;align-items:center;gap:8px;">
-            <div style="flex:1;height:8px;border-radius:5px;background:var(--s2);overflow:hidden;"><div style="height:100%;width:${w}%;background:var(--accent);border-radius:5px;"></div></div>
+            <div style="flex:1;height:8px;border-radius:5px;background:var(--s2);overflow:hidden;"><div style="height:100%;width:${w}%;background:var(--accent-fill);border-radius:5px;"></div></div>
             <b style="min-width:46px;text-align:right;">${s.engagementRate}%</b>
           </div></td>
       </tr>`;
