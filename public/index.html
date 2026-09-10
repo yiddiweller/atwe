@@ -2052,7 +2052,7 @@ body.reduce-motion .me-slide,body.reduce-motion .me-slide-back{animation:none;}
 .me-row.me-staff .me-lbl{color:var(--t3);font-weight:600;}
 .me-row.me-staff .me-ic{color:var(--t3);opacity:.72;}
 .iset-row.iset-staff .iset-label{color:var(--t3);font-weight:600;}
-.iset-row.iset-staff .iset-sub{color:var(--t4);}
+.iset-row.iset-staff .iset-sub{color:var(--t3);}
 .iset-row.iset-staff .iset-ic{opacity:.6;}
 /* `--red-txt`, not raw `--red`: the Log out label measured 3.99:1 on Light from real
    pixels (245,0,51 on near-white) against a 4.5 floor. The token exists for exactly this —
@@ -4091,7 +4091,7 @@ textarea#inp::placeholder{color:var(--t3);}
   border-color:var(--accent);
   box-shadow:0 0 0 3px var(--accent-dim);
 }
-.fg input::placeholder{color:var(--t4);}
+.fg input::placeholder{color:var(--t3);}
 
 /* Password show/hide eye */
 .pwd-wrap{position:relative;}
@@ -5534,7 +5534,7 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
 .msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding:0 6px 0 8px;transform:translateX(calc(100% + 16px - var(--slidemag,0px)));}
 .msg-row.me .msg-slidetime{left:0;align-items:flex-end;padding:0 8px 0 6px;transform:translateX(calc(-100% - 16px + var(--slidemag,0px)));}
 .msg-slidetime .slt-d{font-size:10px;color:var(--t3);font-weight:600;}
-.msg-slidetime .slt-t{font-size:8.5px;color:var(--t4);}
+.msg-slidetime .slt-t{font-size:8.5px;color:var(--t3);}
 .msg-slidetime .slt-solo{font-size:10px;color:var(--t3);font-weight:600;} /* time-only (<24h) — bold like the date */
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
@@ -6146,7 +6146,7 @@ body.reduce-motion .mc-loc-pin.pulse{animation:none;}
 .mk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
 .mk-title{font-size:19px;font-weight:800;letter-spacing:-.02em;}
 .mk-label{font-size:11.5px;font-weight:700;color:var(--t3);letter-spacing:.05em;text-transform:uppercase;margin:15px 3px 7px;}
-.mk-label .mk-opt{color:var(--t4);font-weight:600;text-transform:none;letter-spacing:0;margin-inline-start:5px;}
+.mk-label .mk-opt{color:var(--t3);font-weight:600;text-transform:none;letter-spacing:0;margin-inline-start:5px;}
 .mk-input,.mk-textarea{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:14px;
   padding:13px 14px;color:var(--t1);font-size:15px;font-family:inherit;outline:none;
   transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);-webkit-appearance:none;}
@@ -6950,7 +6950,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ax-ask textarea{flex:1;min-width:0;resize:none;background:var(--s1);border:1px solid var(--b2);border-radius:18px;
   color:var(--t1);font-family:inherit;font-size:14px;line-height:1.4;padding:9px 14px;max-height:120px;outline:none;}
 .ax-ask textarea:focus{border-color:var(--b3);}
-.ax-ask textarea::placeholder{color:var(--t4);}
+.ax-ask textarea::placeholder{color:var(--t3);}
 .ax-send{flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--primary);border:none;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:opacity var(--t-fast) ease,transform var(--t-fast) ease;}
 .ax-send:hover{transform:scale(1.05);}.ax-send:active{transform:scale(1.06);}
@@ -7364,9 +7364,9 @@ body.reduce-motion .ac-newposts{animation:none;}
 .art-cover.has{color:transparent;}
 .art-cover-x{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .art-title-in{width:100%;border:none;background:none;color:var(--t1);font-size:26px;font-weight:800;line-height:1.2;padding:6px 0;outline:none;}
-.art-title-in::placeholder{color:var(--t4);}
+.art-title-in::placeholder{color:var(--t3);}
 .art-body-in{width:100%;flex:1;min-height:300px;border:none;background:none;color:var(--t1);font-size:17px;line-height:1.7;padding:10px 0 0;outline:none;resize:none;font-family:inherit;}
-.art-body-in::placeholder{color:var(--t4);}
+.art-body-in::placeholder{color:var(--t3);}
 /* Reader. */
 #articleReader{padding:0;align-items:stretch;justify-content:stretch;background:var(--bg);}
 /* Reading-progress bar pinned to the very top of the article reader. */
@@ -7411,7 +7411,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 #notesList .ac-note{cursor:default;}
 .note-input{width:100%;box-sizing:border-box;background:var(--s2);border:none;border-radius:14px;color:var(--t1);padding:12px 14px;font:inherit;font-size:15px;line-height:1.5;resize:vertical;outline:none;}
 .note-src-input{width:100%;box-sizing:border-box;background:var(--s2);border:none;border-radius:12px;color:var(--t1);padding:11px 14px;font:inherit;font-size:14px;outline:none;margin-top:10px;}
-.note-input::placeholder,.note-src-input::placeholder{color:var(--t4);}
+.note-input::placeholder,.note-src-input::placeholder{color:var(--t3);}
 
 /* ── Offer to savers: deal picker sheet + deal DM card ── */
 .deal-label{font-size:12.5px;font-weight:700;color:var(--t3);margin:14px 2px 8px;}
@@ -7495,7 +7495,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .status-row{display:flex;gap:10px;margin-top:6px;}
 .status-emoji-in{width:56px;flex-shrink:0;text-align:center;background:var(--s2);border:none;border-radius:12px;color:var(--t1);font-size:22px;padding:10px 0;outline:none;}
 .status-text-in{flex:1;min-width:0;background:var(--s2);border:none;border-radius:12px;color:var(--t1);font:inherit;font-size:15px;padding:10px 14px;outline:none;}
-.status-text-in::placeholder{color:var(--t4);}
+.status-text-in::placeholder{color:var(--t3);}
 .status-presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
 .status-preset{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;background:var(--s2);color:var(--t1);font-size:13px;font-weight:600;padding:7px 13px;cursor:pointer;}
 .status-preset .sp-em{font-size:15px;line-height:1;}
@@ -10896,7 +10896,7 @@ body.light .gp-card{background:#fff;}
 .gp-join:hover{opacity:.9;}
 .gp-join:active{transform:scale(1.02);}
 .gp-join.requested{background:transparent;color:var(--t1);border:none;}
-.gp-note{font-size:12.5px;color:var(--t4);margin-top:14px;line-height:1.5;max-width:340px;margin-inline-start:auto;margin-inline-end:auto;}
+.gp-note{font-size:12.5px;color:var(--t3);margin-top:14px;line-height:1.5;max-width:340px;margin-inline-start:auto;margin-inline-end:auto;}
 @media(min-width:600px) and (min-height:501px){
   .overlay.gp-sheet{align-items:center;}
   .gp-card{max-width:380px;border:none;border-radius:var(--r-xl);animation:sheetFade .4s cubic-bezier(.22,.61,.36,1);}
@@ -12052,10 +12052,10 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
   .mm-reax-more{font-weight:700;color:var(--t2);}
 /* AI disclosure. Stated plainly, never dressed up as a badge — it is a fact
    about the post, not a decoration on it. */
-.ai-disclosed{font-size:11.5px;color:var(--t4);margin-top:6px;}
+.ai-disclosed{font-size:11.5px;color:var(--t3);margin-top:6px;}
 .ai-disclose-chip{display:inline-flex;align-items:center;gap:8px;background:var(--s2);border:none;border-radius:999px;
   padding:6px 12px;font-size:12px;font-weight:600;color:var(--t2);cursor:pointer;margin-top:8px;}
-  .ai-disclose-chip span{color:var(--t4);font-size:14px;}
+  .ai-disclose-chip span{color:var(--t3);font-size:14px;}
   .ai-disclose-chip.hidden{display:none;}
 /* A topic that's been closed reads quieter, but is still there. */
 .topic-closed{opacity:.55;}
