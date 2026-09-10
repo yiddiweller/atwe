@@ -4979,46 +4979,73 @@ body{
      sides on the bottom, it's like shadow". It is real: their screenshot reads 15,15,16
      at the button's top and 14,25,35 at its bottom. Sized in percentages here rather
      than the login button's fixed 120x86px, because a tab is a third of its width. */
-  --tab-fill:    radial-gradient(90% 130% at 50% 128%,
+  /* ONE CONTROL RECIPE FOR THE WHOLE APP (--ctl-*), and the tab tokens below now
+     READ FROM IT rather than owning it. The founder's instruction was literal: "all
+     buttons should have this grey background with a thin, very thin outline, like we
+     have in the login pages". That recipe was already measured off `.auth-btn` and
+     lived here under a name that said TAB, so 95 other button families never inherited
+     it and rendered as a flat --s2 with no rim at all. Renaming the owner to --ctl-*
+     changes nothing on screen — every value below is byte-identical to what the tabs
+     already shipped — and it gives every other control one place to point at.
+     DECLARED ON `body`, NEVER `:root`: a custom property whose value references another
+     resolves where it is DECLARED, so on :root these would freeze at the Black theme's
+     values and Light would never flip. Same trap the --tab-* set documents. */
+  --ctl-fill:    radial-gradient(90% 130% at 50% 128%,
                    rgba(var(--accent-rgb),.11), transparent 72%),
                  rgba(18,18,21,.90);
+  --ctl-fill-hv: radial-gradient(90% 130% at 50% 128%,
+                   rgba(var(--accent-rgb),.14), transparent 72%),
+                 rgba(34,34,38,.92);
+  --ctl-ink:     var(--t1);
+  --ctl-edge:    var(--divider);
+  --ctl-hi:      rgba(255,255,255,.09);
+  --ctl-shade:   rgba(0,0,0,.45);
+  /* The bottom nav bar's own material, so a button and the bar are the same glass.
+     GLASS LIVES ON CHROME ONLY (founder's decision): bars, menus, buttons, sheets and
+     pop-ups. It never goes behind body text or on a content card — their own sentence
+     was "all the text that is not a button should be with a full black background",
+     and per-card blur is what made iOS jettison the feed twice. */
+  --ctl-blur:    blur(2px) saturate(150%);
+  --tab-fill:    var(--ctl-fill);
   /* A RESTING LABEL IS FULL STRENGTH, not a dimmed one — measured off the same Apple
      screenshot, where the unselected labels read 247-254 (essentially white) and only
      the FILL says which tab you are on. Ours were --t2 (142) and visibly receded beside
      it. The white pill is unmissable on its own; double-encoding the state in the text
      as well only made three of the four choices look switched off. */
-  --tab-ink:     var(--t1);
+  --tab-ink:     var(--ctl-ink);
   --tab-fill-on: var(--primary); /* selected — white on Black, near-black on Light */
   --tab-ink-on:  var(--on-primary);
-  --tab-fill-hv: radial-gradient(90% 130% at 50% 128%,
-                   rgba(var(--accent-rgb),.14), transparent 72%),
-                 rgba(34,34,38,.92);
+  --tab-fill-hv: var(--ctl-fill-hv);
   /* The rim, and it is the login button's exactly: --divider at HALF a pixel, which is
      one physical pixel on a 2x/3x phone. It shipped for one build as a full CSS pixel of
      rgba(255,255,255,.16) — measured off Apple Fitness+, whose own rim really is one
      physical pixel — and the founder asked for thinner, which is Apple's width and ours
      now. A solid --divider rather than a white alpha is what makes it flip cleanly in
      Light (#D1D1D6) instead of dissolving into the page. */
-  --tab-edge: var(--divider);
+  --tab-edge: var(--ctl-edge);
   /* The 3-D the founder could see but not name: a whisper of light along the pill's TOP
      inside edge and a soft shadow underneath, so it reads as sitting ON the bar rather
      than being cut out of it. Both are far below the rim's strength on purpose — a bevel
      you can point at is a bevel that is too strong. */
-  --tab-hi:    rgba(255,255,255,.09);
-  --tab-shade: rgba(0,0,0,.45);
+  --tab-hi:    var(--ctl-hi);
+  --tab-shade: var(--ctl-shade);
 }
 body.light{
   /* Mirrored, not copied: .06 WHITE over a white page is nothing at all, so Light takes
      the same idea from the other side — a whisper of black, again flattened to a solid
      for the same reason as Black. */
-  --tab-fill:    radial-gradient(90% 130% at 50% 128%,
+  --ctl-fill:    radial-gradient(90% 130% at 50% 128%,
                    rgba(var(--accent-rgb),.09), transparent 72%),
                  rgba(242,242,245,.90);
-  --tab-fill-hv: radial-gradient(90% 130% at 50% 128%,
+  --ctl-fill-hv: radial-gradient(90% 130% at 50% 128%,
                    rgba(var(--accent-rgb),.12), transparent 72%),
                  rgba(232,232,237,.92);
-  --tab-hi:      rgba(255,255,255,.7);
-  --tab-shade:   rgba(0,0,0,.10);
+  --ctl-hi:      rgba(255,255,255,.7);
+  --ctl-shade:   rgba(0,0,0,.10);
+  --tab-fill:    var(--ctl-fill);
+  --tab-fill-hv: var(--ctl-fill-hv);
+  --tab-hi:      var(--ctl-hi);
+  --tab-shade:   var(--ctl-shade);
 }
 body.light{
   --bg:#ffffff;--bg-1:#F5F5F7;--bg-2:#F5F5F7;--bg-3:#eff3f4;
@@ -6947,10 +6974,21 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .iv-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;
   padding:max(10px,env(safe-area-inset-top)) 12px 20px;z-index:3;pointer-events:none;
   background:linear-gradient(to bottom,rgba(0,0,0,.5),transparent);}
-.iv-x,.iv-menu{pointer-events:auto;background:none;border:none;color:#fff;display:flex;align-items:center;justify-content:center;
-  padding:8px;cursor:pointer;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7));}
-.iv-x svg{width:27px;height:27px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
-.iv-menu svg{width:24px;height:24px;fill:currentColor;}
+/* THE FOUNDER'S OWN EXAMPLE, VERBATIM: "when I open an image, on the top left there's a
+   small X, on the top right there is three dots — I want that to have a small background
+   circle with a thin hairline." These were two bare white glyphs floating on the photo,
+   kept legible only by a drop-shadow. They are discs now and take the app's one control
+   recipe (--ctl-*) like every other button, so the shadow is gone with the bareness.
+   BOTH ARE 40x40 EXPLICITLY. They used to be sized by their own SVG plus 8px of padding,
+   which made the X 43 across and the ⋯ 40 — invisible while they were bare glyphs, and
+   the first thing you would see once they became two circles side by side.
+   The fill is 90% opaque and the mark stays #fff, so it reads on any photograph — the
+   same reasoning the profile page's back arrow settled: the disc may quieten against a
+   matching photo, the MARK never does. */
+.iv-x,.iv-menu{pointer-events:auto;border:none;color:#fff;display:flex;align-items:center;justify-content:center;
+  width:40px;height:40px;padding:0;border-radius:50%;cursor:pointer;}
+.iv-x svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
+.iv-menu svg{width:22px;height:22px;fill:currentColor;}
 /* Post engagement bar pinned to the bottom of the lightbox — mirrors the post
    card's action row (filled glyphs + counts), tuned white for legibility on a photo. */
 .iv-actions{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:center;gap:22px;
@@ -13502,8 +13540,15 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .msg-send,.ac-mic,.msg-attach,.ac-callbtn,.ac-rec-del,.ac-rec-send,.aatile,.mc-rsvp button,.ac-attach-sheet .aatile{
   transition:transform var(--t-slow) cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease),color var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease),filter var(--t-fast) var(--ease);
 }
+/* THESE EIGHT WERE MISSED BY THE PRESS-GROWS PASS AND THEY ARE THE MOST-PRESSED
+   CONTROLS IN THE APP — the composer's send, the mic and the + . 113 :active rules were
+   mirrored from shrink to grow in build 1740; this one rule was not, so the founder kept
+   reporting "every time I click it gets smaller" about a change we believed was done.
+   Mirrored the same way as all the others (2 - x, capped at 1.06) and put on the shared
+   press curve so it eases both ways instead of snapping. */
 .msg-send:active,.ac-mic:active,.msg-attach:active,.ac-callbtn:active,.ac-rec-del:active,.ac-rec-send:active,.aatile:active,.mc-rsvp button:active{
-  transform:scale(.84);transition:transform var(--t-fast) ease;
+  transform:scale(1.06);
+  transition:transform var(--press-dur) var(--press-ease);
 }
 @media(prefers-reduced-motion:reduce){
   .msg-send,.ac-mic,.msg-attach,.ac-callbtn,.ac-rec-del,.ac-rec-send,.aatile,.mc-rsvp button,.vn-play,.vn-speed{transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -14359,6 +14404,171 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 .ev-tab.on,.bk-tab.on,.ac-jv.on,.wf-chip.on,.sell-sortchip.on,.fb-cat.on,.ac-jbtab.on,
 .ja-fchip.on,.dir-ind.on,.svc-cat.on,.rx-tab.on,.rev-chip.on,.stt-chip.on,
 .ev-seg-btn.on,.cash-stab.on,.cash-range.on{box-shadow:none;}
+
+/* == ONE BUTTON, EVERYWHERE (founder, Sept 2026) =============================
+   "All buttons should have this grey background with a thin, very thin outline, like we
+   have of the other places that we made already like the login buttons... for example
+   when I open an image, on the top left there's a small X, on the top right there is
+   three dots — I want that to have a small background circle with a thin hairline."
+
+   That recipe already existed and was already measured off `.auth-btn` — it was just
+   named --tab-* and therefore only ever reached the tab rows. It is --ctl-* now (see the
+   token block), and this is the same treatment the tab pills get, applied to the other
+   45 control families: the grey wash, the HALF-pixel hairline, the whisper of light on
+   the top inside edge, the soft shadow beneath, and the bottom nav's own frost.
+
+   MEASURED, not guessed: 25 button families were on the recipe and 95 were on a flat
+   --s2 with no rim at all, which is why the app read as two different button systems.
+
+   THE GUARD IS LOAD-BEARING. This block sits after every family's own rule so it can
+   beat a base `background:var(--s2)` — which means it would ALSO beat each family's
+   own selected/primary/destructive state, since most of those are declared earlier at
+   the same specificity. `:not(.on):not(.active):not(.accent):not(.danger):not(.selected)`
+   is what keeps a chosen chip white, a primary white, and a delete button red. Same
+   discrimination `.tb-feedtab:not(.tb-feedtab-add)` already uses one block above.
+
+   GLASS ON CHROME ONLY. A button is chrome, so it gets the frost. A card, a post, a
+   message bubble and anything carrying body text stay solid — the founder's own line was
+   "all the text that is not a button should be with a full black background", and this
+   is also where the two iOS feed crashes came from. Do not lift this onto a card. */
+.ac-cat-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-err-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-h3-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-h3-pill:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-head-more:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-icon-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-lchip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-pill-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-recent-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-selbar-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ai-disclose-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ai-open-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ai-shop-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.arc-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.cl-signbtn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.deal-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.det-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.emoji-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.eng-ai-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.gp-close:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.iv-menu:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.iv-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ja-select-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.jm-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.mc-live-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.mic-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.mkt-more-img:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.modal-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ob-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ppl-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.remove-img-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.sect-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.send-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.skill-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.slot-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.snz-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.stl-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.su-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.vchip:not(.on):not(.active):not(.accent):not(.danger):not(.selected){
+  border:none;
+  background:var(--ctl-fill);
+  color:var(--ctl-ink);
+  box-shadow:0 0 0 .5px var(--ctl-edge) inset, 0 .5px 0 var(--ctl-hi) inset,
+             0 1px 2px var(--ctl-shade);
+  -webkit-backdrop-filter:var(--ctl-blur);backdrop-filter:var(--ctl-blur);
+}
+@media (hover:hover){
+.ac-cat-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-err-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-h3-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-h3-pill:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-head-more:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-icon-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-lchip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-pill-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-recent-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-selbar-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ac-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ai-disclose-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ai-open-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ai-shop-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.arc-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.cl-signbtn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.deal-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.det-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.emoji-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.eng-ai-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.gp-close:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.iv-menu:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.iv-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ja-select-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.jm-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.mc-live-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.mic-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.mkt-more-img:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.modal-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ob-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.ppl-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.remove-img-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.sect-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.send-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.skill-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.slot-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.snz-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.stl-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.su-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
+.vchip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover{background:var(--ctl-fill-hv);}
+}
+/* Somebody who asked for less transparency gets a solid control, exactly as the tab
+   pills and the top bar's glass already do. The RIGHT query is prefers-reduced-
+   transparency; borrowing the motion one would take the frost from people who only
+   asked for stiller animation. */
+@media (prefers-reduced-transparency:reduce){
+.ac-cat-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-err-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-h3-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-h3-pill:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-head-more:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-icon-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-lchip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-pill-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-recent-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-selbar-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ac-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ai-disclose-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ai-open-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ai-shop-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.arc-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.cl-signbtn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.deal-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.det-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.emoji-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.eng-ai-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.gp-close:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.iv-menu:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.iv-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ja-select-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.jm-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.mc-live-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.mic-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.mkt-more-img:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.modal-x:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ob-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.ppl-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.remove-img-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.sect-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.send-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.skill-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.slot-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.snz-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.stl-btn:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.su-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected),
+.vchip:not(.on):not(.active):not(.accent):not(.danger):not(.selected){-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--s1);}
+}
 /* -- A press GROWS, and eases both ways (founder) ----------------------------
    "Every time I click on an option it gets smaller. I want it to rather go smoothly
    bigger, just like the navigation icon." There were 113 :active rules across the app
