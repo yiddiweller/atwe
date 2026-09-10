@@ -85,12 +85,22 @@ const ok = (c, m, x) => { if (c) { pass++; console.log('  ok   ' + m); } else { 
        simply never touched) and the reopen check fails. */
     const send = (build) => fetch(BASE + '/api/client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: e.message, source: e.source, path: 'home', build }) });
+    /* READ THE ROW DEFENSIVELY — it can be GONE, and when it was, this probe CRASHED rather
+       than failing. `now.resolved` on an undefined row throws, and run-all.sh prints a stack
+       trace instead of the "N FAILED" line every check-counting probe ends with, so a
+       monitor grepping for FAILED reports a green run over a crashed one — the exact trap
+       recorded in CLAUDE.md. It is a real possibility in a batch: this table has its own
+       ageing sweep, and every other probe in the run is throwing client errors into it. The
+       check now says what happened in words instead of dying. */
+    const row = async () => (await pool.query('SELECT resolved FROM client_errors WHERE id = $1', [e.id])).rows[0] || null;
     await send(e.build); await new Promise(r => setTimeout(r, 900));
-    let now = (await pool.query('SELECT resolved FROM client_errors WHERE id = $1', [e.id])).rows[0];
-    ok(now.resolved === true, 'a straggler still on the old build does not reopen it');
+    let now = await row();
+    ok(now && now.resolved === true, 'a straggler still on the old build does not reopen it',
+       now ? String(now.resolved) : 'the row was gone when it was read back');
     await send(String(Number(e.build) + 1)); await new Promise(r => setTimeout(r, 900));
-    now = (await pool.query('SELECT resolved FROM client_errors WHERE id = $1', [e.id])).rows[0];
-    ok(now.resolved === false, 'but the same fault on a NEWER build does');
+    now = await row();
+    ok(now && now.resolved === false, 'but the same fault on a NEWER build does',
+       now ? String(now.resolved) : 'the row was gone when it was read back');
   } else ok(false, 'no admin account to check the dashboard with');
 
   /* SIGNING UP OFFERS TO SAVE THE PASSWORD. A browser decides "shall I save this?" by
