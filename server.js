@@ -3334,10 +3334,16 @@ async function groupMemberIds(groupId, exceptId) {
 // caller is on the target's allow-list. A block always denies.
 async function canContact(callerId, targetId) {
   if (callerId === targetId) return true;
-  // The block check fails CLOSED — a block must never leak through on a DB error.
+  /* The block check fails CLOSED — a block must never leak through on a DB error — and
+     it runs in BOTH DIRECTIONS. It used to ask only "did the target block the caller",
+     which meant the BLOCKER could still message and still call the person they had
+     blocked, while that person could not answer either. That is not a gap in a privacy
+     setting, it is a one-way channel built out of the block feature: block someone so
+     they cannot reply, then keep messaging them. Every real platform blocks both ways
+     for exactly this reason, and this repo's own rule already said so — it simply was
+     not true of the code. Found by two accounts; one browser can never see it. */
   try {
-    const blocked = await db.query('SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [targetId, callerId]);
-    if (blocked.rowCount) return false;
+    if (await blockedEither(callerId, targetId)) return false;
   } catch (e) { return false; }
   try {
     const { rows } = await db.query('SELECT pc_everyone, pc_following, pc_followers, dm_connections_only, deactivated FROM users WHERE id = $1', [targetId]);
@@ -3441,8 +3447,9 @@ async function dmAllowed(meId, otherId) {
   if (meId === otherId) return true; // you can always message yourself
   if (await canContact(meId, otherId)) return true; // also denies on block
   try {
-    const b = await db.query('SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [otherId, meId]);
-    if (b.rowCount) return false;
+    // Both directions, for the same reason canContact does: without it the prior-history
+    // fallback below would hand the blocker back the channel canContact just closed.
+    if (await blockedEither(meId, otherId)) return false;
     const r = await db.query(
       'SELECT 1 FROM at_messages WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1) LIMIT 1',
       [meId, otherId]
