@@ -6398,13 +6398,25 @@ this very title for months and is green for the first time.
 `polish2.js` had been rewritten in build 1766 to assert the header **stays put**, with the
 jank measurement written out beside it. Build 1827 restored the retraction on better terms
 and updated `notifscroll.js` — but not this one, so it failed on correct code at the next
-full run. **That is the THIRD probe here to go stale against a decision it did not know
-about** (notifhdr on this very header, lastseen, now this), and the shape is always the
+full run. **That was the THIRD probe here to go stale against a decision it did not know
+about** (notifhdr on this very header, lastseen, then this — and two more below, making five), and the shape is always the
 same: two probes asserting the same behaviour, one of them updated. The fix is not to
 re-assert the new direction in both — **the retraction's pacing belongs to `notifscroll.js`
 alone**, and `polish2` keeps only what a member sees (it retracts at all, by transform not
 margin, and reopening shows it again). When you change a behaviour, `grep` the whole
 scratchpad for the OLD one before shipping.
+
+**IT HAPPENED TWICE MORE ON ONE CHANGE — build 1836's colour split — and the second time
+the grep above is what would have caught it.** `chathead.js` asserted the composer mic was
+`--accent`, and `polish3.js` asserted the Undo pill's fill was the literal `rgb(0,13x,25x)`.
+Both are blue AREAS carrying white content, so both correctly moved to `--accent-fill` — the
+old assertions were literally demanding the 3.52:1 fault D1 exists to fix. **A probe that
+hardcodes a colour VALUE cannot survive a token being split**, which is why both were
+reframed onto what was ever being protected: `polish3` now asserts the pill takes the fill
+token, that the fill is a DIFFERENT token from the identity blue, and that its label clears
+4.5:1 — a check that would have failed on the old colour and passes on the new one. After
+fixing them, `grep -rniE "rgb\(0, ?13[0-9], ?25[0-9]\)|#0088ff" scratchpad/*.js` (and the
+same for `#FF0033`) found no third one. **Run that grep as part of any future token change.**
 
 **`scratchpad/worldhdr.js` (129 checks) is the durable guard**, and every check is written
 as a RELATIONSHIP between the four worlds rather than as a number — which is the only shape
