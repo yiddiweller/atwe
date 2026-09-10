@@ -35752,7 +35752,7 @@ async function refreshNotifCount() {
   if (!isAccount()) return;
   try { setNotifBadge((await API.req('GET', '/api/notifications/count')).unread); } catch {}
 }
-function closeNotifToHome() { acCloseNotifDetail(); closeOverlay('notifOverlay'); appTab('home'); }
+function closeNotifToHome() { acCloseNotifDetail(); closeOverlay('notifOverlay', true); appTab('home'); }
 function openNotifications() {
   requireSectionUnlock('notifications', async () => {
     if (_lw() <= 768) closeSidebar();
@@ -35838,7 +35838,7 @@ function acNotifGroupRow(g) {
     : `appTab('home');acGoProfile('${lead.username}')`;
   const names = others > 0 ? `<b>${escHtml(lead.name)}</b> and ${others} other${others === 1 ? '' : 's'}` : `<b>${escHtml(lead.name)}</b>`;
   const snip = newest.postBody ? `<div class="notif-snip">${escHtml(newest.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item notif-row ${unread ? 'unread' : ''}" onclick="closeOverlay('notifOverlay');${go}">
+  return `<div class="ac-item notif-row ${unread ? 'unread' : ''}" onclick="closeOverlay('notifOverlay', true);${go}">
     <div class="notif-ava-wrap"><div class="notif-ava-stack">${stack}</div></div>
     <div class="ac-item-main"><div class="notif-text">${names} ${verb} · <span class="notif-time">${acTime(newest.created_at)}</span></div>${snip}</div>
     ${unread ? '<span class="notif-dot"></span>' : ''}
@@ -35866,7 +35866,7 @@ function acRenderNotifDetail(n) {
         <div class="nd-time">${escHtml(acTime(n.created_at))}</div>
       </div>
       <div class="nd-card"><div class="nd-msg">This is the mark Atwe gives to people who deal well, over enough dealings for it to mean something. It shows on your profile from now on, and it stays as long as your reputation does.</div></div>
-      <button class="nd-action" onclick="closeOverlay('notifOverlay');acGoProfile()">See your profile</button>`;
+      <button class="nd-action" onclick="closeOverlay('notifOverlay', true);acGoProfile()">See your profile</button>`;
   }
   if (n.type === 'login') {
     let when = acTime(n.created_at);
@@ -35885,6 +35885,64 @@ function acRenderNotifDetail(n) {
   const a = n.actor || {};
   return `<div class="nd-hero">${acAvatarHtml(a.name, a.avatar, 'nd-ava', acIsBiz(a))}<div class="nd-title">${escHtml(a.name || 'Notification')}</div><div class="nd-time">${escHtml(acTime(n.created_at))}</div></div>`;
 }
+
+/* == EVERY NOTIFICATION LANDS SOMEWHERE REAL (founder, Sept 2026) ==============
+   "I realized some of the notifications jumps to other pages for no reason. I want
+   every notification to have a place to land if I click on that notification."
+
+   MEASURED: the server emits 153 notification types. The router below handled 82 of
+   them and the other 71 fell through to `appTab('home')` plus the actor's profile — so
+   a refund approval, a payment, a tip, an accepted quote, a frozen wallet, a course
+   enrolment and 65 more all took you Home and then to somebody's profile.
+
+   This table is the missing 71. It is a TABLE and not another pile of `is*` booleans on
+   purpose: notifguard.js diffs its keys against the types server.js actually emits, so
+   type 154 cannot ship without a destination. Add a type there, add a row here.
+
+   WHERE A TYPE HAS NO BETTER PLACE — a strike, a moderation warning, an appeal outcome,
+   a sign-in check — it opens its OWN detail page rather than a stranger's profile. That
+   surface already exists (it is what a `login` alert opens) and reading the message you
+   were notified about is a real destination; the actor's profile is not. */
+const NOTIF_GO = {
+  // ── money: it all lives in the wallet ─────────────────────────────────────
+  payment:'acOpenWallet()', money_received:'acOpenWallet()', money_drop_done:'acOpenWallet()',
+  tip:'acOpenWallet()', pool_contribution:'acOpenPools()', ppv_unlock:'acOpenWallet()',
+  series_bought:'acOpenWallet()', wallet_frozen:'acOpenWallet()', referral:'acOpenReferrals()',
+  gift_received:'acOpenGiftCards()', giftcard_frozen:'acOpenGiftCards()',
+  sched_pay_failed:'acOpenSchedPays()', return_request:'acOpenWallet()',
+  refund_approved:'acOpenRefunds()', refund_declined:'acOpenRefunds()',
+  // ── the "win the job" layer ───────────────────────────────────────────────
+  quote:'acOpenQuotes()', quote_received:"acOpenQuotes('received')",
+  quote_accepted:"acOpenQuotes('sent')", quote_declined:"acOpenQuotes('sent')",
+  // ── advertising ───────────────────────────────────────────────────────────
+  ad_approved:'acOpenAds()', ad_rejected:'acOpenAds()', ad_review:'acOpenAds()',
+  product_ad_paused:'acOpenProductAds()',
+  // ── affiliation badges ────────────────────────────────────────────────────
+  aff_invite:'acOpenAffiliation()', aff_accepted:'acOpenAffiliation()',
+  aff_approved:'acOpenAffiliation()', aff_rejected:'acOpenAffiliation()',
+  aff_review:'acOpenAffiliation()',
+  // ── teaching, publishing, selling ─────────────────────────────────────────
+  course_enroll:"acOpenCourses('teaching')", course_cancelled:"acOpenCourses('enrolled')",
+  newsletter_issue:'acOpenNewsletters()', creator_sub:'acOpenCreatorSettings()',
+  webinar_live:'acOpenWebinars()', webinar_signup:'acOpenWebinars()',
+  webinar_cancelled:'acOpenWebinars()',
+  sample_offer:'acOpenSamples()', sample_update:'acOpenSamples()',
+  product_review:'acOpenPendingReviews()', review_invite:'acOpenPendingReviews()',
+  review:'acOpenReviews()', review_reply:'acOpenReviews()',
+  // ── things that ARE just a message: open the message, not a stranger ──────
+  // ── the twelve the first pass missed, found by tightening the guard's own scan ──
+  advance_repaid:'acOpenWallet()', wallet_adjustment:'acOpenWallet()',
+  revshare:'acOpenWallet()', money_drop_expired:'acOpenWallet()',
+  cashout_released:'acOpenCashout()', cashout_returned:'acOpenCashout()',
+  referral_milestone:'acOpenReferrals()', event_cancelled:'acOpenEvents()',
+  listing_hidden:'acOpenSell()', waitlist_invite:'acOpenDebitCard()',
+  sms_received:'acOpenLeads()', ai_task:'DETAIL',
+  strike:'DETAIL', mod_warning:'DETAIL', appeal_granted:'DETAIL', appeal_denied:'DETAIL',
+  auth_requested:'DETAIL', auth_passed:'DETAIL', auth_failed:'DETAIL',
+  experiment_done:'DETAIL', dmca_reinstated:'DETAIL', group_removed:'DETAIL',
+  inbox_assigned:'DETAIL', case_assigned:'DETAIL', brief_application:'DETAIL',
+  voicemail:'DETAIL', community_boost:'DETAIL', contact:'DETAIL',
+};
 function notifRow(n, i) {
   const a = n.actor;
   // A new sign-in is a system (security) alert — the Atwe mark, no actor link.
@@ -35912,7 +35970,7 @@ function notifRow(n, i) {
   // show the Atwe mark rather than reading as "you interacted with you".
   // Weekly shop summary — a system digest for businesses; taps to Sales & analytics.
   if (n.type === 'week_summary') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');acOpenShopAnalytics()">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);acOpenShopAnalytics()">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Your week in your shop</b>${n.metaNum ? ` — ${n.metaNum} order${n.metaNum === 1 ? '' : 's'}` : ''} · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">Tap for the full picture — sales, orders and top products.</div></div>
@@ -35924,7 +35982,7 @@ function notifRow(n, i) {
      not a person's doing, so it wears the Atwe mark rather than attributing the bug to
      whoever happened to be on screen when it fired. */
   if (n.type === 'app_error') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');openSettings();setNav('admin')">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);openSettings();setNav('admin')">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Something broke for someone</b> · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">A new fault was reported. Open the dashboard → Site to see it.</div></div>
@@ -35934,7 +35992,7 @@ function notifRow(n, i) {
   // Follower milestone — a system celebration (the Atwe mark, no actor):
   // tapping opens YOUR followers list to enjoy the view.
   if (n.type === 'follower_milestone') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');acOpenFollowList(S.user && S.user.username, 'followers')">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);acOpenFollowList(S.user && S.user.username, 'followers')">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text">🎉 <b>You reached ${n.metaNum ? Number(n.metaNum).toLocaleString() : 'a new milestone in'} followers</b> · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">Keep it going — post something for them.</div></div>
@@ -35943,7 +36001,7 @@ function notifRow(n, i) {
   }
   if (n.type === 'stock_low' || n.type === 'stock_out') {
     const out = n.type === 'stock_out';
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${n.productId ? `acOpenListing(${n.productId})` : ''}">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);${n.productId ? `acOpenListing(${n.productId})` : ''}">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>${out ? 'Sold out' : 'Running low'}</b> — ${out ? 'restock to keep selling' : 'only a few left'} · <span class="notif-time">${acTime(n.created_at)}</span></div>
         ${n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : ''}</div>
@@ -35951,7 +36009,7 @@ function notifRow(n, i) {
     </div>`;
   }
   if (n.type === 'product_ad_paused') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${n.productId ? `acOpenListing(${n.productId})` : ''}">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);${n.productId ? `acOpenListing(${n.productId})` : ''}">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Sponsored listing paused</b> — your balance ran out · <span class="notif-time">${acTime(n.created_at)}</span></div>
         ${n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : ''}</div>
@@ -35961,7 +36019,7 @@ function notifRow(n, i) {
   // Auction ended with no bids — a system row (the Atwe mark): opens the listing
   // so the seller can relist or turn the auction off.
   if (n.type === 'auction_no_bids') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${n.productId ? `acOpenListing(${n.productId})` : ''}">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);${n.productId ? `acOpenListing(${n.productId})` : ''}">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Auction ended without bids</b> — relist it or set a lower starting bid · <span class="notif-time">${acTime(n.created_at)}</span></div>
         ${n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : ''}</div>
@@ -35970,7 +36028,7 @@ function notifRow(n, i) {
   }
   // Daily morning briefing — a system row (the Atwe mark): opens today's agenda.
   if (n.type === 'daily_briefing') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');acOpenAgenda()">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);acOpenAgenda()">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Your morning brief</b> — see what’s on today · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">Appointments, money waiting, orders to ship.</div></div>
@@ -35980,7 +36038,7 @@ function notifRow(n, i) {
   // Pot auto-save — a system event (the Atwe mark, no actor): opens the wallet.
   if (n.type === 'pot_saved' || n.type === 'pot_save_skipped') {
     const ok = n.type === 'pot_saved';
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');acOpenWallet()">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);acOpenWallet()">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>${ok ? 'Auto-save done' : 'Auto-save skipped'}</b> — ${ok ? 'money moved into your pot' : 'your balance was too low, so we’ll try again next time'} · <span class="notif-time">${acTime(n.created_at)}</span></div></div>
       ${n.read ? '' : '<span class="notif-dot"></span>'}
@@ -36063,12 +36121,14 @@ function notifRow(n, i) {
     : isEndorse ? `acGoProfile('')`
     : isProduct ? `acOpenListing(${n.productId})`
     : isTeam ? `acOpenTeam('${n.type === 'team_invite' ? 'memberships' : 'team'}')`
+    : NOTIF_GO[n.type] ? (NOTIF_GO[n.type] === 'DETAIL'
+        ? `acOpenNotifDetail(${jsAttr(String(n.id))})` : NOTIF_GO[n.type])
     : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`);
   const snip = isJob ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
     : isProduct ? (n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : '')
     : isEvent ? (n.eventTitle ? `<div class="notif-snip">${escHtml(n.eventTitle)}</div>` : '')
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam || isMoneyReq || isInvoice || isSplit || isInquiry || isCallSched || isAppt || isEvent || isOrderN || isOfferN || (isMention && n.groupId)) ? '' : "appTab('home');"}${go}">
+  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" data-type="${escHtml(n.type || '')}" onclick="closeOverlay('notifOverlay', true);${(NOTIF_GO[n.type] || isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam || isMoneyReq || isInvoice || isSplit || isInquiry || isCallSched || isAppt || isEvent || isOrderN || isOfferN || (isMention && n.groupId)) ? '' : "appTab('home');"}${go}">
     <div class="notif-ava-wrap">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}</div>
     <div class="ac-item-main"><div class="notif-text"><b>${escHtml(a.name)}</b>${acIsVerified(a) ? vbadge(true) : ''}${acAffBadge(a)} ${verb} · <span class="notif-time">${acTime(n.created_at)}</span></div>${snip}</div>
     ${n.read ? '' : '<span class="notif-dot"></span>'}
@@ -40620,7 +40680,7 @@ function acCloseNotifMenu() {
 function acNotifMenuPick(which) {
   acCloseNotifMenu();
   if (which === 'settings') {
-    closeOverlay('notifOverlay');
+    closeOverlay('notifOverlay', true);
     openSettings();
     setTimeout(() => setNav('notifications'), 0);   // let the hub finish drawing, then slide into the page
   } else acClearNotifs();
