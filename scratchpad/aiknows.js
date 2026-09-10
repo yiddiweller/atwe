@@ -157,6 +157,15 @@ function loadRetrieval() {
   ok(/appHintsBlock\(/.test(chat), 'the chat route really uses the search ranker\'s hints');
   ok(/appGuideBlock\(/.test(chat), 'the chat route still sends the list of places');
 
+  /* These descriptions are no longer internal: they are shown to members in search
+     and sent to the assistant, so the app's oldest rule applies to them — the
+     product is Atwe and the assistant is Atwe AI, and the vendor behind it is never
+     named. Checked on the catalogue itself, so a future entry cannot leak one. */
+  const vendor = FEATURES.filter((f) => f.phase === 'inv')
+    .filter((f) => /claude|anthropic|sonnet|haiku|opus|gpt|openai/i.test(f.name + ' ' + f.desc + ' ' + f.cat))
+    .map((f) => f.name);
+  ok(vendor.length === 0, vendor.length ? 'a member-visible feature names the AI vendor: ' + vendor.join(', ') : 'nothing member-visible names the AI vendor');
+
   const adminOnly = R.CAP_ROWS.filter((r) => r.admin).length;
   ok(adminOnly > 0, 'the catalogue does carry dashboard-only rows (' + adminOnly + ')');
   const memberOut = R.capabilityBlock([{ role: 'user', content: 'how do I refund a customer' }], false);
