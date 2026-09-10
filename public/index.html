@@ -22822,7 +22822,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1842'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1843'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -26968,7 +26968,9 @@ async function sendMessage() {
       headers,
       // appGuide = every page, feature and setting this member can actually reach,
       // so the assistant answers about THIS app instead of in general.
-      body: JSON.stringify({ messages: apiMessages, plan: S.plan, appGuide: acAiGuide() }),
+      // appHints = the places OUR OWN search ranker picks for these exact words, so the
+      // assistant inherits the app's hand-written synonyms without being sent all of them.
+      body: JSON.stringify({ messages: apiMessages, plan: S.plan, appGuide: acAiGuide(), appHints: acAiHints(text) }),
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout));
 
@@ -27753,11 +27755,14 @@ const SET_SEARCH_INDEX = [
   { label: 'Muted accounts', sub: 'Privacy & safety', page: 'privacy', kw: 'mute' },
   { label: 'Muted words', sub: 'Privacy & safety', page: 'privacy', kw: 'keywords filter words mute hide' },
   { label: 'Push notifications', sub: 'Notifications', page: 'notifications', kw: 'alerts push notifications sounds badge' },
-  { label: 'Your plan', sub: 'Premium', page: 'premium', kw: 'pro upgrade subscription billing payment' },
+  { label: 'Your plan', sub: 'Premium', page: 'premium', kw: 'pro upgrade subscription billing payment plans pricing premium free tier' },
   { label: 'Verified badge', sub: 'Premium', page: 'premium', kw: 'verification check tick' },
   { label: 'Creator subscriptions', sub: 'Premium', page: 'premium', kw: 'monetize earn subscribers' },
   { label: 'Wallet', sub: 'Premium', page: 'premium', kw: 'money balance send cash out withdraw bank' },
   { label: 'Appearance', sub: 'Display & accessibility', page: 'display', kw: 'theme dark light black system appearance colors mode night display look' },
+  { label: 'Change email', sub: 'Your account', page: 'account', kw: 'email address change update mail login' },
+  { label: 'Language', sub: 'Display & accessibility', page: 'display', kw: 'language translate english spanish french arabic hebrew rtl locale' },
+  { label: 'Currency', sub: 'Display & accessibility', page: 'display', kw: 'currency money dollar euro pound exchange prices' },
   { label: 'Larger text', sub: 'Display & accessibility', page: 'display', kw: 'font size accessibility bigger text zoom larger' },
   { label: 'Reduce motion', sub: 'Display & accessibility', page: 'display', kw: 'animation accessibility motion effects less' },
   { label: 'Active model', sub: 'Atwe Assistant', page: 'assistant', kw: 'ai standard advanced' },
@@ -35368,6 +35373,18 @@ const PLACES_EXTRA = [
   { l: 'New group',       sub: 'Messages',  kw: 'new group create group chat channel broadcast', run: "acOpenGroupCreate()" },
   { l: 'Starred messages', sub: 'Messages', kw: 'starred saved bookmarked messages important', run: 'acOpenStarred()' },
   { l: 'Broadcast lists', sub: 'Messages',  kw: 'broadcast list send many people at once bulk', run: 'acOpenBroadcasts()' },
+  /* Both are real screens with a real opener that nothing indexed, so search denied
+     they existed — found by diffing every no-argument opener against this index. */
+  { l: 'My services',     sub: 'Work',      kw: 'my services offering provide freelance gigs what i do listed', run: 'acOpenMyServices()' },
+  { l: 'Verify your business', sub: 'Account', kw: 'verify verification business badge tick official prove legitimate', run: 'acOpenBizVerify()',
+    when: (u) => acIsBiz(u) },
+  { l: 'Add money',       sub: 'Money',     kw: 'add money top up topup deposit fund load balance put money in', run: 'acOpenAddMoney()' },
+  { l: 'Tune your feed',  sub: 'Home',      kw: 'tune feed algorithm show me less more interested personalise', run: 'acOpenFeedTune()' },
+  { l: 'Chat labels',     sub: 'Messages',  kw: 'labels folders tags organise chats colour categorise', run: 'acOpenLabelManage()' },
+  { l: 'Your storefront', sub: 'Selling',   kw: 'storefront shop front my shop store page products window', run: 'acOpenMyStorefront()',
+    when: (u) => acIsBiz(u) },
+  { l: 'Auto-messages',   sub: 'Messages',  kw: 'auto message greeting away automatic reply out of office autoreply', run: 'acOpenAutoMessages()',
+    when: (u) => acIsBiz(u) },
 ];
 
 /* The handful of destinations people reach for most. Worth a nudge when scores
@@ -35430,6 +35447,38 @@ function acAiGuide() {
   _aiGuide = lines.join('\n');
   return _aiGuide;
 }
+/* The guide above sends every place by NAME. It cannot send the keywords, which are
+   the hand-written synonyms that make the search bar understand "cash out", "cv" or
+   "incognito" — all 154 sets of them would roughly double the guide and crowd the
+   question out. So instead the app runs the member's own words through its OWN
+   ranker, the same one behind every search bar, and sends the handful of places that
+   won. The assistant gets the benefit of the synonyms without carrying them. */
+const _HINT_STOP = new Set(('a an and any are as at be by can could do does for from get got how i if in into is it me my '
+  + 'not of on or our so that the their them then there this to up us was we what when where which who why will with would '
+  + 'you your please just want need able there any some').split(' '));
+function acAiHints(text) {
+  try {
+    /* The ranker behind the search bar is built for what people type INTO a search
+       box — two or three words. A question is a sentence, and its filler words fail
+       the every-word test, so asking it whole returns nothing: "how do I cash out to
+       my bank" found no place at all while "cash out" found the Wallet immediately.
+       So the filler is dropped and what is left is asked as a phrase and then word by
+       word, and the answers merged. */
+    const words = String(text || '').toLowerCase().split(/[^a-z0-9@#]+/)
+      .filter((w) => w.length > 2 && !_HINT_STOP.has(w)).slice(0, 8);
+    if (!words.length) return '';
+    const seen = new Set(), out = [];
+    for (const q of [words.join(' ')].concat(words)) {
+      for (const p of acFindPlaces(q, 4) || []) {
+        if (seen.has(p.label)) continue;
+        seen.add(p.label);
+        out.push(p.label + (p.sub ? ' (' + p.sub + ')' : ''));
+        if (out.length >= 8) return out.join('\n');
+      }
+    }
+    return out.join('\n');
+  } catch (e) { return ''; }
+}
 // Pull the markers out of a reply: returns the clean text plus the destinations
 // that actually resolve to somewhere real.
 function acAiOpenTargets(text) {
@@ -35481,7 +35530,7 @@ function acAppIndex() {
       // the app; it should lose a close race, not win it on a coincidence.
       tier: /^Settings · /.test(sub) ? -6 : 0 });
   };
-  PLACES_EXTRA.forEach((p) => add(p.l, p.sub, p.kw, p.run));
+  PLACES_EXTRA.forEach((p) => add(p.l, p.sub, p.kw, p.run, p.when));
   ME_SECTIONS.forEach((g) => g.items.forEach((it) => add(meLabel(it), 'Account · ' + g.title.replace('&amp;', '&'), it.kw, it.run, it.when)));
   ME_HUB_TAIL.forEach((it) => add(meLabel(it), 'Account', it.kw, it.run, it.when));
   ME_HUB_FOOT.forEach((it) => add(meLabel(it), 'Account', it.kw, it.run, it.when));
@@ -35562,15 +35611,152 @@ function acRenderPlaces(q) {
   else el.insertAdjacentHTML('afterbegin', html);
 }
 
+/* ── WHAT ATWE CAN DO — the other half of the search bar ─────────────────────
+   The index above knows 154 PLACES. Atwe has 437 built features, so "disappearing",
+   "escrow", "close friends" and several hundred other real, shipped things matched
+   nothing at all — the app quietly denied having them.
+
+   This reads the SAME catalogue `tools/features.js` writes on the commit that ships
+   a feature, and that Atwe AI is now grounded on, so all three stay in step with no
+   one remembering anything. It is fetched once per build and kept on the device.
+
+   It never invents a destination. A capability opens a real place only when its
+   category resolves to a name that is genuinely in the index; otherwise the row
+   hands the question to Atwe AI — which, since it reads this same catalogue, can
+   actually answer it. */
+let _caps = null, _capsAll = false, _capsRows = [], _capsTried = false, _capTaken = null;
+const _CAPS_KEY = 'atwe_caps_';
+/* Where a family of features lives. Ordered — first match wins — and every target is
+   looked up in the index by name, so a renamed or removed place yields no chip rather
+   than a button that goes nowhere. */
+const _CAP_WHERE = [
+  [/^Beam|Messaging|^Groups & communities|^Team inbox|^Calls & meetings/i, 'Beam'],
+  [/^Home · Stories/i,                                'Add to your story'],
+  [/^Home|^Content & Home|^Notifications/i,           'Home'],
+  [/Marketplace|^Commerce|^Delivery|^Sales, CRM/i,    'Marketplace'],
+  [/Jobs/i,                                           'Jobs'],
+  [/Wallet & Money/i,                                 'Wallet'],
+  [/Creator Monetization|^Creator economy/i,          'Your profile'],
+  [/Atwe AI/i,                                        'Atwe AI'],
+  [/^Trust · Profile|^Trust · Reputation|^Trust · Reviews/i, 'Your profile'],
+  [/Security & Sessions|Privacy, Safety|^Settings|^Trust/i, 'Settings'],
+  [/^Engine|Discovery|^Services/i,                    'Engine'],
+];
+function acCapPlace(cat) {
+  for (const [re, name] of _CAP_WHERE) {
+    if (!re.test(cat || '')) continue;
+    const hit = acAppIndex().find((p) => p.label === name);
+    if (hit) return hit;
+    return null;                 // named a place that no longer exists — say nothing
+  }
+  return null;
+}
+function acLoadCaps() {
+  if (_caps || _capsTried) return;
+  _capsTried = true;
+  const key = _CAPS_KEY + (typeof ATWE_BUILD === 'string' ? ATWE_BUILD : '0');
+  try {
+    // Sweep the previous build's copy, or every deploy leaves one behind for good.
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf(_CAPS_KEY) === 0 && k !== key) localStorage.removeItem(k);
+    }
+    const cached = localStorage.getItem(key);
+    if (cached) { _caps = JSON.parse(cached); return; }
+  } catch (e) { /* a full or blocked store is not a reason to have no search */ }
+  API.req('GET', '/api/capabilities').then((d) => {
+    _caps = (d && d.items) || [];
+    try { localStorage.setItem(key, JSON.stringify(_caps)); } catch (e) {}
+    // It landed after the query was typed — repaint just this block.
+    const q = (document.getElementById('tbSearchInput') || {}).value || '';
+    if (q.trim().length >= 2) acRenderCaps(q);
+  }).catch(() => { _caps = []; });
+}
+/* Deliberately the same ladder as acFindPlaces, so the two groups agree about what a
+   good match is and a feature can never outrank the actual page it lives on. */
+function acFindCaps(q, limit) {
+  if (!_caps || !_caps.length) return [];
+  q = (q || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (q.length < 2) return [];
+  const words = q.split(' ').filter(Boolean);
+  const short = q.length <= 2;
+  /* A feature that shares its name with a real page IS that page, so it never
+     appears here — it belongs in Pages & features, where tapping it goes somewhere
+     specific rather than to whichever world its category resolves to. Checked
+     against the WHOLE index, not just this query's hits: "Invoices" has a page, and
+     matching it only when the query happened to name it let it show up twice under
+     "wallet". */
+  const taken = _capTaken || (_capTaken = new Set(acAppIndex().map((p) => p.label.toLowerCase())));
+  const hits = [];
+  for (const c of _caps) {
+    const name = (c.n || '').toLowerCase();
+    if (taken.has(name)) continue;
+    const hay = (c.n + ' ' + c.c + ' ' + c.d).toLowerCase();
+    const toks = new Set(hay.split(/[^a-z0-9@#]+/).filter(Boolean));
+    let score = 0;
+    if (name === q) score = 100;
+    else if (name.startsWith(q)) score = 82;
+    else if (new RegExp('\\b' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(name)) score = 64;
+    else if (words.every((w) => toks.has(w))) score = 50;
+    else if (!short && name.includes(q)) score = 48;
+    else if (!short && words.every((w) => hay.includes(w))) score = 30;
+    else continue;
+    hits.push({ c, score: score - Math.min(9, name.length / 6) });
+  }
+  hits.sort((a, b) => b.score - a.score || a.c.n.length - b.c.n.length);
+  return hits.slice(0, limit || 4).map((h) => h.c);
+}
+function acCapTap(i) {
+  const c = _capsRows[i];
+  if (!c) return;
+  const where = acCapPlace(c.c);
+  if (where) { acRunPlace(where); return; }
+  // No page of its own — the assistant knows this feature and can explain it.
+  acAskAiFromSearch(c.n);
+}
+function acCapsGroup(q) {
+  const all = acFindCaps(q, 40);
+  _capsRows = all;
+  if (!all.length) return '<div id="acCaps"></div>';
+  const show = _capsAll ? all : all.slice(0, 4);
+  const more = all.length - show.length;
+  return '<div id="acCaps"><div class="ac-section-row"><span class="ac-prof-head" style="padding:0;">What Atwe can do</span></div>'
+    + show.map((c, i) => {
+      const where = acCapPlace(c.c);
+      const sub = (where ? where.label + ' · ' : '') + (c.d || '');
+      return '<button class="ac-place" onclick="acCapTap(' + i + ')">'
+        + '<span class="ac-place-main"><span class="ac-place-name">' + escHtml(c.n) + '</span>'
+        + '<span class="ac-place-sub">' + escHtml(sub) + '</span></span>' + _PLACE_ARROW + '</button>';
+    }).join('')
+    + (more > 0 ? '<button class="ac-place-more" onclick="acCapsShowAll()">Show ' + more + ' more</button>' : '')
+    + '</div>';
+}
+function acCapsShowAll() {
+  _capsAll = true;
+  acRenderCaps((document.getElementById('tbSearchInput') || {}).value || '');
+}
+/* Swap just this block, for the same reason acRenderPlaces does — the list someone is
+   reading must not blink on every keystroke. It always sits under Pages & features. */
+function acRenderCaps(q) {
+  const el = document.getElementById('acSearchPageResults');
+  if (!el) return;
+  const html = acCapsGroup(q);
+  const box = el.querySelector('#acCaps');
+  if (box) { box.outerHTML = html; return; }
+  const places = el.querySelector('#acPlaces');
+  if (places) places.insertAdjacentHTML('afterend', html);
+  else el.insertAdjacentHTML('afterbegin', html);
+}
+
 function acDoSearch(q) {
   q = (q || '').trim();
   _syncScopeBar(q);
   clearTimeout(_searchT);
-  if (!q || q.length < 2) _placesAll = false;   // a fresh query starts collapsed again
+  if (!q || q.length < 2) { _placesAll = false; _capsAll = false; }   // a fresh query starts collapsed again
   // Pages and features are held on the device, so they can answer immediately —
   // no debounce, no request. They appear as you type, above whatever the server
   // is still fetching.
-  if (_searchScope === 'all' && q.length >= 2) acRenderPlaces(q);
+  if (_searchScope === 'all' && q.length >= 2) { acLoadCaps(); acRenderPlaces(q); acRenderCaps(q); }
   // Log a committed search (after typing settles) — a recent-searches list + a soft
   // interest signal for the feed. Only meaningful queries, never partial keystrokes.
   clearTimeout(_searchLogT);
@@ -35606,9 +35792,11 @@ function acDoSearch(q) {
              + grp('Shop', 'shop', d.listings, acListingCard)
              + grp('Posts', 'posts', d.posts, acPostCard);
         const places = acPlacesGroup(q);
-        // Nothing on Atwe AND nothing in the app is the only true "no results".
-        html = (html || (places === '<div id="acPlaces"></div>' ? none : '')) ;
-        html = places + html;
+        const caps = acCapsGroup(q);
+        // Nothing on Atwe AND nothing in the app is the only true "no results" — and
+        // "in the app" now means a page OR a feature, or a real answer reads as none.
+        html = (html || ((places === '<div id="acPlaces"></div>' && caps === '<div id="acCaps"></div>') ? none : '')) ;
+        html = places + caps + html;
       }
       else if (_searchScope === 'shop') html = (d.listings && d.listings.length) ? d.listings.map(acListingCard).join('') : none;
       else if (_searchScope === 'people') html = (d.users && d.users.length) ? d.users.map(acSearchUserRow).join('') : none;
