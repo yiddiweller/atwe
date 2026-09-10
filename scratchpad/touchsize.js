@@ -75,7 +75,30 @@ const ok=(c,n,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+n+(d?'
        }
        return g;
      };
-     const hit={w:b.width+grow('left')+grow('right'), h:b.height+grow('top')+grow('bottom')};
+     /* MEASURE THE OVERLAY, DO NOT RE-DO ITS ARITHMETIC. This used to be exactly
+        `rect + (-left) + (-right)` — the same sum the CSS comment does — so it could
+        only ever agree with the stylesheet, never with the screen. An inset resolves
+        against the PADDING box, so three bordered controls (.tb-brand-act, .pf-bcam,
+        .pf-cam) were 40-42px while this reported a confident 44 for as long as they
+        were wrong. Ask the browser for the pseudo's own used size and take the larger
+        of that and the element; an inset overlay is centred on the element either way,
+        so the union in each axis is the honest hit box. */
+     const used=(side)=>{
+       let g=0;
+       for(const pe of ['::before','::after']){
+         const cs=getComputedStyle(el,pe);
+         if(cs.content==='none') continue;
+         g=Math.max(g, n(cs[side]));
+       }
+       return g;
+     };
+     /* THE USED SIZE WINS WHEN THERE IS ONE. Taking max() of the two still let the
+        wrong arithmetic through — 36+4+4 = 44 beats a real 42 every time — so the sum
+        is a FALLBACK only, for a pseudo on a surface that is not laid out yet (an
+        unopened sheet computes `auto`, which is "no layout", not "no size"). */
+     const uw=used('width'), uh=used('height');
+     const hit={w: uw>0 ? Math.max(b.width,uw) : b.width+grow('left')+grow('right'),
+                h: uh>0 ? Math.max(b.height,uh) : b.height+grow('top')+grow('bottom')};
      /* does the overlay reach over a sibling's centre? */
      /* ONLY A CONTROL CAN HAVE ITS TAP STOLEN. This check exists to stop one button's
         invisible overlay eating the button next to it — so the neighbour has to BE

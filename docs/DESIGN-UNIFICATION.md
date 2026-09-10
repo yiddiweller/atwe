@@ -115,9 +115,41 @@ Finished means this list is at zero.
   second press must not bring the sheet back) and **Back cannot open a locked door** —
   the sign-in wall, onboarding and the passcode pad are excluded by name, because those
   are not places you are visiting.
-- [ ] **D1 · Phone · tablet · desktop, one app.** The same battery at four widths and both
-  themes.
-- [ ] **E1 · A guard per rule**, all in `run-all.sh`, so none of this drifts back.
+- [x] **D1 · Phone, tablet and desktop are one app — and a TABLET is the device class
+  nobody had ever sized for.** The same battery at four widths: 390x844 phone, 768x1024
+  tablet portrait, **1024x768 tablet landscape** and 1440x900 desktop.
+
+  **Three results were already good** and are now guarded: nothing spills sideways at any
+  width, exactly one nav shows on every surface at every width, and desktop is clean.
+
+  **The finding is the tablet.** The layout switches on width AND height, so 1024x768 — an
+  iPad in landscape — correctly gets the DESKTOP layout, sidebar and all. Those rows were
+  drawn for a mouse: `.sb-btn` 36px, `.sb-settings` 34, `.tb-ico` 38. Nobody had ever
+  opened them with a thumb. Across the touch widths **17 control families** sat under the
+  44pt floor, the most-pressed row in the app among them (`.tb-feedtab`, 32px).
+
+  **The gate is `pointer:coarse`, not a width, and that is the whole lesson.** A 1024px
+  iPad wants big targets; a 1024px laptop does not, and a 44px invisible box around a 34px
+  desktop row would swallow hover on the row beside it. Asking about the POINTER is what
+  let the sidebar be fixed for the tablet without touching desktop at all.
+
+  The recipe is the app's own and costs nothing: an invisible `::after`, centred, lifting
+  only the axis that is short. **Almost every one of these failed on HEIGHT alone**, which
+  is the safe axis — they sit in horizontal rows with real gaps.
+
+  **Four controls had been claiming a size they never had.** An inset overlay resolves
+  against the PADDING box, so a control with a border comes out `2 x border` short of the
+  arithmetic: `.tb-brand-act` (1px) reached 42 not 44, `.pf-bcam` 42, `.pf-cam` (2px) only
+  40, and `.story-add` 32 against a recorded 34. **`touchsize.js` guarded all four by
+  redoing the same sum** — element rect plus the two negative insets — instead of asking
+  the browser what the overlay measures, so it reported a confident 44 for as long as they
+  were wrong. **A guard that repeats the calculation it is checking cannot fail.** It
+  measures the used size now; the three bordered ones are sized rather than inset, and
+  `.story-add` genuinely reaches its recorded 34.
+- [x] **E1 · A guard per rule**, all in `run-all.sh`, so none of this drifts back —
+  `ctlsweep.js` (one button everywhere), `notifguard.js` (every notification lands),
+  `wayback.js` (every page has a way back) and `touchwide.js` (four widths, the touch
+  floor, and the gate). 108 probes.
 
 ## What this pass deliberately does NOT do
 
