@@ -1830,7 +1830,7 @@ changes shape as the profile lands. It is shared with the circle and feed screen
 **THE RUNNER HAS UNDER-COVERED ITSELF THREE TIMES NOW, in three different ways** — worth
 naming as one pattern: a stale path in `/tmp` (it ran a frozen copy of every probe), probes
 missing from its list (gapmob, notifhdr, acctbug — and notifhdr then went stale unnoticed),
-and a probe present in the list that could only ever skip (lastseen, above). It is at **112
+and a probe present in the list that could only ever skip (lastseen, above). It is at **113
 probes** today. When you add one, add it to `run-all.sh` in the same commit, and check a
 full run for `skipped` and `MISSING` as well as `FAILED`.
 
@@ -2861,6 +2861,71 @@ for the call — two real browsers.
 - **`rtSource` is a top-level `let`, not a window property** (after `S` and `_caps`), and
   **the call screen shrinks away over .36s** — reading `.hidden` in the same tick calls a
   screen on its way out one that never left.
+
+### HOW IT FEELS TO SCROLL, MEASURED — `scratchpad/motion.js`
+
+Eight surfaces, three flings each, at a **6x CPU throttle** on a 390x844 viewport. The
+throttle is the whole instrument: an unthrottled headless desktop renders every screen in
+this app at a clean 60fps whether or not a phone would, which is how the first version of
+`notifscroll.js` passed on genuinely broken code.
+
+**The result is that there is nothing to fix.** The ordinary frame is **a single vsync
+(16.7ms) on every surface without exception** — the Home feed, an open conversation,
+Notifications, the marketplace, your orders — and the worst single frame anywhere is 50ms.
+A CPU profile says why the long frames that do occur are not ours: **57-78% of samples are
+`(program)`**, the browser rasterising real photographs, against **~1ms per frame in all of
+Atwe's own scroll handling put together**, out of a 16.7ms budget.
+
+**THE PROBE MEASURED THE PAGE BEHIND THE OVERLAY, THREE TIMES, AND REPORTED THREE VERDICTS
+ABOUT IT.** It took the first candidate with room to move and `document.scrollingElement`
+led that list — so Notifications, the marketplace and orders were all the **Home feed
+underneath them**. The document had 6404px of room while `#notifList` had 3545 and the
+marketplace's own card had 23996. **Fifth time this repo has recorded a check confidently
+measuring the wrong subject** (after a scope that excluded most of it, a probe missing from
+the runner, a probe that could only ever skip, and a control absent from the data). An
+overlay covers the page, so it owns the gesture: look inside the topmost open overlay first.
+
+**Three more probe faults, each of which reported a failure on working code.** A
+**signed-out app is a broken app** — the first run said "nothing to scroll" on all eight
+surfaces because Postgres had gone down under it, so it now refuses to measure until
+`S.user.id` exists. **A conversation opens at the BOTTOM** (deliberately, with a watchdog
+holding it there), so flinging it further down moves nothing and it reported "0px of room"
+about the one surface with eighty-odd messages in it — it asks which way there is room now.
+And **`AC._chats` does not exist**: `acOpenChat(undefined)` opened an EMPTY thread screen,
+which was then reported as a conversation that would not scroll. The peer comes from the
+server.
+
+**ONE HALF OF THE BAR IS DELIBERATELY LOOSE AND THE OTHER HALF HAS THE TEETH.** Flung hard
+at 6x, a surface with photographs drops between 5 and 15 of 41 moving frames **and disagrees
+with itself** — the same surface, same build, twice in a row, gave 5 then 11, and 2 then 15.
+A bar tight enough to catch a six-frame regression would go red on noise weekly and be
+switched off. So beside the loose checks sits one taken from the sampling profiler: **the
+milliseconds of Atwe's own JavaScript per moving frame**, which does not vary with what the
+browser is rasterising. It measures ~1ms; the bar is 3. Self-tested by injecting 14ms of
+work per scroll event — that reads **4.82ms and fails by name** while the dropped-frame
+count stays inside its own noise, which is exactly why the profile-based check exists.
+
+**A SUSPECTED PER-FRAME REFLOW THAT WASN'T — the A/B is in the code so nobody repeats it.**
+`_onWinScroll` computed `atBottom` (a `scrollHeight` read) AFTER writing the top bar's
+transform and `--tb-hide`, three lines above its own comment forbidding exactly that. It
+looks like the textbook read-after-write thrash. Measured with Chrome's `LayoutCount` over a
+fixed 60-frame fling it is **24 layouts and 3.3ms either way**: a transform and a custom
+property dirty compositing and style, not layout, so the later read was already free. The
+reordering shipped anyway — it costs nothing and makes the invariant real for the day
+somebody adds a write above it that DOES dirty layout — but the comment says plainly that it
+saved nothing. **What it did genuinely save is small:** a `.topbar` lookup and a
+`getElementById` that ran on every frame of every fling are cached, and a `style.opacity`
+rewritten every frame on every tab now writes only on a change.
+
+**`prefers-reduced-motion` is checked here too**, because a token nobody honours is a promise
+nobody keeps. Nothing above 120ms animates in a reduced-motion context.
+
+**What it does NOT cover, deliberately:** a real phone (a CPU throttle does not throttle the
+GPU, and `backdrop-filter` is GPU-bound, so this bounds CPU cost only — the same caveat the
+chat glass and the world bars already carry); the Beam chat list and two short pages, which
+have too little on a test account to fling and skip BY NAME rather than silently; and opening
+time and animation shape, which have their own guards (`bootspeed`, `settle`, `engsettle`,
+`feedskel`, `smooth`, `notifscroll`).
 
 ### NOBODY COULD CREATE AN ACCOUNT: THE WIZARD WAS BURIED UNDER THE LOGIN OVERLAY
 

@@ -46,6 +46,12 @@ the tablet/touch pass; the admin dashboard → its own sweep). **Three genuinely
 - **Speed and motion.** How it actually feels to scroll and animate, measured rather
   than felt.
 
+**ALL THREE ARE NOW DONE** — pass 1 clean over 18 deeper states, pass 2 found and fixed a
+real one-directional block plus two touch targets, pass 3 measured every long surface under
+a throttled CPU and found nothing to fix. **My side of this list is at zero.** What is left
+before the web app is locked in is item 2: the founder's team's own list, which has not been
+sent yet.
+
 **2. Everything the founder's team raises.** Their words, their screenshots — the source
 a probe can never replace, because they use it daily. It goes in once the passes are done,
 and nothing is locked in until it is at zero too.
@@ -61,6 +67,7 @@ list stays the honest measure of what is left.
 
 | # | what | where | state |
 |---|---|---|---|
+| P3-1 | **Nothing.** Every long surface scrolls with its ordinary frame on time, nothing stalls, and the app's own code is ~1ms of the 16.7ms budget. One no-op tidy shipped with it (cached per-frame lookups) | `_onWinScroll` · `_onListScroll` | **measured clean**, build 1848, guarded by `motion.js` |
 | P2-2 | **Two touch controls under the 44pt floor** — the Recent-searches chips (93x29) and the Translate-post line (92x19). Both only render once the account HAS the data, so no sweep had ever seen them | `public/index.html` `pointer:coarse` block | **fixed**, build 1847, guarded by `touchwide.js` |
 | P2-1 | **A block only worked in one direction** — the blocker could keep messaging AND calling the person they had blocked, while that person could not answer | `server.js` `canContact` + `dmAllowed` | **fixed**, build 1846, guarded by `twoperson.js` |
 
@@ -172,6 +179,113 @@ Both are in the app's own `pointer:coarse` block now, growing vertically only (e
 already past 44 wide, and vertical is the safe axis for a chip row and for a line sitting
 between a post's words and its pills). Both pseudo-element slots were checked free first —
 the trap that shipped a visible bug on ~90 screens in build 1832.
+
+---
+
+## Pass 3 of 3 — speed and motion, measured · DONE, NOTHING TO FIX
+
+> *"Speed and motion. How it actually feels to scroll and animate, measured rather than felt."*
+
+**Eight surfaces, three flings each, at a 6x CPU throttle, on a 390x844 phone viewport.**
+The throttle is not decoration: an unthrottled headless desktop renders every screen in
+this app at a clean 60fps whether or not a phone would, and the first version of the
+`notifscroll` check passed on genuinely broken code for exactly that reason.
+
+### THE RESULT
+
+| surface | what actually scrolls | ordinary frame | worst frame | frames over 32ms |
+|---|---|---|---|---|
+| the Home feed | the page | **16.7ms** | 33ms | 5 of 41 |
+| an open conversation | `acThreadVP` | **16.7ms** | 33ms | 1 of 41 |
+| Notifications | `notifList` | **16.7ms** | 33ms | 3 of 41 |
+| the marketplace | its own card | **16.7ms** | 33ms | 8 of 41 |
+| your orders | the page | **16.7ms** | 50ms | 1 of 41 |
+| the Account page · Engine | — | *434px and 553px of room: too short to fling, skipped by name* | | |
+| the Beam chat list | — | *one conversation on a test account: nothing to scroll* | | |
+
+**The ordinary frame is a single vsync on every surface without exception.** That is what
+"smooth" means — not that no frame is ever long, but that the normal frame arrives on time.
+Nothing stalls anywhere: the worst single frame in the whole sweep is 50ms, and a hitch you
+would actually see starts well above that.
+
+**And the app's own code is not the cost.** A CPU profile of a Home fling puts **57-78% of
+samples in `(program)`** — the browser rasterising real photographs — against **~1ms per
+frame in all of Atwe's own scroll handling put together**, out of a 16.7ms budget. There is
+no scroll fault here to fix, and the measurement says where the time genuinely goes if the
+question is ever asked again.
+
+### THE ONE CHANGE THAT SHIPPED, AND THE HONEST NOTE ON IT
+
+`_onWinScroll` computed `atBottom` — a `scrollHeight` read — AFTER writing the top bar's
+transform and `--tb-hide`, three lines above its own comment forbidding exactly that
+("never read layout on scroll (a per-frame reflow stalls scroll)"). It looked like a
+textbook per-frame forced reflow.
+
+**It was not, and the A/B is written into the code so nobody spends the afternoon on it
+twice.** Measured with Chrome's own `LayoutCount` over a fixed 60-frame fling: **24 layouts
+and 3.3ms either way.** A transform and a custom property dirty compositing and style, not
+layout, so the later read was already free. The reordering shipped anyway, with a comment
+that says all of this, because it makes the invariant real — the day someone adds a write
+above that line which DOES dirty layout, it cannot silently become a reflow. What it
+genuinely saves is small and real: the `.topbar` lookup and a `getElementById` that ran on
+every frame of every fling are cached, and a `style.opacity` that was rewritten every frame
+on every tab now writes only on a change.
+
+### THE PROBE WAS MEASURING THE PAGE BEHIND THE OVERLAY
+
+The first run of `motion.js` reported Notifications and the marketplace as materially worse
+than everything else. They were not. It took the first candidate with room to move and
+`document.scrollingElement` was at the head of that list — so on every surface that is an
+**overlay over a world** it measured the **Home feed sitting behind the overlay**, three
+separate times, and returned three separate verdicts about it. Proved by printing all of
+them: the document had 6404px of room while `#notifList` had 3545 and the marketplace's own
+card had 23996.
+
+**That is the fifth time this repo has recorded a check confidently measuring the wrong
+subject** — after a scope that excluded most of it, a probe missing from the runner, a probe
+that could only ever skip, and a control that was absent from the data. An overlay covers
+the page, so it owns the gesture: look inside the topmost open overlay first, and fall back
+to the world underneath only when nothing in there scrolls.
+
+### THREE MORE PROBE FAULTS, EVERY ONE OF WHICH REPORTED A FAILURE ON WORKING CODE
+
+- **A signed-out app is a broken app.** The very first run said "nothing long enough to
+  scroll" on all eight surfaces — the tell that the CHECK is wrong, not the app. Postgres
+  had gone down underneath it, so the page painted a signed-out shell and every scroller
+  really was empty. It now refuses to measure until `S.user.id` exists.
+- **A conversation opens at the BOTTOM.** Deliberately — the app spends a watchdog keeping
+  it there — so flinging it further down moves nothing, and the probe reported "0px of room"
+  about the one surface in the app with eighty-odd messages in it. It asks which way there
+  is room now, instead of assuming.
+- **`AC._chats` does not exist.** The probe fed `acOpenChat(undefined)`, the thread screen
+  opened EMPTY, and that empty screen was then reported as a conversation that would not
+  scroll. The peer comes from the server now, not from a guess at the client's own state.
+
+### THE BAR, AND WHY ONE HALF OF IT IS DELIBERATELY LOOSE
+
+Flung hard at a 6x throttle, a surface with real photographs in it drops somewhere between
+5 and 15 of 41 moving frames — **and it disagrees with itself**: the same surface, same
+build, measured twice in a row, gave 5 then 11, and 2 then 15. A dropped-frame bar tight
+enough to catch a six-frame regression would go red on noise several times a week and be
+switched off within a fortnight, which is worth less than a loose bar that is believed.
+
+So the loose checks (nothing stalls, no surface is an outlier) sit beside one with real
+teeth: **the milliseconds of Atwe's own JavaScript per moving frame**, taken from the
+sampling profiler, which does not vary with what the browser happens to be rasterising.
+It measures **~1ms**; the bar is 3. Self-tested by injecting a deliberate 14ms of work per
+scroll event: that takes it to **4.82ms and fails by name**, while leaving the dropped-frame
+count inside its own noise — which is precisely why the profile-based check exists.
+
+### WHAT THIS PASS DID NOT LOOK AT
+
+- **A real phone.** A CPU throttle does not throttle the GPU, and `backdrop-filter` is
+  GPU-bound, so this bounds the CPU cost of scrolling, not an iPhone's rasterisation. That
+  caveat is already recorded against the chat glass and the world bars.
+- **The Beam chat list and two short pages**, which have too little on a test account to
+  fling. They skip by name in the output rather than silently.
+- **Opening time and animation shape**, which already have their own guards and were not
+  re-done here: `bootspeed.js`, `settle.js`, `engsettle.js`, `feedskel.js`, `smooth.js`,
+  `notifscroll.js`.
 
 ---
 
