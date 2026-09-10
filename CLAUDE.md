@@ -1820,7 +1820,7 @@ changes shape as the profile lands. It is shared with the circle and feed screen
 **THE RUNNER HAS UNDER-COVERED ITSELF THREE TIMES NOW, in three different ways** — worth
 naming as one pattern: a stale path in `/tmp` (it ran a frozen copy of every probe), probes
 missing from its list (gapmob, notifhdr, acctbug — and notifhdr then went stale unnoticed),
-and a probe present in the list that could only ever skip (lastseen, above). It is at **104
+and a probe present in the list that could only ever skip (lastseen, above). It is at **112
 probes** today. When you add one, add it to `run-all.sh` in the same commit, and check a
 full run for `skipped` and `MISSING` as well as `FAILED`.
 
@@ -2815,6 +2815,42 @@ exist only in that process's stdout; the database stores a hash):
    real browser, because that is the only door a locked-out member has. Setup writes
    `status='suspended'` straight to the database on purpose — the admin route that does
    that has its own coverage, and what is under test is the member's way back.
+
+### THE PATHS THAT NEED A SECOND PERSON — `scratchpad/twoperson.js`
+
+Every probe in this repo drove ONE browser as ONE account. That is most of the app and not
+the part that matters most: **a sale has a seller, a call has somebody to answer it, a
+photo is posted so that somebody ELSE can see it.** Those are exactly the paths where "it
+worked for me" and "it worked for them" can diverge. 67 checks, two seeded accounts, and —
+for the call — two real browsers.
+
+- **A real sale, both sides.** One lists, the other buys with real wallet money, the seller
+  ships it, **the buyer's OPEN tab is told without reloading**, the buyer marks it arrived.
+  The pennies are conserved across buyer, seller and Atwe's own cut.
+- **Buyer protection.** The money leaves the buyer and **the seller is NOT paid** — that gap
+  is the entire product. The confirm releases it; a dispute reaches the other side.
+- **A real message.** Live over SSE, not on a reload; a retry does not deliver twice.
+- **A REAL CALL — this had NO probe at all.** Two Chromium contexts with fake microphones
+  run the app's own `startCall`/`callAccept` through the app's own signalling and must
+  reach `connectionState === 'connected'` with the other side's LIVE track. The note in
+  this file saying a two-peer call connects was true and had been done by hand, once.
+  Plus the silenced-stranger promise, which needs a third account with no history.
+- **A real upload.** Media is served by SIGNED URL, so the poster's own copy proves nothing:
+  the check is whether the address the OTHER person is handed returns the bytes.
+
+**Four probe mistakes, and the self-test found the worst of them:**
+- **Atwe's cut is taken fire-and-forget** (`chargePlatformFee(...).catch(...)`, not
+  awaited), so the route answers BEFORE the fee leaves the seller. Read the balances in the
+  same tick and 25 cents have vaporised on a working sale. **Settle before judging money.**
+- **"an `order` event arrived" is not "the SHIP event arrived".** The buy pushes one of its
+  own moments earlier and the waiter checks what has already landed — so a bare
+  `type === 'order'` **passed with the ship push commented out**. Match the event, not its
+  type. Only the deliberate self-test could have caught this.
+- **The media signature is not at the end of the URL** — a `?v=` stamp follows it, so an
+  anchored `/[0-9a-f]{20}$/` tampered with nothing and read the resulting 200 as a hole.
+- **`rtSource` is a top-level `let`, not a window property** (after `S` and `_caps`), and
+  **the call screen shrinks away over .36s** — reading `.hidden` in the same tick calls a
+  screen on its way out one that never left.
 
 ### NOBODY COULD CREATE AN ACCOUNT: THE WIZARD WAS BURIED UNDER THE LOGIN OVERLAY
 
@@ -10413,6 +10449,16 @@ health check with three real outcomes must not have two buttons' worth of UI.**
   path must go through them. A conservation test (`test/money-refunds.test.js`)
   asserts the only rule that matters: balances + pots + escrow + Atwe's revenue must
   equal what was ever deposited.
+- **A BLOCK ONLY WORKED IN ONE DIRECTION, AND IT TOOK TWO ACCOUNTS TO SEE IT.**
+  `canContact` asked only *"did the TARGET block the CALLER"*, so the **blocker could
+  keep messaging AND calling the person they had blocked, while that person could not
+  answer** — a one-way channel built out of the block feature. Measured: B blocks A, A is
+  refused, B's message lands in A's inbox and B's call rings A's phone. It is
+  `blockedEither` now — the helper that already existed for this — in `canContact` **and**
+  in `dmAllowed`, because `dmAllowed`'s prior-history fallback would otherwise hand the
+  channel straight back after `canContact` closed it. The rule below already said blocks
+  hold both ways; **it simply was not true of the code**, and no single-browser probe can
+  ever find that. Guarded by `scratchpad/twoperson.js`.
 - **A block is enforced in BOTH directions, and the second half is easy to forget.**
   Nine feed queries filtered `blocked_id ... WHERE blocker_id = $1` ("people I
   blocked") without the mirror `blocker_id ... WHERE blocked_id = $1` ("people who

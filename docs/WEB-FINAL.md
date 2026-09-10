@@ -27,11 +27,13 @@ So the same rule applies to this pass, and it is the whole reason this file exis
 
 ## What goes on the list
 
-**1. Everything the founder's team raises.** Their words, their screenshots. This is the
-first source and the most important one: they use it daily and they see what a probe
-cannot.
+**THE ORDER, and it is the founder's own (10 Sep 2026):** *"we should do your stuff first
+when you are completely done with everything. We will go forward with my teams stuff."* So
+the three passes run to completion FIRST, and the team's list goes in after them. An
+earlier version of this file had it the other way round, which is why it is written out
+here rather than left implied.
 
-**2. The three passes the first sweep explicitly said it had NOT done.** That list closed
+**1. The three passes the first sweep explicitly said it had NOT done.** That list closed
 by naming where it stopped, and being honest about that is what makes the remaining scope
 real rather than invented. Of the five it named, two have since been done (other widths →
 the tablet/touch pass; the admin dashboard → its own sweep). **Three genuinely remain:**
@@ -44,6 +46,10 @@ the tablet/touch pass; the admin dashboard → its own sweep). **Three genuinely
 - **Speed and motion.** How it actually feels to scroll and animate, measured rather
   than felt.
 
+**2. Everything the founder's team raises.** Their words, their screenshots — the source
+a probe can never replace, because they use it daily. It goes in once the passes are done,
+and nothing is locked in until it is at zero too.
+
 **3. Anything found along the way.** Recorded here rather than fixed silently, so the
 list stays the honest measure of what is left.
 
@@ -51,10 +57,11 @@ list stays the honest measure of what is left.
 
 ## The list
 
-*(the founder's team's items go in first, above the pass results)*
+*(pass results first — the founder's team's items are added below them once sent)*
 
 | # | what | where | state |
 |---|---|---|---|
+| P2-1 | **A block only worked in one direction** — the blocker could keep messaging AND calling the person they had blocked, while that person could not answer | `server.js` `canContact` + `dmAllowed` | **fixed**, build 1846, guarded by `twoperson.js` |
 
 ---
 
@@ -92,6 +99,60 @@ stayed at 390 and there was no sideways scroll to find. Proving the check needed
 symptom — `body{min-width:520px}` — which trips it on every state with `HTML +130px`. A
 clipped-name injection trips the text check by name. **An injection that the app already
 defends against proves nothing; pick one that produces the symptom being measured.**
+
+---
+
+## Pass 2 of 3 — a second person, or real money · DONE, ONE REAL FAULT FOUND AND FIXED
+
+`scratchpad/twoperson.js`, **67 checks**. Every other probe in this repo drives ONE
+browser as ONE account — which is most of the app and not the part that matters most: a
+sale has a seller, a call has somebody to answer it, a photo is posted so that SOMEBODY
+ELSE can see it. Those are exactly the paths where "it worked for me" and "it worked for
+them" can diverge, and none of them had a guard.
+
+So it seeds **two real accounts** and, for the call, opens **two real browsers**.
+
+| | what it proves |
+|---|---|
+| **a real sale** | one lists, the other buys with real wallet money, the seller ships it, **the buyer's OPEN tab is told without reloading**, the buyer marks it arrived, and the pennies are conserved across buyer, seller and Atwe's own cut |
+| **buyer protection** | the money leaves the buyer and **the seller is NOT paid** — that gap is the entire product — the confirm is what releases it, a protected order cannot be cancelled out from under it, and a dispute reaches the person on the other side of it |
+| **a real message** | it lands in the other person's open app live; a retry does not deliver it twice; typing and read receipts reach the other side |
+| **a real call** | it RINGS; they answer; **two real browsers with real microphones negotiate a real connection and reach `connected` with each other's live track**; a stranger's call is silenced when asked and still lands in Recent; someone they know still rings through |
+| **a real upload** | the OTHER person is handed a signed URL, that URL really answers with a real picture, and a made-up one is refused — in a post AND in a conversation |
+
+### THE FAULT: A BLOCK ONLY WORKED IN ONE DIRECTION
+
+**Blocking somebody left you able to keep messaging AND calling them, while they could
+not answer.** `canContact` asked only *"did the target block the caller"*, so the BLOCKER
+still got through — a one-way channel built out of the block feature. Measured: B blocks
+A; A is refused; **B's message lands in A's inbox and B's call rings A's phone.**
+
+Both directions now, via the `blockedEither` helper that already existed for exactly this
+— in `canContact` AND in `dmAllowed`, because `dmAllowed`'s prior-history fallback would
+otherwise have handed the channel straight back. **This repo's own written rule already
+said blocks are enforced both ways; it simply was not true of the code**, and one browser
+can never see that.
+
+### FOUR FALSE ALARMS, AND THE SELF-TEST IS WHAT FOUND THE WORST ONE
+
+- **ATWE'S CUT IS TAKEN FIRE-AND-FORGET.** `chargePlatformFee(...).catch(...)` is not
+  awaited, so the route answers before the fee has left the seller. Read the three
+  balances the instant it returns and 25 cents have apparently vaporised on a working
+  sale. Settle before judging money.
+- **"an order event arrived" is not "the ship event arrived".** The buy pushes an `order`
+  event of its own moments earlier, and the waiter deliberately checks what has ALREADY
+  landed — so a bare `type === 'order'` **passed with the ship push commented out**. Only
+  the deliberate self-test caught it; match the event, not its type.
+- **the signature is not at the end of the URL** — a `?v=` cache stamp follows it, so an
+  anchored `/[0-9a-f]{20}$/` tampered with nothing and reported the resulting 200 as a
+  security hole.
+- **`rtSource` is a top-level `let`, not a window property** (the third time in this repo:
+  `S`, `_caps`, now this), and **the call screen shrinks away over .36s** — reading
+  `.hidden` in the same tick calls a screen on its way out one that never left.
+
+Self-tested three ways: reverting the block fix fails it by name, commenting out the
+ship push fails it by name, and the whole call section fails if the two browsers never
+connect.
 
 ---
 
