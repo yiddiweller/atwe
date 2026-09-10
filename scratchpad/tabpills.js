@@ -81,7 +81,23 @@ const ROWS = [
             return { bg: cs.backgroundColor, rad: parseFloat(cs.borderRadius) || 0, h: q.height,
               sh: cs.boxShadow, img: cs.backgroundImage, fg: cs.color,
               bd: cs.backdropFilter || cs.webkitBackdropFilter,
-              under: getComputedStyle(e, '::after').content !== 'none' && parseFloat(getComputedStyle(e, '::after').height) > 0 };
+              /* AN UNDERLINE IS PAINTED, SHORT, AND AT THE BOTTOM — not merely "has a
+                 pseudo-element". This used to call ANY ::after with a height an underline,
+                 which was safe only while no tab had one; the 44pt touch block (D1) gives
+                 every tab a TRANSPARENT, FULL-HEIGHT ::after for the tap target, and this
+                 check then reported 8 underlines on tabs that draw none. Ask the three
+                 things that make a line a line. */
+              under: (() => {
+                const a = getComputedStyle(e, '::after');
+                if (a.content === 'none') return false;
+                const ah = parseFloat(a.height) || 0;
+                if (!(ah > 0)) return false;
+                const painted = (a.backgroundColor && a.backgroundColor !== 'rgba(0, 0, 0, 0)'
+                                 && a.backgroundColor !== 'transparent')
+                             || (a.backgroundImage && a.backgroundImage !== 'none')
+                             || (parseFloat(a.borderBottomWidth) || 0) > 0;
+                return painted && ah <= q.height / 2;
+              })() };
           }),
           addBg: add ? getComputedStyle(add).backgroundColor : null,
         };
