@@ -981,10 +981,15 @@ identity colour fails it by name.
 > lighter box (1.5×); 58-over-15 is **3.8×**, and that ratio is the whole reason the login
 > button reads as a raised object rather than a painted rectangle.
 >
-> **THE FILL IS THE BOTTOM NAV BAR'S OWN MATERIAL** — `rgba(18,18,21,.90)` +
-> `blur(2px) saturate(150%)`, copied from `.bottom-nav` so the two cannot drift (founder:
-> *"a drop see-through just like the navigation bar… on the same level"*). Over black it
-> renders **16**, within a pixel of the login button's 15, so the sign-in look survives too.
+> **THE FILL WAS THE BOTTOM NAV BAR'S OWN MATERIAL, AND BUILD 1859 BROKE THAT TIE ON
+> PURPOSE.** It began as `rgba(18,18,21,.90)` + `blur(2px) saturate(150%)` copied from
+> `.bottom-nav` (founder: *"a drop see-through just like the navigation bar… on the same
+> level"*), rendering **16** on black. They then sent a reference for the ROUND buttons and
+> asked to match its colour exactly, which moved `--ctl-fill` to `rgba(27,27,27,.90)` —
+> **24 on black** — for every control in the app, while the bar, the ＋ ball and the
+> popover menus keep the darker tint they chose separately. **The alpha and the blur are
+> still the bar's**, so a pill is still the same glass; only the tint is 8 points lighter.
+> Do not "restore" the old value: see "THE ROUND BUTTON IS THE FOUNDER'S OWN REFERENCE".
 >
 > **THE 90% IS WHAT MAKES IT SAFE, and it took a failure to learn.** `.auth-btn` is a .06
 > white wash — 94% see-through — free on a page with only black behind it, but shot over a
