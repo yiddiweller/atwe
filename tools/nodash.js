@@ -96,5 +96,31 @@ function deDash(s) {
   return s;
 }
 
+/* A DASH CAN BE WRITTEN WITHOUT BEING A DASH, and that is how twenty of them survived the
+   first sweep with every check green. `'—'` in a source file is six plain ASCII bytes,
+   so the DASH test above cannot see it, yet the browser turns it straight back into a real
+   em dash and paints it on the screen. The offline screen said "Check your connection — we'll
+   pick up right where you left off" that way, which is to say the app spoke in exactly the
+   voice this whole rule exists to remove, at the one moment a member is already annoyed.
+   The same is true of an HTML entity (&mdash;) and of the raw UTF-8 bytes spelled out.
+
+   So a SOURCE sweep must look for the disguises as well as the character. Only text already
+   in memory, where the escape has been decoded, can be tested with DASH alone. */
+const DASH_SRC = /[—–]|\\u201[34]|\\x[eE]2\\x80\\x9[34]|&mdash;|&ndash;|&#8212;|&#8211;|&#x201[34];?/;
+
+/* WHY CODE COMMENTS ARE DELIBERATELY LEFT ALONE, so nobody has to find this out twice.
+   About 3,900 dashes live in comments and SQL notes. Nobody can see one: a comment is not
+   sent to the model, not rendered by the browser, and not read by Postgres. Removing them
+   anyway was tried, mechanically, with the rewrite proved not to touch a single byte of
+   real code or move a single line. It still had to be thrown away, because the output was
+   worse than the input: "as — .pf-top-save" became "as.pf-top-save", "than — .overlay"
+   became "than.overlay", and "and — :root is a different element" became "and:root", which
+   reads as a selector. A dash standing in front of a class name, a selector or a bracket is
+   not punctuation a machine can replace, and these comments are the only written record of
+   why half this app is built the way it is. The guard (scratchpad/nodash.js) is what makes
+   the rule stick; sweeping the margin notes was never what was protecting anybody. */
+
 const hasDash = (s) => typeof s === 'string' && DASH.test(s);
-module.exports = { deDash, hasDash, DASH, DASH_G };
+/* For a run lifted straight out of a source file, before any escape has been decoded. */
+const hasDashSrc = (s) => typeof s === 'string' && DASH_SRC.test(s);
+module.exports = { deDash, hasDash, hasDashSrc, DASH, DASH_G, DASH_SRC };
