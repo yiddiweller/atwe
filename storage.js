@@ -194,7 +194,7 @@ async function remove(url) {
   if (!key) return false;
   try {
     const { headers, url: signed } = sign({ method: 'DELETE', key, payloadHash: sha256('') });
-    const r = await fetch(signed, { method: 'DELETE', headers });
+    const r = await fetch(signed, { method: 'DELETE', headers, signal: AbortSignal.timeout(15000) });
     return r.ok || r.status === 204;
   } catch (e) { return false; }
 }
@@ -220,7 +220,7 @@ async function selfTest() {
       + (_lastError ? ` (the store said: ${_lastError})` : '') };
   }
   let readable = false;
-  try { const r = await fetch(url); readable = r.ok; } catch (e) { readable = false; }
+  try { const r = await fetch(url, { signal: AbortSignal.timeout(10000) }); readable = r.ok; } catch (e) { readable = false; }
   await remove(url);
   return { ok: true, readable, url, cdn: !!CDN, endpoint: ENDPOINT || 'aws', bucket: BUCKET };
 }

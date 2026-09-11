@@ -4685,16 +4685,25 @@ app.delete('/api/atchat/presence-hidden/:id', auth.requireAuth, async (req, res)
 // Cloudflare on every request). Returns a TURN ICE server object, or null.
 const STUN_SERVER = { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] };
 let _cfTurnCache = null; // { server, exp }
+const CF_TURN_TIMEOUT_MS = 4000;   // a call cannot wait on an optional credential
 async function cloudflareTurnServer() {
   const keyId = process.env.CLOUDFLARE_TURN_KEY_ID;
   const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
   if (!keyId || !apiToken) return null;
   if (_cfTurnCache && _cfTurnCache.exp > Date.now()) return _cfTurnCache.server;
   const ttl = 86400; // 24h credentials
+  /* A DEADLINE, BECAUSE THIS ONE REQUEST CAN STOP EVERY CALL ON THE PLATFORM.
+     Node's fetch has no timeout of its own, so a slow or unreachable Cloudflare
+     left this hanging, /api/rt/ice-servers never answered, and the CALLER sat on
+     "Calling..." with the offer never sent - so the person being called never
+     heard a thing. Reproduced: 25s in, still "Calling...", nothing on the wire.
+     TURN credentials are an OPTIONAL improvement; STUN and the relay fallback
+     below work without them, so waiting is always the wrong trade. */
   const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ ttl }),
+    signal: AbortSignal.timeout(CF_TURN_TIMEOUT_MS),
   });
   if (!r.ok) throw new Error('Cloudflare TURN responded ' + r.status);
   const data = await r.json();
@@ -6233,14 +6242,14 @@ app.post('/api/auth/google', rateLimit(20, 60000), async (req, res) => {
   if (!accessToken) return res.status(400).json({ error: 'Missing Google token.' });
   try {
     // 1) Verify the token belongs to our OAuth client (audience check).
-    const ti = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(accessToken));
+    const ti = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(accessToken), { signal: AbortSignal.timeout(8000) });
     if (!ti.ok) return res.status(401).json({ error: 'Google sign-in failed. Please try again.' });
     const info = await ti.json();
     if (info.aud !== GOOGLE_CLIENT_ID && info.azp !== GOOGLE_CLIENT_ID) {
       return res.status(401).json({ error: 'Google sign-in failed (token wasn’t issued for Atwe).' });
     }
     // 2) Read the verified profile.
-    const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + accessToken } });
+    const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + accessToken }, signal: AbortSignal.timeout(8000) });
     if (!ui.ok) return res.status(401).json({ error: 'Could not read your Google profile.' });
     const p = await ui.json();
     const email = String(p.email || '').trim().toLowerCase();
@@ -6484,7 +6493,7 @@ app.get('/api/gif/search', auth.requireAuth, rateLimit(60, 60000, 'gif-search'),
       const gbase = gq
         ? `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(gq)}&`
         : 'https://api.giphy.com/v1/gifs/trending?';
-      const gr = await fetch(`${gbase}api_key=${encodeURIComponent(process.env.GIPHY_API_KEY)}&limit=24&offset=${off}&rating=g`);
+      const gr = await fetch(`${gbase}api_key=${encodeURIComponent(process.env.GIPHY_API_KEY)}&limit=24&offset=${off}&rating=g`, { signal: AbortSignal.timeout(7000) });
       if (!gr.ok) return res.status(502).json({ error: 'GIF search is unavailable right now.' });
       const gd = await gr.json();
       const gifs = (gd.data || []).map((g) => {
@@ -14508,6 +14517,7 @@ function phoneConfigured() { return !!(TWILIO_SID && TWILIO_TOKEN); }
 function twilioAuth() { return 'Basic ' + Buffer.from(TWILIO_SID + ':' + TWILIO_TOKEN).toString('base64'); }
 async function twilio(path, form) {
   const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(TWILIO_SID)}${path}`, {
+    signal: AbortSignal.timeout(12000),
     method: form ? 'POST' : 'GET',
     headers: { Authorization: twilioAuth(), ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) },
     body: form ? new URLSearchParams(form).toString() : undefined,
@@ -14990,7 +15000,7 @@ async function fetchAppleReviews(territory) {
   const t = String(territory || 'gb').toLowerCase().replace(/[^a-z]/g, '').slice(0, 2) || 'gb';
   const url = `https://itunes.apple.com/${t}/rss/customerreviews/id=${encodeURIComponent(APPLE_APP_ID)}/sortBy=mostRecent/json`;
   try {
-    const r = await fetch(url, { headers: { 'User-Agent': 'Atwe/1' } });
+    const r = await fetch(url, { headers: { 'User-Agent': 'Atwe/1' }, signal: AbortSignal.timeout(8000) });
     if (!r.ok) return { ok: false, reason: 'store returned ' + r.status };
     const j = await r.json().catch(() => null);
     const entries = (j && j.feed && j.feed.entry) || [];
@@ -16496,7 +16506,7 @@ app.post('/api/calls/recordings/:id/transcribe', auth.requireAuth, rateLimit(10,
     let source = rec.media;
     // If it went to the bucket, fetch it back as a data URL for the transcriber.
     if (source && /^https?:\/\//i.test(source)) {
-      const r = await fetch(source);
+      const r = await fetch(source, { signal: AbortSignal.timeout(20000) });
       if (!r.ok) return res.status(502).json({ error: 'Could not read that recording back.' });
       const buf = Buffer.from(await r.arrayBuffer());
       const type = r.headers.get('content-type') || 'audio/webm';

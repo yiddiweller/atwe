@@ -67,6 +67,7 @@ list stays the honest measure of what is left.
 
 | # | what | where | state |
 |---|---|---|---|
+| T3 | **Calls and video calls did not work.** *"when I'm trying to call someone the other person doesn't even get a call, and if they do they can't pick up"* | One request every call waits on, with no time limit on either side, plus no error handling on the answer path | **fixed**, build 1852, guarded by `callpath.js` |
 | T2 | **Some Atwe AI questions were never answered, and pressing Post froze the button.** *"I wanted to post a message and I am clicking post but it doesn't get sent. It's like frozen... there is probably more stuff that doesn't work"* | One cause behind both: `API.req` had no deadline, so a stalled mobile connection left `fetch` pending for ever | **fixed**, build 1851, guarded by `nohang.js` |
 | T1 | **The em dash.** The founder had asked once, it was half-done, and they still kept meeting them: *"all AI sites and stuff comes a lot with this line and I don't see it unprofessional apps"* | 1,175 lines of copy across 15 files, plus the AI itself, plus 20 more written as `\u2014` that the first sweep could not see | **done**, build 1850, guarded by `nodash.js` |
 | P3-1 | **Nothing.** Every long surface scrolls with its ordinary frame on time, nothing stalls, and the app's own code is ~1ms of the 16.7ms budget. One no-op tidy shipped with it (cached per-frame lookups) | `_onWinScroll` · `_onListScroll` | **measured clean**, build 1848, guarded by `motion.js` |
