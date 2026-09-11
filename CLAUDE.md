@@ -6861,8 +6861,10 @@ nothing else on it; on a row of tab pills it reads as a coloured shadow on a gre
 which is what the founder saw. **Measured off their own screenshot**: a resting pill read
 `[16,16,18]` at its top and `[16,23,33]` at its bottom, i.e. **blue 33 against red 16**.
 
-The fill is the flat glass now, in both themes — `rgba(18,18,21,.90)` on Black,
-`rgba(242,242,245,.90)` on Light. **Nothing else about the button changes**: the half-pixel
+The fill is flat glass now, in both themes. **The VALUE moved again one build later**
+(see the next section): it shipped as `rgba(18,18,21,.90)` on Black and is
+`rgba(27,27,27,.90)` today, so do not quote the number from this paragraph.
+**Nothing else about the button changes**: the half-pixel
 rim, the white top-edge highlight and the BLACK drop shadow all stay, so the 3-D the founder
 asked for in the first place is untouched. It also puts the app back on its own colour law,
 which says `--accent` is identity and never decoration.
@@ -6886,6 +6888,67 @@ the wash was a radial INSIDE the fill, so a rule elsewhere could paint one again
 check would not notice; it reads the resting pill's own top and bottom and requires blue
 within 6 of red. Self-tested: restoring the wash reports **rgb(15,24,35)**, which is the
 founder's screenshot to within a point, and putting the circles back to 36 fails four more.
+
+### THE ROUND BUTTON IS THE FOUNDER'S OWN REFERENCE, MEASURED
+
+They sent one close-crop of a dark round ✕ button: *"Try to match this exact color and
+hairline, outline, color and design style and size."* Everything below is read off that
+image at 3x rather than estimated.
+
+| | their reference | Atwe before |
+|---|---|---|
+| diameter | 132px = **44.0pt** | 36pt (fixed in 1858) |
+| fill | flat **rgb(24,24,24)**, neutral | **rgb(16,16,19)** |
+| rim | **rgb(57,57,57)** | about **29** — a line you cannot see |
+
+**THE THREE TOP-RIGHT CIRCLES WERE THE LAST ROUND BUTTONS NOT ON THE `--ctl-*` RECIPE.**
+`.tb-brand-act.more/.plus/.prof` carried their own `rgba(18,18,21,.90)` fill and a
+`1px solid rgba(255,255,255,.05)` border, which over that fill composites to ~29 — the
+reason the founder could see a rim in their reference and not in ours. They read the
+recipe now, and **the app already owned the right colour**: `--ctl-edge` is `--divider`
+`#3A3A3C` = rgb(58,58,60), one point off their 57.
+
+**MATCHING THE FILL MOVED THE SHARED TOKEN, AND THAT IS THE POINT RATHER THAN A SIDE
+EFFECT.** `--ctl-fill` went `rgba(18,18,21,.90)` -> **`rgba(27,27,27,.90)`**: 0.9 x 27 is
+24.3, which renders exactly the reference's 24 on black. Because it is the ONE control
+recipe, **every button in the app moved with it** — the tab pills, the secondary pills,
+the round buttons — which is what keeps them one family. Scoping the change to three
+buttons would have created exactly the two-greys drift this founder keeps catching.
+
+**WHAT DELIBERATELY DID NOT MOVE: the floating nav bar, the collapsed ＋ ball and the
+popover menus**, all three still `rgba(18,18,21,.90)`. That darker tint is the founder's
+own earlier decision (*"darker, see-through but not too much"*), and those are SURFACES,
+not controls. **The consequence is a real one and is recorded here rather than left to be
+discovered:** the tab pill's fill used to be copied from `.bottom-nav` "so the two cannot
+drift", and it now differs by 8 points. The control recipe is the reference; the bar is
+its own decision.
+
+**THE HAIRLINE MUST STAY A REAL `border`, NOT the recipe's inset `box-shadow`.** `.prof`
+holds an avatar at `width:100%`. With `box-sizing:border-box` a border reserves its ring
+OUTSIDE the content box, so the picture cannot cover it; an inset shadow paints on the
+padding box and the avatar sits straight on top of it. The WIDTH stays 1px — at 3x the
+reference's rim ramps over three device pixels, which is one CSS pixel.
+
+**The glyphs were deliberately left alone.** Their ✕ fills 0.341 of its circle where our
+＋ is 0.52 and the ⋯ 0.66, but those two ratios are themselves an earlier owner
+instruction (*"a bolder +"*), and a ✕ in another app is not our ＋. Only the button was
+asked about; only the button changed.
+
+**Guarded by `scratchpad/tabrow.js`, IN REAL PIXELS.** It samples the disc's fill at a
+point past the glyph box but inside the circle, and takes the BRIGHTEST pixel across a few
+px either side of the left edge for the rim (a 1px border at dpr 2 antialiases over two or
+three device pixels, so one fixed coordinate reads the blend, not the line). It requires
+the fill to be 24 and neutral, the rim to be 58 and at least 18 points brighter than the
+fill, and the profile circle to keep a real border at `border-box` with no size cost.
+Self-tested: putting the old family rule back reports **rgb(16,16,19)** and **rgb(28,28,31)**.
+
+**AND IT CAUGHT A PROBE THAT HAD OUTLIVED ITS OWN DECISION — the sixth time here.**
+`tabpills.js` asserted the resting pill carries *"the login button's own wash lifting its
+lower edge"*, i.e. it demanded the very accent radial build 1858 removed at the founder's
+request; it went **14 red on correct code** and was mis-read as green for a build. It now
+asserts the OUTCOME instead of the token — no background image, and a fill whose three
+channels are neutral — so a grey gradient added later still passes and any coloured one
+fails. **When you change a material, grep the scratchpad for the old one before shipping.**
 
 ### The desktop right rail answers in place
 
