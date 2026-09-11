@@ -22845,7 +22845,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1852'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1853'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -41870,7 +41870,14 @@ async function acCreateList(forAdd) {
   const name = (prompt('List name', '') || '').trim(); if (!name) return;
   try {
     const { list } = await API.req('POST', '/api/social/lists', { name });
-    if (forAdd && AC._addToUid) { await API.req('POST', '/api/social/lists/' + list.id + '/members', { uid: AC._addToUid }).catch(() => {}); showNotif('Added to ' + name); closeOverlay('addToList'); }
+    /* SAY "Added" ONLY IF THEY WERE. This swallowed the failure and then announced
+       the success either way, so a member could be told somebody was on a list that
+       was in fact empty. Same lie as reporting a queued post as posted. */
+    if (forAdd && AC._addToUid) {
+      try { await API.req('POST', '/api/social/lists/' + list.id + '/members', { uid: AC._addToUid }); showNotif('Added to ' + name); }
+      catch (e2) { showNotif((e2 && e2.message) || 'The list was made, but they could not be added.'); }
+      closeOverlay('addToList');
+    }
     else { showNotif('List created'); acOpenLists(); }
   } catch (e) { showNotif(e.message || 'Could not create.'); }
 }
