@@ -24,7 +24,7 @@ if (HOST && USER && PASS) {
   });
 } else {
   console.warn(
-    '⚠️  SMTP not configured — verification/reset emails will be logged to the console instead of sent.'
+    '⚠️  SMTP not configured. Verification/reset emails will be logged to the console instead of sent.'
   );
 }
 

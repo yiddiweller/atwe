@@ -22,7 +22,7 @@ if (!process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET must be set in production. Refusing to start with an insecure fallback.');
   }
   console.warn(
-    '⚠️  JWT_SECRET not set — using an insecure dev fallback. Set JWT_SECRET in production.'
+    '⚠️  JWT_SECRET not set. Using an insecure dev fallback. Set JWT_SECRET in production.'
   );
 }
 
@@ -237,7 +237,7 @@ function passwordIssue(password, ctx = {}) {
   const pw = String(password || '');
   if (pw.length < 8) return 'Password must be at least 8 characters.';
   const low = pw.toLowerCase();
-  if (COMMON_PASSWORDS.has(low)) return 'That password is too common — please choose a stronger one.';
+  if (COMMON_PASSWORDS.has(low)) return 'That password is too common. Please choose a stronger one.';
   if (/^(.)\1+$/.test(pw)) return 'Please choose a stronger password (not a single repeated character).';
   // Straight ascending/descending runs like 12345678 or abcdefgh.
   const isRun = (s) => {

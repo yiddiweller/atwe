@@ -24,7 +24,7 @@ const provider = (TWILIO_SID && TWILIO_TOKEN && TWILIO_FROM) ? 'twilio'
   : (API_URL && API_KEY) ? 'http' : null;
 
 if (!provider) {
-  console.warn('⚠️  SMS not configured — security/money texts will be logged to the console instead of sent.');
+  console.warn('⚠️  SMS not configured. Security/money texts will be logged to the console instead of sent.');
 }
 
 function isConfigured() { return !!provider; }

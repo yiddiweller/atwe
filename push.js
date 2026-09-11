@@ -19,7 +19,7 @@ if (PUBLIC && PRIVATE) {
   try { webpush.setVapidDetails(SUBJECT, PUBLIC, PRIVATE); configured = true; }
   catch (e) { console.warn('⚠️  Web Push misconfigured (bad VAPID keys?):', e.message); }
 } else {
-  console.warn('⚠️  Web Push not configured — set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY to enable push notifications.');
+  console.warn('⚠️  Web Push not configured. Set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY to enable push notifications.');
 }
 
 function isConfigured() { return configured; }

@@ -26,16 +26,16 @@ const LAST = ['Carter', 'Reyes', 'Nguyen', 'Patel', 'Okafor', 'Bennett', 'Silva'
 // Industries → category (matches the signup industry list), business-name parts,
 // headlines, post lines, and product samples. Keeps the demo varied + realistic.
 const IND = [
-  { cat: 'Technology', biz: ['Northstar Labs', 'Pixel Forge', 'Cloudbase', 'Bytewise'], head: ['Software engineer', 'Founder & CTO', 'Product designer', 'Full-stack developer'], posts: ['Shipped a big refactor today — feels good to delete code. #buildinpublic', 'Hot take: the best feature is the one you didn’t build.', 'We’re hiring two engineers. DMs open.', 'Three years in and still learning something new every week.'], prods: ['1-hr product strategy call', 'Landing page audit', 'API integration package'] },
+  { cat: 'Technology', biz: ['Northstar Labs', 'Pixel Forge', 'Cloudbase', 'Bytewise'], head: ['Software engineer', 'Founder & CTO', 'Product designer', 'Full-stack developer'], posts: ['Shipped a big refactor today. Feels good to delete code. #buildinpublic', 'Hot take: the best feature is the one you didn’t build.', 'We’re hiring two engineers. DMs open.', 'Three years in and still learning something new every week.'], prods: ['1-hr product strategy call', 'Landing page audit', 'API integration package'] },
   { cat: 'Marketing', biz: ['Bright Reach', 'Loud & Clear', 'Tidepool Media'], head: ['Brand strategist', 'Growth marketer', 'Content lead'], posts: ['Your brand is a promise. Keep it. ✨', 'Stop boosting posts. Start telling stories.', 'Case study: 3x leads in 60 days. Thread 🧵'], prods: ['Brand strategy session', 'Social content pack (12 posts)', 'Marketing audit'] },
-  { cat: 'Real Estate', biz: ['Keystone Realty', 'Summit Homes', 'Harbor Properties'], head: ['Realtor', 'Broker', 'Property manager'], posts: ['Just listed 🏡 3bd / 2ba with the best light I’ve seen all year.', 'Open house this Sunday — come say hi!', 'Rates moved. Here’s what it means for buyers.'], prods: ['Home valuation', 'Staging consult'] },
+  { cat: 'Real Estate', biz: ['Keystone Realty', 'Summit Homes', 'Harbor Properties'], head: ['Realtor', 'Broker', 'Property manager'], posts: ['Just listed 🏡 3bd / 2ba with the best light I’ve seen all year.', 'Open house this Sunday. Come say hi!', 'Rates moved. Here’s what it means for buyers.'], prods: ['Home valuation', 'Staging consult'] },
   { cat: 'Healthcare', biz: ['Bright Dental', 'Wellspring Clinic', 'CarePoint'], head: ['Dentist', 'Physiotherapist', 'Nutrition coach'], posts: ['Reminder: floss the ones you want to keep 🦷', 'Small habits, big health. Start with water.', 'Now accepting new patients this month.'], prods: ['Initial consultation', 'Wellness plan'] },
   { cat: 'Fitness', biz: ['Iron Tide Gym', 'PeakForm', 'MoveWell Studio'], head: ['Personal trainer', 'Yoga instructor', 'Strength coach'], posts: ['Consistency beats intensity. Show up. 💪', 'New 6-week program drops Monday.', 'Form > ego. Every single time.'], prods: ['1:1 training session', '6-week program', 'Form check video review'] },
-  { cat: 'Food & Beverage', biz: ['Olive & Ember', 'Daily Grind', 'Saffron Kitchen'], head: ['Chef', 'Café owner', 'Caterer'], posts: ['Fresh batch out of the oven 🥐', 'Catering 40 covers this weekend — wish us luck!', 'New seasonal menu is live.'], prods: ['Catering (per head)', 'Private dinner', 'Pastry box'] },
-  { cat: 'Construction', biz: ['Apex Build', 'Cornerstone Co.', 'TrueLine Contractors'], head: ['General contractor', 'Site manager', 'Carpenter'], posts: ['Before/after on this kitchen reno 🔨', 'Booked through spring — thank you all.', 'Measure twice, cut once. Always.'], prods: ['Renovation estimate', 'Handyman half-day'] },
-  { cat: 'Legal', biz: ['Hale & Park', 'Justice Lane', 'Meridian Law'], head: ['Attorney', 'Paralegal', 'Notary'], posts: ['Read the contract. Then read it again.', 'Free 15-min consult for small businesses this week.', 'Know your rights — short thread.'], prods: ['Contract review', '30-min legal consult'] },
+  { cat: 'Food & Beverage', biz: ['Olive & Ember', 'Daily Grind', 'Saffron Kitchen'], head: ['Chef', 'Café owner', 'Caterer'], posts: ['Fresh batch out of the oven 🥐', 'Catering 40 covers this weekend. Wish us luck!', 'New seasonal menu is live.'], prods: ['Catering (per head)', 'Private dinner', 'Pastry box'] },
+  { cat: 'Construction', biz: ['Apex Build', 'Cornerstone Co.', 'TrueLine Contractors'], head: ['General contractor', 'Site manager', 'Carpenter'], posts: ['Before/after on this kitchen reno 🔨', 'Booked through spring. Thank you all.', 'Measure twice, cut once. Always.'], prods: ['Renovation estimate', 'Handyman half-day'] },
+  { cat: 'Legal', biz: ['Hale & Park', 'Justice Lane', 'Meridian Law'], head: ['Attorney', 'Paralegal', 'Notary'], posts: ['Read the contract. Then read it again.', 'Free 15-min consult for small businesses this week.', 'Know your rights. Short thread.'], prods: ['Contract review', '30-min legal consult'] },
   { cat: 'Finance', biz: ['Ledger & Co.', 'Cascade Advisors', 'BluePeak Finance'], head: ['Accountant', 'Financial advisor', 'Bookkeeper'], posts: ['Tax season tip: track it monthly, not in April.', 'Compound interest is the quietest superpower.', 'Helping 3 founders clean up their books this week.'], prods: ['Bookkeeping (monthly)', 'Tax prep', 'Financial plan'] },
-  { cat: 'Education', biz: ['BrightMinds', 'Lumen Tutoring', 'Open Path'], head: ['Tutor', 'Course creator', 'Coach'], posts: ['A good teacher makes you curious, not just correct.', 'New cohort opens next week — 6 seats left.', 'Free study guide in the comments 👇'], prods: ['1:1 tutoring hour', 'Course access'] },
+  { cat: 'Education', biz: ['BrightMinds', 'Lumen Tutoring', 'Open Path'], head: ['Tutor', 'Course creator', 'Coach'], posts: ['A good teacher makes you curious, not just correct.', 'New cohort opens next week. 6 seats left.', 'Free study guide in the comments 👇'], prods: ['1:1 tutoring hour', 'Course access'] },
   { cat: 'Photography', biz: ['Goldhour Studio', 'Frame & Field', 'Lumen Photo'], head: ['Photographer', 'Videographer', 'Photo editor'], posts: ['Golden hour never misses 📸', 'Booking fall portraits now.', 'Behind the scenes from yesterday’s shoot.'], prods: ['Portrait session', 'Event coverage (hr)', 'Photo editing (10 imgs)'] },
   { cat: 'Beauty', biz: ['Glow Bar', 'Luxe Lounge', 'Bloom Studio'], head: ['Hair stylist', 'Esthetician', 'Makeup artist'], posts: ['Fresh color, fresh start 💇‍♀️', 'A few openings this weekend!', 'Skincare is self-care. Be gentle.'], prods: ['Cut & style', 'Facial', 'Bridal makeup'] },
   { cat: 'Automotive', biz: ['TorqueWorks', 'Apex Auto', 'RoadReady'], head: ['Mechanic', 'Detailer', 'Auto electrician'], posts: ['Brakes done right the first time 🔧', 'Winter check-ups are on special this month.', 'That new-car feeling, no new-car price.'], prods: ['Full detail', 'Diagnostic check'] },
@@ -44,17 +44,17 @@ const IND = [
   { cat: 'Fashion', biz: ['Thread & Co.', 'Velvet Lane', 'Mode Atelier'], head: ['Designer', 'Stylist', 'Tailor'], posts: ['New drop this Friday 🧵 limited run.', 'Fit is everything. Always tailor.', 'Sustainable fabrics, timeless cuts.'], prods: ['Personal styling', 'Custom tailoring', 'Lookbook piece'] },
 ];
 
-const POOL_TXT = ['Grateful for this community 🙏', 'Working on something exciting — more soon.', 'What’s everyone reading this week?', 'Coffee, then conquer. ☕', 'Best advice you ever got? Drop it below.', 'Networking really is just being genuinely curious about people.'];
+const POOL_TXT = ['Grateful for this community 🙏', 'Working on something exciting. More soon.', 'What’s everyone reading this week?', 'Coffee, then conquer. ☕', 'Best advice you ever got? Drop it below.', 'Networking really is just being genuinely curious about people.'];
 
 // Longer, multi-paragraph posts (mixed in so the feed reads like a real one).
 const LONG_POSTS = [
-  'Three years ago I started this with a laptop and a maybe.\n\nNo office, no team, no idea what I was doing — just a stubborn belief that I could do it better. Today we crossed a milestone I used to only dream about.\n\nTo everyone who took a chance on us early: thank you. This is just the start. 🚀 #buildinpublic',
+  'Three years ago I started this with a laptop and a maybe.\n\nNo office, no team, no idea what I was doing. Just a stubborn belief that I could do it better. Today we crossed a milestone I used to only dream about.\n\nTo everyone who took a chance on us early: thank you. This is just the start. 🚀 #buildinpublic',
   'Unpopular opinion: most “productivity” advice is just procrastination in a nicer outfit.\n\nYou don’t need a new app. You don’t need a 5am routine. You need to pick the one thing that actually matters today and do it before you check your phone.\n\nThat’s the whole system. Everything else is noise.',
   'A client asked me yesterday what the secret is. I told them the truth: there isn’t one.\n\nShow up when you don’t feel like it. Do the boring work nobody claps for. Keep your promises even when it costs you. Be the person who’s easy to trust.\n\nDo that for a few years and people start calling it “luck.” 💯',
-  'We almost shut down last winter.\n\nCash was tight, two big clients left in the same month, and I genuinely didn’t know if we’d make payroll. I’m sharing this because everyone posts the wins and hides the part where it nearly fell apart.\n\nWe made it. Barely. And it taught me more than any good year ever did. If you’re in the hard part right now — keep going. 🙏',
+  'We almost shut down last winter.\n\nCash was tight, two big clients left in the same month, and I genuinely didn’t know if we’d make payroll. I’m sharing this because everyone posts the wins and hides the part where it nearly fell apart.\n\nWe made it. Barely. And it taught me more than any good year ever did. If you’re in the hard part right now. Keep going. 🙏',
   'Hot take after 10 years in this industry:\n\nThe best people I’ve worked with aren’t the most talented. They’re the most reliable. They answer the email. They show up on time. They say “I don’t know” instead of guessing.\n\nTalent gets you in the room. Trust keeps you there.',
-  'I get asked a lot how to “find your passion.”\n\nHonestly? You don’t find it — you build it. You get good at something, good enough to help people, and the passion follows the progress. Waiting to feel inspired before you start is exactly backwards.\n\nStart messy. Get better. The love comes later. ✨',
-  'Today a customer drove 40 minutes just to tell us in person how much our work meant to them.\n\nNo review, no post — they just wanted to say thank you face to face. I’ve been doing this a long time and moments like that still get me.\n\nThis is why small business is worth it. Every single time. ❤️',
+  'I get asked a lot how to “find your passion.”\n\nHonestly? You don’t find it. You build it. You get good at something, good enough to help people, and the passion follows the progress. Waiting to feel inspired before you start is exactly backwards.\n\nStart messy. Get better. The love comes later. ✨',
+  'Today a customer drove 40 minutes just to tell us in person how much our work meant to them.\n\nNo review, no post. They just wanted to say thank you face to face. I’ve been doing this a long time and moments like that still get me.\n\nThis is why small business is worth it. Every single time. ❤️',
   'Reminder for anyone building something right now:\n\nComparison is a trap. That person you’re measuring yourself against is on a totally different timeline, with a totally different starting point, fighting battles you’ll never see.\n\nRun your own race. Check your own scoreboard. Keep your head down and build. 🏗️',
 ];
 const STORY_BG = ['g1', 'g2', 'g3', 'g4', 'g5'];
@@ -63,7 +63,7 @@ const STORY_BG = ['g1', 'g2', 'g3', 'g4', 'g5'];
 // in the feed. Creatives are royalty-free stock images; links are placeholder domains.
 const DEMO_ADS = [
   { sponsor: 'Northstar Labs', title: 'Ship faster with Northstar', body: 'The developer platform teams love. Start free today.', cta: 'Start free', url: 'https://northstar.example.com' },
-  { sponsor: 'Glow Bar', title: 'Look your best this season', body: 'Cut, color or facial — 20% off your first visit.', cta: 'Book now', url: 'https://glowbar.example.com' },
+  { sponsor: 'Glow Bar', title: 'Look your best this season', body: 'Cut, color or facial. 20% off your first visit.', cta: 'Book now', url: 'https://glowbar.example.com' },
   { sponsor: 'Iron Tide Gym', title: 'New year, stronger you', body: 'Our 6-week transformation program. Limited spots left.', cta: 'Join today', url: 'https://irontide.example.com' },
   { sponsor: 'Saffron Kitchen', title: 'Catering made effortless', body: 'Fresh, chef-crafted menus for any event or office.', cta: 'See menus', url: 'https://saffron.example.com' },
   { sponsor: 'Keystone Realty', title: 'Find your dream home', body: 'Browse brand-new listings in your area this week.', cta: 'View homes', url: 'https://keystone.example.com' },
@@ -332,7 +332,7 @@ async function seedDemoExtras(client, ids) {
       const asker = (people[(i * 5) % people.length] || {}).id;
       if (asker && asker !== bid) {
         const q = await client.query('INSERT INTO business_questions (business_id, asker_id, body) VALUES ($1,$2,$3) RETURNING id', [bid, asker, 'Do you take new clients this month?']);
-        await client.query('INSERT INTO business_answers (question_id, answerer_id, body) VALUES ($1,$2,$3)', [q.rows[0].id, bid, 'Yes! We have a few openings — send us a message and we will get you booked in.']);
+        await client.query('INSERT INTO business_answers (question_id, answerer_id, body) VALUES ($1,$2,$3)', [q.rows[0].id, bid, 'Yes! We have a few openings. Send us a message and we will get you booked in.']);
       }
     }
   } catch (e) { console.error('demo reviews/business pass failed (non-fatal):', e.message); }
@@ -343,7 +343,7 @@ async function seedDemoExtras(client, ids) {
     for (let i = 0; i < nlOwners.length; i++) {
       const { id: oid, ind } = nlOwners[i];
       const nl = await client.query('INSERT INTO newsletters (owner_id, title, description, cover) VALUES ($1,$2,$3,$4) RETURNING id',
-        [oid, 'The ' + ind.cat + ' Weekly', 'Practical ' + ind.cat.toLowerCase() + ' tips, trends and stories — every week.', banner(200 + i)]);
+        [oid, 'The ' + ind.cat + ' Weekly', 'Practical ' + ind.cat.toLowerCase() + ' tips, trends and stories. Every week.', banner(200 + i)]);
       await client.query('INSERT INTO newsletter_subs (newsletter_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [nl.rows[0].id, oid]);
       await client.query(`INSERT INTO newsletter_subs (newsletter_id, user_id)
         SELECT $1, id FROM users WHERE is_demo AND id <> $2 ORDER BY random() LIMIT (5 + floor(random()*20)::int) ON CONFLICT DO NOTHING`, [nl.rows[0].id, oid]);
@@ -378,7 +378,7 @@ async function seedDemoExtras(client, ids) {
       await client.query(`INSERT INTO at_group_members (group_id, user_id)
         SELECT $1, id FROM users WHERE is_demo AND id <> $2 ORDER BY random() LIMIT 8 ON CONFLICT DO NOTHING`, [gid, owner]);
       await client.query(`INSERT INTO at_group_messages (group_id, sender_id, body, created_at)
-        SELECT $1, m.user_id, (ARRAY['Welcome everyone! 👋','Great to be here.','Anyone going to the meetup next week?','Just shared a resource — check it out.','Happy Friday all!'])[1+floor(random()*5)::int], now() - (random() * interval '10 days')
+        SELECT $1, m.user_id, (ARRAY['Welcome everyone! 👋','Great to be here.','Anyone going to the meetup next week?','Just shared a resource. Check it out.','Happy Friday all!'])[1+floor(random()*5)::int], now() - (random() * interval '10 days')
         FROM at_group_members m WHERE m.group_id = $1 ORDER BY random() LIMIT 12`, [gid]);
     }
   } catch (e) { console.error('demo groups pass failed (non-fatal):', e.message); }
@@ -435,7 +435,7 @@ async function immerseInDemo(client, userId) {
     }
     // A few demo people DM this account, so Beam isn't empty (the 2 newest stay unread).
     try {
-      const HELLO = ['Hey! Loved your latest post 🙌', 'Thanks for connecting — let me know if I can ever help.', 'Are you around this week for a quick chat?', 'Big fan of your work. Keep it up!', 'Welcome! Great to have you here.'];
+      const HELLO = ['Hey! Loved your latest post 🙌', 'Thanks for connecting. Let me know if I can ever help.', 'Are you around this week for a quick chat?', 'Big fan of your work. Keep it up!', 'Welcome! Great to have you here.'];
       const dmers = followed.slice(0, 5);
       for (let d = 0; d < dmers.length; d++) {
         await client.query(

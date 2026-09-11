@@ -17,7 +17,7 @@ const stripe = SECRET ? new Stripe(SECRET) : null;
 
 if (!stripe || !PRICE_ID) {
   console.warn(
-    '⚠️  Stripe not fully configured — "Upgrade to Pro" uses the demo instant-upgrade path. Set STRIPE_SECRET_KEY and STRIPE_PRICE_ID to enable real billing.'
+    '⚠️  Stripe not fully configured. "Upgrade to Pro" uses the demo instant-upgrade path. Set STRIPE_SECRET_KEY and STRIPE_PRICE_ID to enable real billing.'
   );
 }
 

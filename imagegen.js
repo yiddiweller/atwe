@@ -26,7 +26,7 @@ const SIZE = process.env.IMAGE_SIZE || '1024x1024';
 
 const ok = !!(API_URL && API_KEY);
 if (!ok) {
-  console.warn('⚠️  Image generation not configured — the "make me a picture" button will say so. Set IMAGE_API_URL / IMAGE_API_KEY to enable it.');
+  console.warn('⚠️  Image generation not configured. The "make me a picture" button will say so. Set IMAGE_API_URL / IMAGE_API_KEY to enable it.');
 }
 function isConfigured() { return ok; }
 
