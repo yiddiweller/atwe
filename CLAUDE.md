@@ -9760,6 +9760,25 @@ whether the bug is there or not, so the first version of the check passed on bro
 compares against the Account page (a list of the same shape) rather than a fixed number, and
 self-tests: restoring the retract fails four of its six checks.
 
+**ITS p95 CHECK CANNOT SEPARATE A REGRESSION FROM MACHINE LOAD ON THIS BOX, and that was
+measured rather than assumed (build 1859).** Five consecutive runs against one unchanged
+build reported a notifications p95 of **22.0, 22.6, 31.2, 36.9 and 18.6** against a bar of
+`account + 12` (about 30.5) — so it passed three times and failed twice while nothing had
+changed. The Account reference beside it is rock steady at 18.2-18.9, so the variance is
+the notifications scroll's own, not the clock's. **There is no honest threshold**: the
+probe's own self-test says a real 14ms-per-event regression reads **39ms**, and good code
+has now been seen at **37.3** — the two bands overlap, so any bar that never cries wolf
+also never catches the thing it exists for.
+
+**Taking the best of three flings was tried and did not help** (37.3 / 29.8 / 20.9 across
+three runs of the improved version), which is what rules out simple per-fling noise; the
+variance is between RUNS, not within one. That change was reverted rather than kept,
+because an unproven change to a probe is just more noise. **Do not tune this number to make
+the light go green.** What still guards the 1766 design is the half that IS reliable: the
+dropped-frame count (3-5 against the reference's 0, bar +6), and the three structural
+checks — it moves, it moves by transform, and nothing below it reflows. Those caught the
+margin-driven version and would catch it again. The p95 line needs a quiet machine.
+
 **Two fixes from that build are kept**, because they were real bugs rather than the design:
 a notification row carries `.ac-item`, whose base `:hover` has **no `@media(hover:hover)`
 guard**, so iOS and Chrome latch a synthetic hover onto the last-touched row and leave a grey
