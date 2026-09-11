@@ -7,7 +7,10 @@
  * 1. THE SIZE AND THE SPACES. Both reference screenshots are a 375pt iPhone at 3x, so
  *    every number is a measurement divided by 3, never an estimate:
  *        pill height      Apple 132px = 44.0pt   Atwe was 96px = 32.0pt
- *        padding per side Apple  50px = 16.7pt   Atwe was 48px = 16.0pt
+ *        padding per side Apple  50px = 16.7pt   Atwe 48px = 16.0pt  <- KEPT AT 16
+ *    The side padding stays the app's own 16, not Apple's 16.7: the founder asked for it
+ *    back after seeing both, and they are right that two thirds of a point is invisible
+ *    while 16 is the number every other inset in the app already uses.
  *        gap between      Apple  30px = 10.0pt   Atwe was 24px =  8.0pt
  *        clearance below  Apple  45px = 15.0pt   Atwe was        ~9.0pt
  *    The height was the one genuinely wrong: the side padding was already within a
@@ -43,7 +46,7 @@ const ok = (c, what, detail) => { c ? pass++ : fail++; console.log((c ? '  ok  '
 const near = (a, b, tol) => Math.abs(a - b) <= (tol === undefined ? 0.6 : tol);
 
 /* Apple Fitness+, measured off the founder's own screenshot at 3x on a 375pt phone. */
-const APPLE = { h: 44, padX: 17, gap: 10, below: 15 };
+const APPLE = { h: 44, padX: 16, gap: 10, below: 15 };
 const WORLDS = ['Home', 'Beam', 'Engine', 'Notifications'];
 
 const MEAS = () => {
@@ -195,6 +198,79 @@ const MEAS = () => {
   ok(after.length === 4 && after[0] === 'All',
     '…and the same four pills are still there afterwards, unchanged', after.join(' · '));
   await p.close();
+
+  /* ── 3. the top-right circles, and no blue on any button ──────────────── */
+  const p3 = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  if (BREAK) await p3.addInitScript(() => {
+    addEventListener('DOMContentLoaded', () => {
+      const st = document.createElement('style');
+      st.textContent = 'body{--ctl-fill:radial-gradient(90% 130% at 50% 128%,rgba(var(--accent-rgb),.11),transparent 72%),rgba(18,18,21,.90)!important}'
+        + '.topbar.tb-solo .tb-brandrow,#notifHead.tb-brandrow{--tb-brand-circle:36px!important}';
+      document.head.appendChild(st);
+    });
+  });
+  await p3.goto('http://localhost:' + PORT, { waitUntil: 'domcontentloaded' });
+  await p3.evaluate((t) => { localStorage.clear(); localStorage.setItem('atwe_token', t);
+    localStorage.setItem('atwe_theme', 'black');
+    localStorage.setItem('atwe_intro_seen', JSON.stringify(['beam', 'circles', 'ai', 'wallet'])); }, TOK);
+  await p3.goto('http://localhost:' + PORT, { waitUntil: 'domcontentloaded' });
+  await p3.waitForTimeout(5200);
+  for (const w of WORLDS) {
+    if (w === 'Notifications') { await p3.evaluate(() => acNavNotifs()); await p3.waitForTimeout(2200); }
+    else {
+      await p3.evaluate((t) => { [...document.querySelectorAll('.overlay:not(.hidden)')]
+        .forEach((e) => { try { closeOverlay(e.id, true); } catch (x) {} }); appTab(t); },
+        w === 'Home' ? 'home' : w === 'Beam' ? 'chat' : 'search');
+      await p3.waitForTimeout(1500);
+    }
+    /* APPLE FITNESS+ MEASURED: its two top-right circles are 132px on a 375pt phone at
+       3x, i.e. 44.0pt, with a 36px (12.0pt) gap. Ours were 36 with the same 12 gap, so
+       only the diameter was adrift. 44 is also the touch minimum, which is why the same
+       number lands on the tab pill. */
+    const c = await p3.evaluate(() => {
+      const root = document.querySelector('#notifOverlay:not(.hidden) #notifHead') || document.querySelector('.topbar .tb-brandrow:not([hidden])');
+      const acts = [...(root ? root.querySelectorAll('.tb-brand-act') : [])]
+        .filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.getBoundingClientRect());
+      if (acts.length < 2) return null;
+      return { w: +acts[0].width.toFixed(1), h: +acts[0].height.toFixed(1),
+        gap: +(acts[1].left - acts[0].right).toFixed(1), n: acts.length };
+    });
+    if (!c) { ok(false, w + ': the top-right circles are on screen'); continue; }
+    ok(near(c.w, 44, 1) && near(c.h, 44, 1), w + ': the top-right circle is Apple\'s 44pt', c.w + 'x' + c.h);
+    ok(near(c.gap, 12, 1), w + ': …and Apple\'s 12pt gap between them', c.gap);
+  }
+  /* NO BLUE ON A BUTTON — measured in REAL PIXELS, not from the computed style. The wash
+     that was removed was a radial INSIDE the fill, so a rule elsewhere could paint one
+     again and a token check would not notice. A grey button's three channels must stay
+     within a few points of each other; the old pill read [16,16,18] at its top and
+     [16,23,33] at its bottom, i.e. blue 17 above red. */
+  await p3.evaluate(() => { [...document.querySelectorAll('.overlay:not(.hidden)')]
+    .forEach((e) => { try { closeOverlay(e.id, true); } catch (x) {} }); appTab('home'); });
+  await p3.waitForTimeout(1500);
+  const box = await p3.evaluate(() => {
+    const row = [...document.querySelectorAll('.topbar .tb-feedtabs')].find((e) => e.getBoundingClientRect().height > 0);
+    const rest = [...row.children].find((e) => e.getBoundingClientRect().height > 0
+      && !e.classList.contains('active') && !e.classList.contains('tb-feedtab-add'));
+    const q = rest.getBoundingClientRect();
+    return { x: Math.round(q.left + q.width / 2), top: Math.round(q.top + 3), bot: Math.round(q.bottom - 4) };
+  });
+  const shot = await p3.screenshot();
+  const png = require('zlib'), sharpless = null; // no image lib: read pixels through the page instead
+  const cast = await p3.evaluate(async ({ x, top, bot, data }) => {
+    const img = new Image(); img.src = 'data:image/png;base64,' + data;
+    await img.decode();
+    const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+    cv.getContext('2d').drawImage(img, 0, 0);
+    const dpr = img.width / window.innerWidth;
+    const px = (yy) => { const d = cv.getContext('2d').getImageData(Math.round(x * dpr), Math.round(yy * dpr), 1, 1).data;
+      return [d[0], d[1], d[2]]; };
+    return { top: px(top), bot: px(bot) };
+  }, { ...box, data: shot.toString('base64') });
+  const blueCast = (c) => c[2] - c[0];
+  ok(blueCast(cast.bot) <= 6, 'a resting pill carries NO blue wash at its bottom edge',
+    'rgb(' + cast.bot.join(',') + ')');
+  ok(blueCast(cast.top) <= 6, '…nor at its top', 'rgb(' + cast.top.join(',') + ')');
+  await p3.close();
 
   await b.close();
   console.log(`\n═══ ${pass} passed, ${fail} failed ═══`);

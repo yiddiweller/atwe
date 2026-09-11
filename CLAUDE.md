@@ -6765,7 +6765,7 @@ measurement divided by 3, not an estimate:
 | | Apple Fitness+ | Atwe before |
 |---|---|---|
 | pill height | 132px = **44.0pt** | 96px = **32.0pt** |
-| padding each side | 50px = **16.7pt** | 48px = **16.0pt** |
+| padding each side | 50px = **16.7pt** | 48px = **16.0pt** — **KEPT AT 16** |
 | gap between pills | 30px = **10.0pt** | 24px = **8.0pt** |
 | clearance below the row | 45px = **15.0pt** | **~9.0pt** |
 | left margin | 48px = 16.0pt | 42px = 14.0pt |
@@ -6784,6 +6784,11 @@ story tray. Moving it for the tabs alone would stop them lining up with the card
 beneath them, which is a worse fault than 2pt; moving it globally is a much bigger change,
 and 14 was the founder's own decision in build 1744. `tabrow.js` asserts the row starts on
 **the gutter**, never on the literal 14.
+
+**THE SIDE PADDING STAYS 16, NOT APPLE'S 16.7 — the founder asked for it back after
+seeing both, and they are right.** Two thirds of a point is invisible, and 16 is the number
+every other inset in the app already uses; the HEIGHT and the GAP are what carry the Apple
+reference. Shipped at 17 for exactly one build.
 
 **Everything is in `--tabpill-py` / `--tabpill-px` / `--tabpill-gap` / `--tabpill-below` on
 `:root`**, and the height is expressed as PADDING because the line box is pinned at 18px
@@ -6842,6 +6847,45 @@ the gap to the first thing a person actually reads.
 same machine the rows arrive within a frame or two, so the broken build and the fixed one
 measure identically. `tabrow.js` holds `/api/notifications` for 2.5s the way a phone on
 mobile data does; measured, the pills land at **203ms** and the rows at **2611ms**.
+
+### NO BLUE ON A BUTTON, AND THE TOP-RIGHT CIRCLES ARE APPLE'S 44
+
+Two more from the founder in the same breath as the tab row, and both are one-line changes
+to a token that reaches the whole app.
+
+**1. THE BLUE SHADOW UNDER EVERY BUTTON IS GONE.** `--ctl-fill` — the ONE control recipe
+every button in the app reads from — carried a soft **accent radial centred just below the
+control** (`radial-gradient(90% 130% at 50% 128%, rgba(accent,.11), transparent 72%)` over
+the flat glass). It came from `.auth-btn`, where it reads as a lift on a sign-in page with
+nothing else on it; on a row of tab pills it reads as a coloured shadow on a grey button,
+which is what the founder saw. **Measured off their own screenshot**: a resting pill read
+`[16,16,18]` at its top and `[16,23,33]` at its bottom, i.e. **blue 33 against red 16**.
+
+The fill is the flat glass now, in both themes — `rgba(18,18,21,.90)` on Black,
+`rgba(242,242,245,.90)` on Light. **Nothing else about the button changes**: the half-pixel
+rim, the white top-edge highlight and the BLACK drop shadow all stay, so the 3-D the founder
+asked for in the first place is untouched. It also puts the app back on its own colour law,
+which says `--accent` is identity and never decoration.
+
+**2. THE TOP-RIGHT CIRCLES ARE 44, NOT 36.** Apple Fitness+'s own two circles measure
+**132px on a 375pt phone at 3x = 44.0pt**, with a **36px (12.0pt) gap**; ours were **36pt**
+with a gap that was **already 12**, so only the diameter was adrift. 44 is also the touch
+minimum, which is why the tab pill landed on the same number — the whole top bar is now one
+size.
+
+**It is ONE token and everything follows, which is the point.** `--tb-brand-circle` (36 ->
+44) drives the circle, and the glyphs are ratios of it (`+` at 0.52, `⋯` at 0.66, the avatar
+at 100%) — Apple's own edit glyph measures 0.485 of its circle, so the proportions already
+agreed. **The lockup does not move**, and that is not luck: the brand row's padding is
+`calc(gutter - (circle - lockup)/2)`, so growing the circle takes the same amount off the
+padding and the swirl stays on the gutter line. Measured, circle top 9 -> 5 with its CENTRE
+at 27 both times; the bar grows 4px in total.
+
+Both are in `scratchpad/tabrow.js`. **The blue check measures REAL PIXELS, not the token** —
+the wash was a radial INSIDE the fill, so a rule elsewhere could paint one again and a token
+check would not notice; it reads the resting pill's own top and bottom and requires blue
+within 6 of red. Self-tested: restoring the wash reports **rgb(15,24,35)**, which is the
+founder's screenshot to within a point, and putting the circles back to 36 fails four more.
 
 ### The desktop right rail answers in place
 
