@@ -9489,6 +9489,25 @@ They cannot be concentric with a card at all — they sit on the same gutter as 
 edge, so the gap is zero and concentricity would demand a 78px button. `radii.js` now only
 asks that the three match each other.
 
+**THAT PARAGRAPH WAS WRITTEN BEFORE THE PROBE AGREED WITH IT, and build 1859's regression
+is what found the gap.** `radii.js` went on demanding `radius === card − padding`, which
+held only while the circles were 36 across; build 1858 took them to Apple's 44 at the
+founder's request and it went **3 red on correct code**. This is the **seventh** probe here
+to outlive a decision it did not know about — and the first where the DOC had already been
+corrected and the CODE had not, which is the mirror of this repo's usual drift and just as
+expensive. It now asserts what is true at any diameter: all three are on screen, each is a
+true circle (`radius === height / 2`), and the three match **each other** — so changing the
+size can never make it stale again. The 44 itself belongs to `tabrow.js`, which measures it
+against Apple's own. Self-tested: `node radii.js --break` makes one circle 36 while the
+others stay 44 and fails *"the three turn on the same corner as each other"* by name.
+
+**AND IT ONLY SURFACED BECAUSE THE SERVER WAS RESTARTED.** The build-1858 regression ran
+against a server that had booted at 17:32 while 1858 was committed at 17:44, so it served
+the 1857 shell — 36px circles — and `radii` passed. The shell is pre-compressed at boot
+(see the dev-loop trap above), so **a regression is only testing the tree you think it is
+if the server was started after the last edit**; check `/api/config`'s `build` against
+`ATWE_BUILD` before believing a green run.
+
 **`--post-row-gap` exists because of this.** The action row's gap used to be `--post-pad`
 so the row read as one even beat with the card's edge. Once the padding grew, that starved
 the pills on a narrow phone, so the row keeps 12 while the card's edge padding moves — and

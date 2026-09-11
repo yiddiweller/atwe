@@ -21,6 +21,15 @@ const PHOTO='data:image/png;base64,'+Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAA
   await pool.query(`INSERT INTO posts (user_id,body,image,image_w,image_h,to_main,created_at) VALUES ($1,'Radius probe',$2,600,400,true,now())`,[uid,PHOTO]);
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
   const errs=[]; const p=await b.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,hasTouch:true,isMobile:true});
+  /* SELF-TEST: `node radii.js --break` makes the profile circle a different size from the
+     other two. The three top-bar checks must go red on that, or they are asserting nothing. */
+  if (process.argv.includes('--break')) await p.addInitScript(() => {
+    addEventListener('DOMContentLoaded', () => {
+      const st = document.createElement('style');
+      st.textContent = '.tb-brand-act.prof{width:36px!important;height:36px!important}';
+      document.head.appendChild(st);
+    });
+  });
   p.on('pageerror',e=>errs.push(String(e).slice(0,160)));
   await p.goto('http://localhost:3262',{waitUntil:'domcontentloaded'});
   await p.evaluate(tk=>{localStorage.clear();localStorage.setItem('atwe_token',tk);localStorage.setItem('atwe_intro_seen',JSON.stringify(['beam','circles','ai','wallet']));},t);
@@ -113,13 +122,27 @@ const PHOTO='data:image/png;base64,'+Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAA
   ok(r.photo.r===inner, 'the photo turns on card − padding', 'photo '+r.photo.r+'  want '+inner);
   ok(r.pill.r===inner, 'the action pills too', 'pill '+r.pill.r+'  want '+inner+' (height '+r.pill.h+')');
   ok(r.avatar.r===inner, 'and the profile picture', 'avatar '+r.avatar.r+'  want '+inner);
-  /* The top bar's round buttons ride OVER the cards as the feed scrolls up under them —
-     that is the "+" in the owner's screenshot. They are 36px circles, so radius 18, which
-     is card − padding: the small shapes and the big ones are one system, related by the
-     same rule that keeps the inside of a card concentric with it. */
-  ok(r.plus && r.plus.r===inner, 'the top bar’s + turns on the same corner', r.plus?('+ '+r.plus.r+'  want '+inner):'not found');
-  ok(r.more && r.more.r===inner, 'so does the \u22ef', r.more?('\u22ef '+r.more.r):'not found');
-  ok(r.prof && r.prof.r===inner, 'and the profile button', r.prof?('profile '+r.prof.r):'not found');
+  /* THE TOP BAR'S ROUND BUTTONS ARE CHROME, NOT CARD CONTENTS — and this probe asserted
+     otherwise for a build. It demanded radius === card - padding, which was TRUE only by
+     coincidence of the old numbers: they were 36px circles, so radius 18, and the card's
+     inner radius happened to be 18 as well. Build 1858 took them to Apple's 44pt at the
+     founder's request, so their radius is 22 and this went red on correct code - the
+     seventh probe in this repo to outlive a decision it did not know about, and the first
+     where CLAUDE.md had ALREADY been corrected ("radii.js now only asks that the three
+     match each other") while the code had not.
+     They CANNOT be concentric with a card in any case: they sit on the same gutter as the
+     card's own edge, so the gap is zero and concentricity would demand a 78px button. What
+     must hold is that the three are one system and that each is a true circle - which is
+     right at any diameter, so raising or lowering the size can never make this stale again.
+     The 44 itself belongs to tabrow.js, which measures it against Apple's own. */
+  const circles = [['+', r.plus], ['\u22ef', r.more], ['profile', r.prof]].filter((c) => c[1]);
+  ok(circles.length === 3, 'all three top-bar circles are on screen', circles.length + ' of 3');
+  ok(circles.every((c) => Math.abs(c[1].r - c[1].h / 2) <= 0.6),
+    'each top-bar button is a true circle at whatever size it is',
+    circles.map((c) => c[0] + ' ' + c[1].r + ' of ' + c[1].h).join('  '));
+  ok(circles.length === 3 && circles.every((c) => c[1].r === circles[0][1].r),
+    'and the three turn on the same corner as each other',
+    circles.map((c) => c[0] + ' ' + c[1].r).join('  '));
   const e=r.edges;
   console.log('     card '+ (e?e.cardL+'..'+e.cardR:'?') + '   nav '+(e?e.navL+'..'+e.navR:'?')+'   + inset '+(e?e.fabGap:'?')+'   gutter '+(e?e.gut:'?'));
   /* They must NOT share a line. Build 1742 made the bar and the cards line up exactly and
