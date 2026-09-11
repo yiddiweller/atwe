@@ -2869,8 +2869,19 @@ body.light .tb-brand-word{filter:invert(1) brightness(.1);}
 /* All three top icons (⋯ · ＋ · profile) share the bottom-nav's exact material: the
    same dark tinted fill + the same thin white hairline border, so they read as one
    family with the nav. Identical box-sizing + size so all three are exactly equal. */
-.tb-brand-act.more,.tb-brand-act.plus,.tb-brand-act.prof{background:rgba(18,18,21,.90);border:1px solid rgba(255,255,255,.05);}
-body.light .tb-brand-act.more,body.light .tb-brand-act.plus,body.light .tb-brand-act.prof{background:rgba(255,255,255,.82);border-color:var(--b3);}
+/* THE HAIRLINE IS THE APP'S OWN --divider, AND THAT IS A CORRECTION. These three were
+   the last round-button family NOT on the --ctl-* recipe: they carried their own
+   `1px solid rgba(255,255,255,.05)`, which over this fill composites to about 29 — a
+   line you cannot see. The founder's reference measures its rim at rgb(57,57,57), and
+   --divider is #3A3A3C = rgb(58,58,60), i.e. the app already owned the right colour and
+   this family simply was not using it. The WIDTH stays 1px: at 3x the reference's rim
+   ramps over three device pixels, which is one CSS pixel.
+   IT MUST STAY A REAL `border`, NOT the recipe's inset box-shadow. `.prof` holds an
+   avatar at width:100%, and with `box-sizing:border-box` a border reserves its own ring
+   OUTSIDE the content box so the picture cannot cover it — an inset shadow is painted on
+   the padding box and the avatar would sit straight on top of it. */
+.tb-brand-act.more,.tb-brand-act.plus,.tb-brand-act.prof{background:var(--ctl-fill);border:1px solid var(--ctl-edge);}
+body.light .tb-brand-act.more,body.light .tb-brand-act.plus,body.light .tb-brand-act.prof{background:var(--ctl-fill);border-color:var(--ctl-edge);}
 .tb-brand-act.plus{color:var(--t1);}
 .tb-brand-act.plus svg{width:calc(var(--tb-brand-circle) * 0.52);height:calc(var(--tb-brand-circle) * 0.52);stroke-width:3.2;/* owner: a bolder + */}
 /* ⋯ menu — three dots, sitting to the LEFT of the "+". Opens the world's tools popover. */
@@ -5043,8 +5054,17 @@ body{
      flat glass now; the rim, the top highlight and the BLACK drop shadow still give the
      3-D, so nothing else about the button changes. --accent stays identity-only, which is
      the colour law's own sentence. */
-  --ctl-fill:    rgba(18,18,21,.90);
-  --ctl-fill-hv: rgba(34,34,38,.92);
+  /* MEASURED OFF THE FOUNDER'S REFERENCE BUTTON (a 44pt circle shot at 3x, so its 132px
+     diameter is the same 44 the top bar already uses). Its fill is a FLAT, perfectly
+     neutral rgb(24,24,24) on a black page, edge to edge, with no gradient anywhere.
+     Ours was rgba(18,18,21,.90), which renders 16,16,19 on black: seven points too dark
+     AND faintly blue, since 21 of blue against 18 of red is a tint you can see on a big
+     pill even though it is invisible on a 44pt circle. .90 over black needs 26.7 to land
+     on 24, so 27 it is, and all three channels are equal so the grey is a true grey.
+     It stays TRANSLUCENT + blurred on purpose: that is the glass the founder asked for
+     and it is what lets a photo show through as a hint of tone. */
+  --ctl-fill:    rgba(27,27,27,.90);
+  --ctl-fill-hv: rgba(40,40,40,.92);
   --ctl-ink:     var(--t1);
   --ctl-edge:    var(--divider);
   --ctl-hi:      rgba(255,255,255,.09);
@@ -22904,7 +22924,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1858'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1859'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
