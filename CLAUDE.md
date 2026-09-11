@@ -10643,6 +10643,18 @@ health check with three real outcomes must not have two buttons' worth of UI.**
 
 ## Gotchas for AI assistants
 
+- **PRODUCTION DEPLOYS FROM `main`, AND THE WORKING BRANCH IS NOT `main`. RUN
+  `./tools/shipcheck.sh` BEFORE TELLING ANYBODY A FIX HAS SHIPPED.** The two are kept in
+  step by **cherry-pick**, never by merging, so a clean 118-probe regression on the working
+  branch says **nothing whatever** about what a member is running. Builds **1846 to 1853**
+  were written, tested green, committed and pushed — and every one of them sat on the branch
+  while the founder's phone ran **1845**. They tested, correctly reported the same bugs
+  back, and were told the fixes were in. The tell was in their own screenshot: Atwe AI
+  answering **"Fetch is aborted"**, which is the string build 1851 deleted. **A shipped fix
+  that never reached production is not a shipped fix**, and "pushed" is not the same word as
+  "deployed". The workflow step exists and is written down ("cherry-pick to main, verify the
+  divergence markers, push main") — it was simply skipped eight builds running, because
+  every other signal (green tests, a clean push) said the work was done.
 - **A CALL WAITS ON ONE REQUEST BEFORE IT RINGS ANYBODY, AND THAT REQUEST HAD NO TIME
   LIMIT ON EITHER SIDE.** Every call — 1:1, group, a call link, Go Live — calls
   `callIceServers()` inside `callCreatePc()` before a byte of the invitation is sent;
