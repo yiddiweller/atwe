@@ -22845,7 +22845,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1851'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1852'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -23084,6 +23084,20 @@ const API = {
     c.signal.addEventListener('abort', done, { once: true });
     setTimeout(done, ms + 1000);
     return c.signal;
+  },
+  /* A HANDFUL OF PLACES CANNOT USE `req` AND MUST STILL NOT HANG. A download wants the
+     raw response, not parsed JSON: the data export, the CSV exports, a calendar file. Each
+     one disables its button and restores it in a `finally` — correct, and unreachable if
+     the fetch never settles, which is the same fault the founder reported as a frozen Post
+     button. `raw` is a plain fetch that carries the deadline and the bearer token, so those
+     screens recover instead of sitting on "Preparing..." for ever. */
+  raw(url, opts) {
+    const o = Object.assign({}, opts);
+    o.headers = Object.assign({}, o.headers);
+    const t = API.token();
+    if (t && !o.headers.Authorization) o.headers.Authorization = 'Bearer ' + t;
+    if (!o.signal) o.signal = API._deadline(o, null);
+    return fetch(url, o);
   },
   TIMEOUT_BASE_MS: 40000,      // a request carrying nothing
   TIMEOUT_MS_PER_KB: 40,       // ~25KB a second, i.e. a genuinely poor connection
@@ -28446,7 +28460,7 @@ async function acDownloadData() {
   const btn = document.getElementById('exportDataBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
   try {
-    const res = await fetch('/api/account/export', { headers: { Authorization: 'Bearer ' + API.token() } });
+    const res = await API.raw('/api/account/export');
     if (!res.ok) throw new Error('Export failed (' + res.status + ')');
     const blob = await res.blob();
     const a = document.createElement('a');
@@ -41246,7 +41260,8 @@ async function acToggleLike(btn, id) {
     acApplyReaction(id, 'like', cur + 1);
     if (!document.body.classList.contains('reduce-motion')) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); setTimeout(() => btn.classList.remove('pop'), 450); }
     acReactBurst(btn, '👍');
-    try { const r = await API.req('POST', '/api/social/posts/' + id + '/like', { reaction: 'like' }); acApplyReaction(id, r.reaction, r.likes); acReactSyncCache(id, r); }
+    /* A queued like carries no counts — the optimistic ones above are already right. */
+    try { const r = await API.req('POST', '/api/social/posts/' + id + '/like', { reaction: 'like' }); if (!(r && r.queued)) { acApplyReaction(id, r.reaction, r.likes); acReactSyncCache(id, r); } }
     catch { acApplyReaction(id, null, cur); }
   }
 }
@@ -45034,7 +45049,7 @@ async function acWalletCsv() {
   if (!(AC._walletTx || []).length) { showNotif('Nothing to export yet.'); return; }
   try {
     const headers = {}; const t = API.token(); if (t) headers.Authorization = 'Bearer ' + t;
-    const res = await fetch('/api/wallet/export', { headers });
+    const res = await API.raw('/api/wallet/export', { headers });
     if (!res.ok) throw new Error('Could not build your statement.');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -47867,7 +47882,7 @@ function _acRefreshMeStatus() { if (_appTab === 'profile' && !document.getElemen
 async function acEventIcs(id) {
   try {
     const headers = {}; const t = API.token(); if (t) headers.Authorization = 'Bearer ' + t;
-    const res = await fetch('/api/events/' + id + '/ics', { headers });
+    const res = await API.raw('/api/events/' + id + '/ics', { headers });
     if (!res.ok) throw new Error('Could not export the event.');
     const text = await res.text();
     const blob = new Blob([text], { type: 'text/calendar' });
@@ -48265,7 +48280,7 @@ function acSrSetDim(v) { acShopReport(null, v, null); }
 function acSrSetDays(v) { acShopReport(null, null, Number(v)); }
 async function acShopReportCsv() {
   try {
-    const res = await fetch('/api/shop/report.csv?metric=' + AC._srM + '&dimension=' + AC._srD + '&days=' + AC._srDays,
+    const res = await API.raw('/api/shop/report.csv?metric=' + AC._srM + '&dimension=' + AC._srD + '&days=' + AC._srDays,
       { headers: { Authorization: 'Bearer ' + S.token } });
     if (!res.ok) throw new Error('Could not build the report.');
     const blob = await res.blob(); const url = URL.createObjectURL(blob);
@@ -48335,7 +48350,7 @@ function acOpenSell() { requireSectionUnlock('storefront', () => { showOverlay('
 async function acExportListingsCsv() {
   try {
     const headers = {}; const t = API.token(); if (t) headers.Authorization = 'Bearer ' + t;
-    const res = await fetch('/api/my-listings/export', { headers });
+    const res = await API.raw('/api/my-listings/export', { headers });
     if (!res.ok) throw new Error('Could not export your listings.');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -50485,7 +50500,7 @@ async function acClearHistory() {
 // A seller's own sales as a spreadsheet — what an accountant asks for.
 async function acExportSales(days) {
   try {
-    const r = await fetch('/api/shop/export?days=' + (days || 90), { headers: { Authorization: 'Bearer ' + S.token } });
+    const r = await API.raw('/api/shop/export?days=' + (days || 90));
     if (!r.ok) throw new Error('Could not build the export.');
     const blob = await r.blob();
     const a = document.createElement('a');
@@ -54305,7 +54320,7 @@ async function acLoadAppointments() {
 async function acApptIcs(id) {
   try {
     const headers = {}; const t = API.token(); if (t) headers.Authorization = 'Bearer ' + t;
-    const res = await fetch('/api/appointments/' + id + '/ics', { headers });
+    const res = await API.raw('/api/appointments/' + id + '/ics', { headers });
     if (!res.ok) throw new Error('Could not export the appointment.');
     const blob = new Blob([await res.text()], { type: 'text/calendar' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'atwe-appointment-' + id + '.ics';
@@ -58091,10 +58106,14 @@ async function rtConnect() {
       acApplyPresence();
     } catch {}
   });
+  /* A THROW IN HERE USED TO SWALLOW THE RING ITSELF. This is the only path an
+     incoming call arrives by, so a failure anywhere in it means the phone simply
+     never rings and nobody ever learns why. It is reported now, like any other
+     fault in the app. */
   rtSource.addEventListener('call', e => { try { const d = JSON.parse(e.data);
     if (d && d.kind === 'recording') acOnRecordingNotice(d);
     else if (d && d.kind === 'caption') acOnCaption(d);
-    else callOnSignal(d); } catch {} });
+    else callOnSignal(d); } catch (err) { try { _reportError('call-signal: ' + ((err && err.message) || err), 'rt'); } catch (e2) {} } });
   rtSource.addEventListener('group-call', e => { try { const d = JSON.parse(e.data);
     if (d && d.kind === 'breakout') acOnBreakout(d);
     else if (d && d.kind === 'breakout-moved') acOnBreakoutMoved(d);
@@ -59639,13 +59658,31 @@ async function callIceServers() {
   // session-long cache would hand out dead relay creds and calls would stop
   // connecting after the first hour. 5-minute freshness keeps them valid.
   if (_iceServers && (Date.now() - _iceServersAt) < 300000) return _iceServers;
-  try { _iceServers = (await API.req('GET', '/api/rt/ice-servers')).iceServers; _iceServersAt = Date.now(); }
+  /* SIX SECONDS, NOT THE APP'S NORMAL ALLOWANCE. Every call waits here before its
+     offer is sent, so a slow answer does not delay a call - it CANCELS it, because
+     the person being called never hears anything at all. Relay credentials only
+     improve a call's odds on a hard network; plain STUN below still connects most
+     calls, so giving up early and ringing is strictly better than waiting. */
+  try { _iceServers = (await API.req('GET', '/api/rt/ice-servers', undefined, { timeout: 6000 })).iceServers; _iceServersAt = Date.now(); }
   catch { if (_iceServers) return _iceServers; _iceServers = [{ urls: 'stun:stun.l.google.com:19302' }]; _iceServersAt = Date.now(); }
   return _iceServers;
 }
+/* THE OFFER AND THE ANSWER ARE THE CALL; ICE AND END ARE HOUSEKEEPING. This used
+   to swallow every failure alike, so a refusal the server explained in words - "this
+   person isn't accepting calls from you" - reached the caller as 45 seconds of
+   ringing and then "No answer", which is indistinguishable from being ignored. A
+   lost ICE candidate is genuinely worth nothing (they are re-sent, and the SDP
+   already carries the full set), so those stay quiet. */
 function callSignal(kind, extra) {
   if (!CALL) return;
-  API.req('POST', '/api/rt/call', Object.assign({ to: CALL.peer.id, kind, callId: CALL.callId, media: CALL.media }, extra || {})).catch(() => {});
+  const vital = kind === 'offer' || kind === 'answer';
+  const req = API.req('POST', '/api/rt/call', Object.assign({ to: CALL.peer.id, kind, callId: CALL.callId, media: CALL.media }, extra || {}), { noQueue: true });
+  if (!vital) { req.catch(() => {}); return; }
+  req.catch((e) => {
+    if (!CALL) return;
+    showNotif((e && e.message) || 'Could not reach them. Please try again.');
+    callCleanup();
+  });
 }
 async function callCreatePc() {
   const pc = new RTCPeerConnection({ iceServers: await callIceServers() });
@@ -59681,9 +59718,9 @@ async function callCreatePc() {
     }
   };
   // Give up gracefully if the call never connects (no answer / network blocked).
-  CALL._connTimeout = setTimeout(() => {
-    if (CALL && CALL.state !== 'connected') { showNotif('No answer.'); callCleanup(); }
-  }, 45000);
+  // Armed by callArmGiveUp, which the caller already ran before any of this could
+  // stall; this covers the answering side, and never doubles up.
+  callArmGiveUp();
 }
 // Re-negotiate ICE on a failed connection (caller side). Gives up after a couple
 // of attempts so a truly dead path still ends cleanly.
@@ -60103,18 +60140,56 @@ async function startCall(media, peerOverride) {
   callPrimeRemote(); // iOS: unlock the remote element within this tap so its audio can play later
   CALL = { peer: { ...peer }, media, callId: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), caller: true, state: 'outgoing', pendingIce: [] };
   callShowUI('calling');
-  try { CALL.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: media === 'video' }); }
-  catch { showNotif('Camera/microphone permission is needed to call.'); callCleanup(); return; }
+  /* THE GIVE-UP TIMER IS ARMED HERE, BEFORE ANYTHING CAN GO WRONG. It used to be
+     set at the END of callCreatePc, so anything that stalled on the way there left
+     the screen reading "Calling..." with no timer and no way out. */
+  callArmGiveUp();
+  try {
+    CALL.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: media === 'video' });
+  } catch (e) {
+    showNotif(callMediaError(e, media));
+    callCleanup(); return;
+  }
   if (!CALL) return; // hung up while awaiting permission
-  await callCreatePc();
-  CALL.localStream.getTracks().forEach(t => CALL.pc.addTrack(t, CALL.localStream));
-  callAttachLocal();
-  const offer = await CALL.pc.createOffer();
-  await CALL.pc.setLocalDescription(offer);
-  await callWaitIceGathering(CALL.pc); // bundle ICE into the SDP so an SSE drop can't lose it
-  if (!CALL || !CALL.pc) return;      // hung up while gathering
-  callSignal('offer', { sdp: JSON.stringify(CALL.pc.localDescription), media });
-  CALL.signaled = true; // reached the ringing stage — worth logging
+  /* EVERY STEP FROM HERE CAN THROW, AND A THROW USED TO FREEZE THE SCREEN. There was
+     no catch past getUserMedia, so a failure in the connection setup left the caller
+     looking at "Calling..." for ever with nothing sent and no error shown. */
+  try {
+    await callCreatePc();
+    CALL.localStream.getTracks().forEach(t => CALL.pc.addTrack(t, CALL.localStream));
+    callAttachLocal();
+    const offer = await CALL.pc.createOffer();
+    await CALL.pc.setLocalDescription(offer);
+    await callWaitIceGathering(CALL.pc); // bundle ICE into the SDP so an SSE drop can't lose it
+    if (!CALL || !CALL.pc) return;      // hung up while gathering
+    callSignal('offer', { sdp: JSON.stringify(CALL.pc.localDescription), media });
+    CALL.signaled = true; // reached the ringing stage — worth logging
+  } catch (e) {
+    showNotif('Could not start the call. Please try again.');
+    callCleanup();
+  }
+}
+/* One place that decides how long a call may go unanswered, so the caller is never
+   left watching a screen that will not change. Re-armed rather than duplicated if
+   callCreatePc runs after it. */
+function callArmGiveUp() {
+  if (!CALL || CALL._connTimeout) return;
+  CALL._connTimeout = setTimeout(() => {
+    if (CALL && CALL.state !== 'connected') { showNotif('No answer.'); callCleanup(); }
+  }, 45000);
+}
+/* A refused microphone and a missing one are different problems with different fixes,
+   and "permission is needed" is wrong advice for half of them. */
+function callMediaError(e, media) {
+  const n = (e && e.name) || '';
+  if (n === 'NotAllowedError' || n === 'SecurityError') {
+    return media === 'video' ? 'Atwe needs permission to use your camera and microphone.' : 'Atwe needs permission to use your microphone.';
+  }
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') {
+    return media === 'video' ? 'No camera was found on this device.' : 'No microphone was found on this device.';
+  }
+  if (n === 'NotReadableError') return 'Your microphone is already in use by another app.';
+  return 'Could not use your microphone. Check it is connected and allowed.';
 }
 function callOnSignal(d) {
   if (d.kind === 'offer') {
@@ -60164,21 +60239,35 @@ async function callOnRenegotiate(d) {
 }
 async function callAccept() {
   if (!CALL || CALL.caller) return;
+  if (CALL._accepting) return;        // a second tap on Answer must not run this twice
+  CALL._accepting = true;
   callPrimeRemote(); // iOS: unlock the remote element within the answer tap
-  try { CALL.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: CALL.media === 'video' }); }
-  catch { showNotif('Camera/microphone permission is needed.'); callDecline(); return; }
+  try {
+    CALL.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: CALL.media === 'video' });
+  } catch (e) {
+    showNotif(callMediaError(e, CALL.media)); callDecline(); return;
+  }
   if (!CALL) return;
-  await callCreatePc();
-  CALL.localStream.getTracks().forEach(t => CALL.pc.addTrack(t, CALL.localStream));
-  callAttachLocal();
-  await CALL.pc.setRemoteDescription(JSON.parse(CALL.offer));
-  callFlushIce();
-  const ans = await CALL.pc.createAnswer();
-  await CALL.pc.setLocalDescription(ans);
-  await callWaitIceGathering(CALL.pc); // bundle ICE into the SDP so an SSE drop can't lose it
-  if (!CALL || !CALL.pc) return;      // hung up while gathering
-  callSignal('answer', { sdp: JSON.stringify(CALL.pc.localDescription) });
-  CALL.state = 'connected'; CALL.connectedAt = Date.now(); callShowUI('connected');
+  /* ANSWERING HAD NO CATCH AT ALL, which is what "they can't pick up" was: any throw
+     in here - a connection that would not build, an offer that would not parse - left
+     the incoming-call screen on display with its buttons doing nothing at all and no
+     way out but reloading the app. Now a failure says so and clears the screen. */
+  try {
+    await callCreatePc();
+    CALL.localStream.getTracks().forEach(t => CALL.pc.addTrack(t, CALL.localStream));
+    callAttachLocal();
+    await CALL.pc.setRemoteDescription(JSON.parse(CALL.offer));
+    callFlushIce();
+    const ans = await CALL.pc.createAnswer();
+    await CALL.pc.setLocalDescription(ans);
+    await callWaitIceGathering(CALL.pc); // bundle ICE into the SDP so an SSE drop can't lose it
+    if (!CALL || !CALL.pc) return;      // hung up while gathering
+    callSignal('answer', { sdp: JSON.stringify(CALL.pc.localDescription) });
+    CALL.state = 'connected'; CALL.connectedAt = Date.now(); callShowUI('connected');
+  } catch (e) {
+    showNotif('Could not join the call. Please try again.');
+    callCleanup();
+  }
 }
 // Persist a finished call to the recent-calls history (best-effort).
 function callLog() {
@@ -63699,7 +63788,14 @@ async function acSendOne(tmp) {
   // accident and quietly swallow a message someone was waiting for.
   if (AC._silentMode) payload.silent = true;
   try {
-    const { message } = await API.req('POST', url, payload);
+    const sent = await API.req('POST', url, payload);
+    /* THE CONNECTION STALLED, SO THIS WENT TO THE OUTBOX. There is no message to swap in
+       yet, and reading one off the answer throws — which lands in the catch below, marks
+       the bubble FAILED and tells the member it could not send, about a message that is
+       safely saved and will leave with the next good connection. The bubble stays
+       pending, which is exactly what it is. */
+    if (sent && sent.queued) { acRenderThread(); return; }
+    const { message } = sent;
     const i = AC.messages.indexOf(tmp);
     if (i !== -1) {
       // Pre-mark the real id as already painted so the temp→real swap doesn't
@@ -68866,7 +68962,7 @@ async function acRecDelete(id) {
 /* ─── Getting your records out ─── */
 async function acExportCsv(path, filename) {
   try {
-    const r = await fetch(path, { headers: { Authorization: 'Bearer ' + S.token } });
+    const r = await API.raw(path);
     if (!r.ok) throw new Error('Could not export that.');
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);

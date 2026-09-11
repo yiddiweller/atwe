@@ -50,6 +50,7 @@ async function sendNative(token, payload) {
     badge: typeof payload.badge === 'number' ? payload.badge : undefined,
   };
   const r = await fetch('https://exp.host/--/api/v2/push/send', {
+    signal: AbortSignal.timeout(10000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body),

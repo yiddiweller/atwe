@@ -1364,12 +1364,43 @@ function notify(msg){
   clearTimeout(n._t); n._t = setTimeout(() => n.classList.remove('show'), 2600);
 }
 
+/* A REQUEST NEEDS A DEADLINE OR A STALLED CONNECTION FREEZES THE SCREEN. `fetch` does
+   not reject when a signal dies mid-request: it stays pending, with no error and no
+   event, so every `catch` and `finally` behind it is unreachable and a button that
+   says "Saving..." says it for ever. The app hit exactly this and it reached a member;
+   staff open this dashboard on a phone too, and this is where money and moderation
+   live. The allowance is a floor plus time bought by the payload, capped, matching the
+   app's own rule so the two cannot drift into different answers. */
+const API_TIMEOUT_BASE_MS = 40000, API_TIMEOUT_MS_PER_KB = 40, API_TIMEOUT_MAX_MS = 240000;
+function apiDeadline(bytes){
+  if (typeof AbortController === 'undefined') return undefined;
+  const ms = Math.min(API_TIMEOUT_BASE_MS + Math.round((bytes||0)/1024) * API_TIMEOUT_MS_PER_KB, API_TIMEOUT_MAX_MS);
+  const c = new AbortController();
+  const t = setTimeout(() => { try { c.abort(); } catch(e){} }, ms);
+  c.signal.addEventListener('abort', () => clearTimeout(t), { once: true });
+  setTimeout(() => clearTimeout(t), ms + 1000);
+  return c.signal;
+}
 async function api(method, path, body){
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const payload = body !== undefined ? JSON.stringify(body) : undefined;
+  let res;
+  try {
+    res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: payload,
+      signal: apiDeadline(payload ? payload.length : 0),
+    });
+  } catch (netErr) {
+    /* Our own deadline, said in words a staffer can act on. The browser's own wording
+       for an abort reads as something they did wrong. */
+    if (netErr && netErr.name === 'AbortError') {
+      const t2 = new Error('The connection stalled, so this did not go through. Nothing was changed, please try again.');
+      t2.status = 0; t2.timedOut = true;
+      throw t2;
+    }
+    throw netErr;
+  }
   let data = {};
   try { data = await res.json(); } catch (e) {}
   if (!res.ok) {

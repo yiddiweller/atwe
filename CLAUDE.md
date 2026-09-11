@@ -10643,6 +10643,45 @@ health check with three real outcomes must not have two buttons' worth of UI.**
 
 ## Gotchas for AI assistants
 
+- **A CALL WAITS ON ONE REQUEST BEFORE IT RINGS ANYBODY, AND THAT REQUEST HAD NO TIME
+  LIMIT ON EITHER SIDE.** Every call — 1:1, group, a call link, Go Live — calls
+  `callIceServers()` inside `callCreatePc()` before a byte of the invitation is sent;
+  behind it `/api/rt/ice-servers` calls Cloudflare, and **Node's `fetch` has no timeout**.
+  So a slow or unreachable Cloudflare did not delay a call, it **cancelled it silently**:
+  the caller watched "Calling…" and the offer was never sent, so the other phone never made
+  a sound. The founder reported it as *"calls and video calls nothing work at all… the other
+  person doesn't even get a call"*. Fixed at both ends — `CF_TURN_TIMEOUT_MS` (4s) on the
+  server, `{ timeout: 6000 }` on the client — and **the client's 6s is deliberately far
+  below the app's normal allowance**: relay credentials only improve a call's odds on a hard
+  network, plain STUN connects most calls, so ringing without them always beats waiting.
+  One fix at `callIceServers` covers all six call surfaces because all six wait there.
+- **`startCall` and `callAccept` had no `catch` past `getUserMedia`, and that is what "they
+  can't pick up" was.** Any throw in the connection setup left the incoming-call screen on
+  display with its buttons dead and no way out but reloading. Both are wrapped now, and
+  **the caller's give-up timer is armed by `callArmGiveUp()` BEFORE anything can stall** —
+  it used to be set at the END of `callCreatePc`, i.e. after the very step that hung.
+- **`callSignal` swallowed every failure alike, including the offer's.** A refusal the
+  server explained in words ("this person isn't accepting calls from you") reached the
+  caller as 45 seconds of ringing then "No answer" — indistinguishable from being ignored.
+  The offer and the answer surface their error and end the call; ICE stays quiet, since
+  candidates are re-sent and the SDP already carries the full set.
+- **THE REAL LESSON: `twoperson.js` drives a genuine two-browser call and passes, and every
+  one of these was live the whole time.** A happy-path call never takes any of these paths.
+  `scratchpad/callpath.js` drives the three that were broken — the credential request
+  stalls, the server refuses, the pick-up throws — and **self-tests by removing the deadline
+  in the page**, where the same stall sends nothing at all. **A probe that only drives the
+  path that works cannot tell you the feature works.**
+- **AND THE PROBE MISTAKE THAT NEARLY SHIPPED A FALSE DIAGNOSIS.** The first reproduction
+  read `peerId` off `/api/atchat/conversations`, where the field is plain **`id`**. It got
+  null, `startCall` returned at its own first line, and the "Calling…" it then measured was
+  the **placeholder text sitting in the hidden markup** — so it "reproduced" a frozen call
+  on a call that had never started, and reported the identical result before AND after the
+  fix. Assert on something the call actually DID (did the invitation reach the server), never
+  on text that exists whether or not anything happened. Sixth time this repo has recorded a
+  check confidently measuring the wrong subject.
+- **A TOAST FADES, so reading the screen once several seconds later finds an empty page and
+  calls a working message missing.** `callpath.js` wraps `showNotif` and records what was
+  said. Same shape as the stale-`_toastStack` trap in `toastpolish.js`.
 - **`fetch` DOES NOT REJECT WHEN A PHONE LOSES SIGNAL MID-REQUEST — it stays PENDING, so
   every shared request needs a deadline or every `catch` and `finally` behind it is
   unreachable.** A lift, a tunnel, a 5G-to-LTE handover produces no error and no event; the
