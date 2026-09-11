@@ -6754,6 +6754,95 @@ followed you"), so 40 seeded `follow` rows collapse to ONE row and there is noth
 scroll — which makes the retraction look broken when it is fine. Seed varied types AND
 distinct actors.
 
+### THE TAB ROW IS APPLE FITNESS+'S, MEASURED — and it is there before the page is
+
+Two asks from the founder's design team, guarded together because they are the same row.
+
+**1. THE SIZE AND THE SPACES.** They sent Apple Fitness+'s own top row as the reference and
+asked to copy it exactly. Both screenshots are a 375pt iPhone at 3x, so every number is a
+measurement divided by 3, not an estimate:
+
+| | Apple Fitness+ | Atwe before |
+|---|---|---|
+| pill height | 132px = **44.0pt** | 96px = **32.0pt** |
+| padding each side | 50px = **16.7pt** | 48px = **16.0pt** |
+| gap between pills | 30px = **10.0pt** | 24px = **8.0pt** |
+| clearance below the row | 45px = **15.0pt** | **~9.0pt** |
+| left margin | 48px = 16.0pt | 42px = 14.0pt |
+
+**HEIGHT IS THE ONE THAT WAS ACTUALLY WRONG**, and it is worth saying why: the side padding
+was already within a third of a point, so *"too close to each other"* was never the
+horizontal spacing. It was 32pt pills with 8pt between them, which reads as a crowded strip
+rather than a row of buttons. **Apple's 44pt is also exactly the touch minimum**, so at this
+height the target is REAL rather than simulated by the invisible `::after` the 44pt block
+still draws round it (that overlay is `width/height:100%` with a 44 floor, so at 44 it lands
+on the control itself and steals nothing from its neighbour).
+
+**THE LEFT MARGIN IS DELIBERATELY LEFT AT 14, NOT MOVED TO APPLE'S 16.** It is
+`--feed-gutter`, shared with the post cards, the profile banner, the Account page and the
+story tray. Moving it for the tabs alone would stop them lining up with the cards directly
+beneath them, which is a worse fault than 2pt; moving it globally is a much bigger change,
+and 14 was the founder's own decision in build 1744. `tabrow.js` asserts the row starts on
+**the gutter**, never on the literal 14.
+
+**Everything is in `--tabpill-py` / `--tabpill-px` / `--tabpill-gap` / `--tabpill-below` on
+`:root`**, and the height is expressed as PADDING because the line box is pinned at 18px
+(13 + 18 + 13 = 44) — so a badge or an icon inside a tab can never change it.
+
+**SIX RULES SET THAT PADDING AND THE WINNER WAS NOT THE OBVIOUS ONE.** Changing the base
+`.tb-feedtab:not(.tb-feedtab-add)` moved nothing: `.topbar.tb-solo.tb-home .tb-feedtab…,
+.topbar.tb-solo.tb-chat .tb-feedtab…` at (0,4,0) outranks everything, and its padding sits
+on the THIRD line of the rule so a grep for `tb-feedtab` on the same line as `padding:`
+misses it. **Ask the browser which rule wins** (walk `document.styleSheets` and
+`el.matches(r.selectorText)`) rather than reading the file. Engine was missing from that
+selector entirely and only matched a (0,3,0) rule inside the phone media query — it is in
+the list now, so the four worlds cannot drift on a single stray edit.
+
+**A PINNED `line-height` DOES NOT HOLD ON ITS OWN, and this repo has now recorded that
+twice.** The Beam unread badge is an 18px `inline-flex` carrying `vertical-align:middle`,
+which lifts it half an x-height OUT of the 18px line box — so "Chats 78" measured **45.03**
+against every other tab's 44, and the row twitched by a pixel as messages arrived and
+cleared. The pill is `display:inline-flex;align-items:center` now: text and badge are flex
+items, centred against each other, and the height is padding plus the taller of the two,
+full stop. Safe because the markup has **no whitespace** between them (`Chats<span…>`), so
+nothing is lost by leaving inline layout; the badge's own margin still supplies the gap.
+
+**2. THE ROW IS ON SCREEN BEFORE THE CONTENT IS.** The founder: *"by notification page the
+menu options only load together with the main page… it should match all the other pages."*
+Home, Beam and Engine draw their row from STATIC markup in the top bar (`#tbFeedTabs` /
+`#tbChatTabs`), so it paints with the header and only the middle of the screen waits.
+Notifications built its row **inside `acRenderNotifList`**, i.e. inside the very element
+that `openNotifications` replaces with a skeleton — so the pills did not exist until the
+fetch returned, two or three seconds later on a phone.
+
+It also **DERIVED which tabs to show from the loaded rows** ("only offer a tab that would
+show something"), so there was nothing to draw before the data arrived even in principle.
+That rule is gone: `acNotifTabsHtml()` renders all four always, the way Home shows Circles
+whether or not you are in one, and it is called TWICE on every open — once beside the
+skeleton, once with the real rows — with identical html, so nothing moves when the list
+lands. A tab with nothing behind it says so when you tap it. `AC._notifTab` is reset
+**before** the first paint, not after the fetch, or the pills would open on a stale tab.
+
+**Guarded by `scratchpad/tabrow.js`** (76 checks, both themes, all four worlds): Apple's
+height, padding and gap; still a true capsule; 44 in both axes; the row starts on the
+gutter; exactly one tab selected; Apple's clearance below; all four identical to each other;
+and the pills on screen within a few hundred ms while the list below is still a skeleton,
+**a second and a half before the notifications themselves land**. Self-tested with
+`--break`, which puts the old padding and the old build-after-the-fetch behaviour back and
+goes 27 red.
+
+**Two of its own bugs, both of which failed on correct code.** `getComputedStyle` reports a
+border-radius's **DECLARED** value, not the clamped one, so a `9999px` capsule reads as 9999
+and "radius equals half the height" fails on a perfectly round pill — assert it is **at
+least** half. And the clearance below the row is not on the scroller's own box
+(`.tb-feedtabs` has no bottom padding; the `.tb-tabrow` around it carries it), so measure
+the gap to the first thing a person actually reads.
+
+**AND THE INSTANT-RENDER CHECK IS WORTHLESS WITHOUT A THROTTLE.** Against a server on the
+same machine the rows arrive within a frame or two, so the broken build and the fixed one
+measure identically. `tabrow.js` holds `/api/notifications` for 2.5s the way a phone on
+mobile data does; measured, the pills land at **203ms** and the rows at **2611ms**.
+
 ### The desktop right rail answers in place
 
 The rail's search used to be a button that threw you onto Engine, and "Show more" under
