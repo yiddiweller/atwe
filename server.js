@@ -119,6 +119,20 @@ const AI_MODEL_CHOICES = [
   { id: 'claude-haiku-4-5-20251001', label: 'Atwe Fast', help: 'Cheapest and fastest. Best for short tasks.' },
 ];
 const AI_MODEL_IDS = AI_MODEL_CHOICES.map((m) => m.id);
+
+/* THE LAST-RESORT 500, AND WHY IT NOW CARRIES A REFERENCE.
+   185 routes ended in the same sentence, so a member saying "it said something went
+   wrong" was untraceable: there was no way to tell which of 185 places they were
+   standing in, and the only record was an unlabelled stack in the log. `fault()`
+   stamps a short reference, prints it beside that stack, and hands the same
+   reference to the member -- so one sentence from them names the exact failure.
+   The WORDING stays honest: at this point the server genuinely does not know what
+   broke, and inventing a specific reason would be worse than admitting it. */
+function fault(res, where) {
+  const ref = Math.random().toString(36).slice(2, 8).toUpperCase();
+  try { console.error('FAULT ' + ref + (where ? ' at ' + where : '')); } catch (e) {}
+  return res.status(500).json({ error: 'Something went wrong on our side. If it keeps happening, quote reference ' + ref + '.', ref });
+}
 let _aiModels = { smart: null, fast: null, smartFallback: null, fastFallback: null, failover: true };
 function normalizeAiModels(v) {
   const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
@@ -1357,7 +1371,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     // reprocess would double-credit); we sacrifice the trailing side-effect
     // instead of the money invariant.
     if (!moneyMoved) await db.query('DELETE FROM processed_stripe_events WHERE event_id = $1', [event.id]).catch(() => {});
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -5771,7 +5785,7 @@ async function sendProWelcomeEmail(user) {
       `The Atwe team`,
     html: mailer.brand({
       preheader: 'Your upgrade to Atwe Pro is complete.',
-      heading: 'You’re on Atwe Pro 🎉',
+      heading: 'You’re on Atwe Pro',
       intro: `Thanks for upgrading, ${safeName(user.name)}! Your Atwe Pro features are now active.`,
       bodyHtml: 'You now get longer, more in-depth AI responses and priority performance.',
       button: { text: 'Open Atwe', url: link },
@@ -5924,7 +5938,7 @@ app.post('/api/auth/exists', rateLimit(20, 60000, 'exists'), async (req, res) =>
     res.json({ exists: rowCount > 0, reserved });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -5984,7 +5998,7 @@ app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), requireFeature('sig
     res.json({ pending: true, email });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -6040,7 +6054,7 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
     res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -6087,7 +6101,7 @@ app.post('/api/auth/signup/start', rateLimit(10, 60000, 'signup-start'), async (
     try { await sendSignupCode(email, '', code); }
     catch (e) { console.error('SIGNUP BLOCKED: sending the code failed:', e.message); return mailOutage(res); }
     res.json({ ok: true, email: maskEmail(email) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Step 2: check the emailed code without consuming it (counts attempts).
@@ -6105,7 +6119,7 @@ app.post('/api/auth/signup/check', rateLimit(20, 60000, 'signup-check'), async (
       return res.status(400).json({ error: 'That code is incorrect. Please try again.' });
     }
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Auto-join a user to the official industry circles matching the categories they
@@ -6175,7 +6189,7 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'That username or email is already taken.' });
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -6241,7 +6255,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
     res.json({ token, user: publicUser(user) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -6436,7 +6450,7 @@ app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
     res.json({ user: publicUser(rows[0]) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -6744,7 +6758,7 @@ app.delete('/api/auth/sessions', auth.requireAuth, async (req, res) => {
     auth.sessionInvalidateAll();
     rtKickUser(req.user.id); // close live streams too, not just block future API calls
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // X-style verification: apply for the verified badge. Requires eligibility
@@ -6766,7 +6780,7 @@ app.post('/api/verification/apply', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, verification: { ...st, pending: true } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7015,7 +7029,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'That username is already taken.' });
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7059,7 +7073,7 @@ app.delete('/api/auth/me/history', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7076,7 +7090,7 @@ app.post('/api/auth/verify-password', auth.requireAuth, rateLimit(10, 60000), as
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7102,7 +7116,7 @@ app.delete('/api/auth/me', auth.requireAuth, blockImpersonation, rateLimit(10, 6
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7155,7 +7169,7 @@ app.post('/api/auth/verify', rateLimit(30, 60000), async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7176,7 +7190,7 @@ app.post('/api/auth/resend-verification', auth.requireAuth, async (req, res) => 
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7412,7 +7426,7 @@ app.post('/api/auth/reset', rateLimit(15, 60000), async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7437,7 +7451,7 @@ app.post('/api/auth/reset/send', rateLimit(6, 60000, 'reset-send'), async (req, 
     res.json({ ok: true, email: user ? maskEmail(user.email) : null });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7455,7 +7469,7 @@ app.post('/api/auth/reset/check', rateLimit(12, 60000, 'reset-check'), async (re
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7485,7 +7499,7 @@ app.post('/api/auth/reset/confirm', rateLimit(12, 60000, 'reset-confirm'), async
     res.json({ token: await issueSession(u, req), user: publicUser(u) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7501,7 +7515,7 @@ app.get('/api/projects', auth.requireAuth, async (req, res) => {
     res.json({ projects: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7519,7 +7533,7 @@ app.put('/api/projects/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7532,7 +7546,7 @@ app.delete('/api/projects/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7549,7 +7563,7 @@ app.get('/api/chats', auth.requireAuth, async (req, res) => {
     res.json({ chats: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7572,7 +7586,7 @@ app.put('/api/chats/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7585,7 +7599,7 @@ app.delete('/api/chats/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7595,7 +7609,7 @@ app.delete('/api/chats', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7617,7 +7631,7 @@ app.get('/api/messages', auth.requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7632,7 +7646,7 @@ app.post('/api/messages/read', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7653,7 +7667,7 @@ app.post('/api/messages', auth.requireAuth, rateLimit(20, 60000), async (req, re
     res.json({ message: { ...rows[0], image: rows[0].image || null } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7693,7 +7707,7 @@ app.get('/api/atchat/search', auth.requireAuth, rateLimit(60, 60000, 'atchat-sea
     res.json({ users: rows.map(r => ({ ...r, categories: Array.isArray(r.categories) ? r.categories : [] })) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -7973,11 +7987,11 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
       ...r, avatar: mediaRef(r.avatar, 'avatar', r.id),
       // A secret message has no readable body here and never will, so the list
       // says what it honestly is rather than showing an empty row.
-      last_body: r.last_secret ? '🔒 Secret message' : r.last_body,
+      last_body: r.last_secret ? 'Secret message' : r.last_body,
     })) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -8440,7 +8454,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -8633,7 +8647,7 @@ async function flushCartRecovery() {
       if (!(await dmAllowed(seller, customer))) continue;
       const bname = (await db.query('SELECT name FROM users WHERE id = $1', [seller])).rows[0];
       const meta = { t: 'cartrecovery', businessId: seller, count, totalCents, image: firstImg, name: firstName, more: Math.max(0, lines.filter((l) => !cartLineState(l).soldOut).length - 1) };
-      const body = `Still thinking it over? Your cart at ${(bname && bname.name) || 'our shop'} is waiting. Complete your checkout whenever you're ready. 🛍️`;
+      const body = `Still thinking it over? Your cart at ${(bname && bname.name) || 'our shop'} is waiting. Complete your checkout whenever you're ready.`;
       const m = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`, [seller, customer, body, JSON.stringify(meta)]);
       const msg = { id: m.rows[0].id, body, image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta, viewOnce: false, threadId: null, secret: false, mine: false };
       rtPush(customer, 'msg', { kind: 'dm', peerId: seller, message: msg });
@@ -8705,7 +8719,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 6
     try {
       const acct = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
       if (!acct || acct.account_type !== 'business') return res.status(403).json({ error: 'Quick buttons are a business-account tool.' });
-    } catch (e) { return res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+    } catch (e) { return fault(res); }
   }
   let replyTo = Number.isInteger(req.body.replyTo) ? req.body.replyTo : null;
   const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
@@ -8757,7 +8771,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 6
     if (!r) { // conflict (duplicate resend) — return the message we already stored
       const ex = await db.query(`SELECT ${COLS} FROM at_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId]);
       r = ex.rows[0];
-      if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+      if (!r) return fault(res);
     }
     const msg = mediaRefMsg({ id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, duration_sec: r.duration_sec || null, image_w: r.image_w || null, image_h: r.image_h || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once, threadId: r.thread_id || null, secret: !!r.secret }, 'dm');
     if (isNew) {
@@ -8799,7 +8813,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 6
     res.json({ message: { ...msg, mine: true } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -10618,7 +10632,7 @@ app.post('/api/atchat/sticker', auth.requireAuth, rateLimit(60, 60000, 'sticker-
       );
       let r = ins.rows[0];
       const isNew = !!r;
-      if (!r) { r = (await db.query(`SELECT ${GCOLS} FROM at_group_messages WHERE group_id = $1 AND sender_id = $2 AND client_id = $3`, [groupId, req.user.id, clientId])).rows[0]; if (!r) return res.status(500).json({ error: 'Something went wrong.' }); }
+      if (!r) { r = (await db.query(`SELECT ${GCOLS} FROM at_group_messages WHERE group_id = $1 AND sender_id = $2 AND client_id = $3`, [groupId, req.user.id, clientId])).rows[0]; if (!r) return fault(res); }
       const base = {
         id: r.id, body: r.body, image: null, images: [], media: null, media_kind: null, media_name: null,
         created_at: r.created_at, forwarded: false, meta: r.meta || null, reply_to: null, reactions: {}, edited: false,
@@ -10641,7 +10655,7 @@ app.post('/api/atchat/sticker', auth.requireAuth, rateLimit(60, 60000, 'sticker-
     );
     let r = ins.rows[0];
     const isNew = !!r;
-    if (!r) { r = (await db.query(`SELECT ${COLS} FROM at_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId])).rows[0]; if (!r) return res.status(500).json({ error: 'Something went wrong.' }); }
+    if (!r) { r = (await db.query(`SELECT ${COLS} FROM at_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId])).rows[0]; if (!r) return fault(res); }
     const msg = { id: r.id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: r.created_at, reply_to: null, forwarded: false, meta: r.meta || null, viewOnce: false, threadId: r.thread_id || null, secret: false };
     if (isNew) {
       rtPush(to, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
@@ -10944,7 +10958,7 @@ app.post('/api/atchat/request/:id', auth.requireAuth, rateLimit(20, 60000, 'chat
     res.json({ ok: true, status: 'pending' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -10990,7 +11004,7 @@ app.post('/api/atchat/requests/:rid/accept', auth.requireAuth, async (req, res) 
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11001,7 +11015,7 @@ app.post('/api/atchat/requests/:rid/decline', auth.requireAuth, async (req, res)
   try {
     await db.query("UPDATE chat_requests SET status = 'declined', updated_at = now() WHERE id = $1 AND recipient_id = $2", [rid, req.user.id]);
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Delete (clear) a DM conversation for me — hides messages up to now; the chat
@@ -11018,7 +11032,7 @@ app.delete('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11059,7 +11073,7 @@ app.delete('/api/atchat/message/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11084,7 +11098,7 @@ app.post('/api/atchat/message/:id/hide', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11112,7 +11126,7 @@ app.post('/api/atchat/message/:id/react', auth.requireAuth, async (req, res) => 
     res.json({ ok: true, reactions });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11136,7 +11150,7 @@ app.post('/api/atchat/message/:id/star', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11158,7 +11172,7 @@ app.post('/api/atchat/groups/:id/messages/:mid/star', auth.requireAuth, async (r
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11206,7 +11220,7 @@ app.get('/api/atchat/starred', auth.requireAuth, async (req, res) => {
     res.json({ items });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11323,7 +11337,7 @@ app.get('/api/atchat/messages/search', auth.requireAuth, rateLimit(60, 60000, 'm
     res.json({ items, query: q, operators: { from: op.from, has: op.has, before: op.before, after: op.after } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11347,7 +11361,7 @@ app.post('/api/atchat/message/:id/pin', auth.requireAuth, async (req, res) => {
     rtPush(other, 'pin', { scope: 'dm', peerId: req.user.id, id: mid, pinned: pin });
     if (other !== req.user.id) rtPush(req.user.id, 'pin', { scope: 'dm', peerId: other, id: mid, pinned: pin }); // + my other devices
     res.json({ ok: true, pinned: pin });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.get('/api/atchat/with/:id/pins', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);
@@ -11362,7 +11376,7 @@ app.get('/api/atchat/with/:id/pins', auth.requireAuth, async (req, res) => {
       [req.user.id, other]
     );
     res.json({ pins: rows.map((m) => ({ id: m.id, body: m.body || '', mediaKind: m.media_kind || (m.image ? 'image' : null), mine: !!m.mine, sender: m.sender_name, pinnedAt: m.pinned_at })) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Group pin / unpin + list.
 app.post('/api/atchat/groups/:id/messages/:mid/pin', auth.requireAuth, async (req, res) => {
@@ -11376,7 +11390,7 @@ app.post('/api/atchat/groups/:id/messages/:mid/pin', auth.requireAuth, async (re
     await db.query('UPDATE at_group_messages SET pinned_at = $1 WHERE id = $2', [pin ? new Date() : null, mid]);
     for (const id of await groupMemberIds(gid, null)) rtPush(id, 'pin', { scope: 'group', groupId: gid, id: mid, pinned: pin }); // null = include actor's other devices too
     res.json({ ok: true, pinned: pin });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.get('/api/atchat/groups/:id/pins', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id);
@@ -11390,7 +11404,7 @@ app.get('/api/atchat/groups/:id/pins', auth.requireAuth, async (req, res) => {
       [gid, req.user.id]
     );
     res.json({ pins: rows.map((m) => ({ id: m.id, body: m.body || '', mediaKind: m.media_kind || (m.image ? 'image' : null), mine: !!m.mine, sender: m.sender_name, pinnedAt: m.pinned_at })) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Disappearing messages — per-conversation auto-delete timer.
@@ -11404,7 +11418,7 @@ app.get('/api/atchat/with/:id/disappearing', auth.requireAuth, async (req, res) 
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid id.' });
   try { res.json({ seconds: await dmDisappearSeconds(req.user.id, other) }); }
-  catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+  catch (err) { console.error(err); fault(res); }
 });
 app.put('/api/atchat/with/:id/disappearing', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id), sec = parseInt(req.body.seconds, 10);
@@ -11424,7 +11438,7 @@ app.get('/api/atchat/groups/:id/disappearing', auth.requireAuth, async (req, res
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const r = await db.query('SELECT disappearing FROM at_groups WHERE id = $1', [gid]);
     res.json({ seconds: (r.rows[0] && r.rows[0].disappearing) || 0 });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.put('/api/atchat/groups/:id/disappearing', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id), sec = parseInt(req.body.seconds, 10);
@@ -11457,7 +11471,7 @@ app.post('/api/atchat/message/:id/edit', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11663,7 +11677,7 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
     res.json({ group: { id: gid, name, username, avatar: avatar || null, members: all.length, broadcast, description } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11725,7 +11739,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     res.json({ group: { id: r.id, name: r.name, username: r.username, avatar: r.avatar || null, createdBy: r.created_by, broadcast: r.broadcast, description: r.description || null } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11761,7 +11775,7 @@ app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
     res.json({ groups: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11791,7 +11805,7 @@ app.get('/api/atchat/groups/by-username/:username', auth.requireAuth, async (req
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11809,7 +11823,7 @@ app.post('/api/atchat/groups/:id/request', auth.requireAuth, rateLimit(30, 60000
     res.json({ ok: true, isMember: false, requested: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 // Cancel my own pending request.
@@ -11821,7 +11835,7 @@ app.delete('/api/atchat/groups/:id/request', auth.requireAuth, async (req, res) 
     res.json({ ok: true, requested: false });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 // Admin: approve / decline a pending join request.
@@ -11841,7 +11855,7 @@ app.post('/api/atchat/groups/:id/requests/:uid', auth.requireAuth, async (req, r
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -11908,7 +11922,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -12052,7 +12066,7 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, blockLimited, rate
     if (!r) {
       const ex = await db.query(`SELECT ${GCOLS} FROM at_group_messages WHERE group_id = $1 AND sender_id = $2 AND client_id = $3`, [gid, req.user.id, clientId]);
       r = ex.rows[0];
-      if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+      if (!r) return fault(res);
     }
     const base = mediaRefMsg({
       id: r.id, body: r.body, image: r.image || null,
@@ -12100,7 +12114,7 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, blockLimited, rate
     res.json({ message: { ...base, mine: true } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -12136,7 +12150,7 @@ app.delete('/api/atchat/groups/:id/messages/:mid', auth.requireAuth, async (req,
       await db.query('UPDATE at_group_messages SET deleted_for = array_append(deleted_for, $1) WHERE id = $2 AND NOT ($1 = ANY(deleted_for))', [req.user.id, mid]);
     }
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Hide / unhide a group message in my own view (per-user).
 app.post('/api/atchat/groups/:id/messages/:mid/hide', auth.requireAuth, async (req, res) => {
@@ -12149,7 +12163,7 @@ app.post('/api/atchat/groups/:id/messages/:mid/hide', auth.requireAuth, async (r
     if (hide) await db.query('UPDATE at_group_messages SET hidden_for = array_append(hidden_for, $1) WHERE id = $2 AND NOT ($1 = ANY(hidden_for))', [req.user.id, mid]);
     else await db.query('UPDATE at_group_messages SET hidden_for = array_remove(hidden_for, $1) WHERE id = $2', [req.user.id, mid]);
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // React to a group message (one emoji per member; toggle off by repeating/empty).
 app.post('/api/atchat/groups/:id/messages/:mid/react', auth.requireAuth, async (req, res) => {
@@ -12164,7 +12178,7 @@ app.post('/api/atchat/groups/:id/messages/:mid/react', auth.requireAuth, async (
     await db.query('UPDATE at_group_messages SET reactions = $1 WHERE id = $2', [JSON.stringify(reactions), mid]);
     fanGroup(gid, req.user.id, 'dm_reaction', { groupId: gid, id: mid, reactions });
     res.json({ ok: true, reactions });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Edit a group message (sender-only, text-only).
 app.post('/api/atchat/groups/:id/messages/:mid/edit', auth.requireAuth, async (req, res) => {
@@ -12186,7 +12200,7 @@ app.post('/api/atchat/groups/:id/messages/:mid/edit', auth.requireAuth, async (r
     await db.query('UPDATE at_group_messages SET body = $1, edited = true WHERE id = $2', [body, mid]);
     fanGroup(gid, req.user.id, 'dm_edited', { groupId: gid, id: mid, body });
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 /* ─── Interactive rich messages — poll votes & event RSVPs (DM + group) ─── */
@@ -12298,7 +12312,7 @@ app.post('/api/atchat/poll/:id/vote', auth.requireAuth, rateLimit(80, 60000, 'po
     await db.query(`UPDATE ${found.table} SET meta = $1 WHERE id = $2`, [JSON.stringify(meta), mid]);
     await pushMetaUpd(found.row, gid, uid, mid, meta);
     res.json({ meta });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Set / clear an RSVP on an event. body: { group?, rsvp: 'going'|'maybe'|'no' }.
@@ -12319,7 +12333,7 @@ app.post('/api/atchat/event/:id/rsvp', auth.requireAuth, rateLimit(80, 60000, 'e
     await db.query(`UPDATE ${found.table} SET meta = $1 WHERE id = $2`, [JSON.stringify(meta), mid]);
     await pushMetaUpd(found.row, gid, uid, mid, meta);
     res.json({ meta });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 /* ═══════════════════════════════════════════════
@@ -12395,7 +12409,7 @@ app.get('/api/atchat/groups/:id/cloud', auth.requireAuth, async (req, res) => {
       pid = p.rows[0].parent_id;
     }
     res.json({ items: rows.map((r) => cloudNode(r, false)), path, parentId: parent || null });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Create a folder / sheet, or upload a file.
@@ -12455,7 +12469,7 @@ app.post('/api/atchat/groups/:id/cloud', auth.requireAuth, rateLimit(60, 60000, 
     cloudNotify(gid, req.user.id, `📁 ${label} in the Cloud`);
     cloudPush(gid, req.user.id, { groupId: gid, parentId });
     res.json({ node: cloudNode(ins.rows[0], false) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Fetch one node WITH its data (file blob / sheet json).
@@ -12470,7 +12484,7 @@ app.get('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res) 
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
     res.json({ node: cloudNode(rows[0], true) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Rename a node, or save a sheet's data (collaborative — last write wins).
@@ -12515,7 +12529,7 @@ app.patch('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res
     );
     cloudPush(gid, req.user.id, { groupId: gid, parentId: rows[0].parent_id || null, nodeId: nid, version: rows[0].version });
     res.json({ node: cloudNode(rows[0], false), version: rows[0].version });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Delete a node (folders cascade to their contents). Only the uploader/creator
@@ -12531,7 +12545,7 @@ app.delete('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, re
     await db.query('DELETE FROM group_cloud WHERE id = $1 AND group_id = $2', [nid, gid]);
     cloudPush(gid, req.user.id, { groupId: gid, parentId: sel.rows[0].parent_id || null });
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Atwe AI drafts a checklist from a plain-English prompt (e.g. "opening checklist
@@ -17611,7 +17625,7 @@ async function runAiTask(t, opts) {
   try {
     await db.query(
       `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin) VALUES ($1,'admin',$2,false,true)`,
-      [t.user_id, '✦ ' + t.name + '\n\n' + (result || 'No answer.')]);
+      [t.user_id, t.name + '\n\n' + (result || 'No answer.')]);
     notifySelf(t.user_id, 'ai_task');
   } catch (e) { /* the run still happened */ }
   const next = reschedule ? aiTaskNext(t.cadence, t.hour, t.weekday) : t.next_at;
@@ -17738,7 +17752,7 @@ async function runWorkflow(w, opts) {
   try {
     await db.query(
       `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin) VALUES ($1,'admin',$2,false,true)`,
-      [w.user_id, '✦ ' + w.name + '\n\n' + result]);
+      [w.user_id, w.name + '\n\n' + result]);
     notifySelf(w.user_id, 'ai_task');
   } catch (e) { /* the run still happened */ }
   await db.query(
@@ -17819,7 +17833,7 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
     res.json({ ok: true, added, blocked: valid.rows.length - added });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -17839,7 +17853,7 @@ app.post('/api/atchat/groups/:id/mute', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, muted, mutedUntil: until ? until.getTime() : null });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -17854,7 +17868,7 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -17878,7 +17892,7 @@ app.delete('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -17901,7 +17915,7 @@ app.delete('/api/atchat/groups/:id/members/:uid', auth.requireAuth, async (req, 
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -17925,7 +17939,7 @@ app.post('/api/atchat/groups/:id/members/:uid/role', auth.requireAuth, async (re
     res.json({ ok: true, admin: makeAdmin });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -19508,7 +19522,7 @@ app.get('/api/social/follows/:username', auth.requireAuth, async (req, res) => {
     res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal', iFollow: !!u.i_follow, isMe: u.id === req.user.id })) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -19704,7 +19718,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -19756,7 +19770,7 @@ app.get('/api/public/profile/:username', async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -19786,7 +19800,7 @@ app.get('/api/social/likes/:username', auth.requireAuth, async (req, res) => {
     res.json({ likes: q.rows.map(mapPost) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -19816,14 +19830,14 @@ app.post('/api/social/follow/:id', auth.requireAuth, rateLimit(120, 60000, 'foll
         if ([10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000].includes(n)) {
           await db.query("INSERT INTO notifications (user_id, actor_id, type, meta_num) VALUES ($1, $1, 'follower_milestone', $2)", [target, n]);
           rtPush(target, 'notif', { type: 'follower_milestone' });
-          pushToUser(target, { title: 'Atwe', body: `🎉 You just reached ${n.toLocaleString()} followers!`, url: '/', tag: 'milestone' }).catch(() => {});
+          pushToUser(target, { title: 'Atwe', body: `You just reached ${n.toLocaleString()} followers!`, url: '/', tag: 'milestone' }).catch(() => {});
         }
       } catch (e) { /* the follow itself must never fail on a celebration */ }
     }
     res.json({ ok: true, following: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 app.delete('/api/social/follow/:id', auth.requireAuth, async (req, res) => {
@@ -19834,7 +19848,7 @@ app.delete('/api/social/follow/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, following: false });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 // Remove a FOLLOWER (X-style, the reverse direction): they stop following you.
@@ -20175,7 +20189,7 @@ app.post('/api/social/block/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, blocked: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 app.delete('/api/social/block/:id', auth.requireAuth, async (req, res) => {
@@ -20186,7 +20200,7 @@ app.delete('/api/social/block/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, blocked: false });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 // List the accounts you've blocked (for Privacy settings).
@@ -20715,7 +20729,7 @@ app.post('/api/social/report/:id', auth.requireAuth, rateLimit(20, 60000, 'repor
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -20727,7 +20741,7 @@ app.post('/api/social/notify/:id', auth.requireAuth, async (req, res) => {
   try {
     await db.query('INSERT INTO post_notify (user_id, target_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, target]);
     res.json({ ok: true, notifying: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.delete('/api/social/notify/:id', auth.requireAuth, async (req, res) => {
   const target = routeId(req.params.id);
@@ -20735,7 +20749,7 @@ app.delete('/api/social/notify/:id', auth.requireAuth, async (req, res) => {
   try {
     await db.query('DELETE FROM post_notify WHERE user_id = $1 AND target_id = $2', [req.user.id, target]);
     res.json({ ok: true, notifying: false });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Contact privacy: who can call / video / DM you.
@@ -21075,7 +21089,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     res.json({ posts, hasMore });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -21181,7 +21195,7 @@ app.post('/api/feedposts', auth.requireAuth, blockLimited, rateLimit(30, 60000, 
     if (taggedProductIds.length) await saveContentProductTags('feedpost', rows[0].id, taggedProductIds);
     const out = await db.query(FEEDPOST_SELECT + 'WHERE fp.id = $2', [req.user.id, rows[0].id]);
     res.json({ post: mapFeedPost(out.rows[0]) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Timeline: active feed posts from people I follow (and my own), newest first.
@@ -21198,7 +21212,7 @@ app.get('/api/feedposts/timeline', auth.requireAuth, async (req, res) => {
       [req.user.id]
     );
     res.json({ posts: rows.map(mapFeedPost) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Discover shorts: short photo/video posts from people you DON'T follow — a
@@ -21241,7 +21255,7 @@ app.get('/api/feedposts/u/:username', auth.requireAuth, async (req, res) => {
       [req.user.id, targetId]
     );
     res.json({ posts: rows.map(mapFeedPost) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 /* ─── Playlists / series: a creator's ORDERED collections of their own feed
@@ -21396,7 +21410,7 @@ app.get('/api/feedposts/:id', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(FEEDPOST_SELECT + 'WHERE fp.id = $2', [req.user.id, id]);
     if (!rows[0]) return res.status(404).json({ error: 'That video isn’t available.' });
     res.json({ post: mapFeedPost(rows[0]) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Delete my own feed post.
 app.delete('/api/feedposts/:id', auth.requireAuth, async (req, res) => {
@@ -21406,7 +21420,7 @@ app.delete('/api/feedposts/:id', auth.requireAuth, async (req, res) => {
     const r = await db.query('DELETE FROM feed_posts WHERE id = $1 AND user_id = $2 RETURNING id', [id, req.user.id]);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 /* ─── Immersive shorts/feed engagement (TikTok / LinkedIn-Video style):
@@ -21564,7 +21578,7 @@ app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
     res.json({ post: mapped, replies: replies.rows.map(mapPost).map((r) => ({ ...r, pinned: r.id === pinnedId })) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -21779,7 +21793,7 @@ app.post('/api/social/posts', auth.requireAuth, blockLimited, rateLimit(40, 6000
     res.json({ post: mapPost(rows[0]) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -21823,7 +21837,7 @@ app.patch('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
     res.json({ post: mapPost(rows[0]) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -21840,7 +21854,7 @@ app.patch('/api/social/posts/:id/reply-scope', auth.requireAuth, async (req, res
     res.json({ ok: true, replyScope: scope });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -21867,7 +21881,7 @@ app.delete('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true }); // nothing deleted (not owner / not admin) — idempotent
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -21921,7 +21935,7 @@ app.post('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, liked: true, reaction, likes: c.rows[0].likes, reactions: rc.rows[0].m || null });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
@@ -21934,7 +21948,7 @@ app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, liked: false, reaction: null, likes: c.rows[0].likes, reactions: rc.rows[0].m || null });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 // Pin / unpin a reply to the top of a post's comments (post author only, one at a time).
@@ -22049,7 +22063,7 @@ app.post('/api/social/posts/:id/repost', auth.requireAuth, async (req, res) => {
     const c = await db.query('SELECT COUNT(*)::int AS reposts FROM post_reposts WHERE post_id = $1', [id]);
     if (r.rowCount) notify(ownerId, req.user.id, 'repost', id);
     res.json({ ok: true, reposted: true, reposts: c.rows[0].reposts });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.delete('/api/social/posts/:id/repost', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
@@ -22058,7 +22072,7 @@ app.delete('/api/social/posts/:id/repost', auth.requireAuth, async (req, res) =>
     await db.query('DELETE FROM post_reposts WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
     const c = await db.query('SELECT COUNT(*)::int AS reposts FROM post_reposts WHERE post_id = $1', [id]);
     res.json({ ok: true, reposted: false, reposts: c.rows[0].reposts });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Record a post view (deduped per viewer per day; the author's own views don't
@@ -22135,7 +22149,7 @@ app.post('/api/social/posts/:id/bookmark', auth.requireAuth, async (req, res) =>
     }
     await db.query('INSERT INTO post_bookmarks (post_id, user_id, folder_id) VALUES ($1, $2, $3) ON CONFLICT (post_id, user_id) DO UPDATE SET folder_id = $3', [id, req.user.id, folderId]);
     res.json({ ok: true, bookmarked: true, folderId });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 /* ─── Bookmark folders ─── */
 const BMK_FOLDER_CAP = 30;
@@ -22201,7 +22215,7 @@ app.delete('/api/social/posts/:id/bookmark', auth.requireAuth, async (req, res) 
   try {
     await db.query('DELETE FROM post_bookmarks WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
     res.json({ ok: true, bookmarked: false });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // My bookmarks (newest saved first). Optional ?folder=:id (or ?folder=unsorted).
 app.get('/api/social/bookmarks', auth.requireAuth, async (req, res) => {
@@ -22229,7 +22243,7 @@ app.get('/api/social/bookmarks', auth.requireAuth, async (req, res) => {
       params
     );
     res.json({ posts: rows.map(mapPost) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Per-post analytics for the author: reach + engagement + a 14-day views trend.
 app.get('/api/social/posts/:id/analytics', auth.requireAuth, async (req, res) => {
@@ -22824,7 +22838,7 @@ app.get('/api/social/trending', auth.requireAuth, async (req, res) => {
     }
     trends.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.count - a.count);
     res.json({ trends: trends.slice(0, 12) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.get('/api/admin/trends', auth.requirePerm('moderation'), async (_req, res) => {
   try {
@@ -23036,7 +23050,7 @@ app.get('/api/social/hashtag/:tag', auth.requireAuth, async (req, res) => {
     );
     const following = (await db.query('SELECT 1 FROM hashtag_follows WHERE user_id = $1 AND tag = $2', [req.user.id, tag])).rowCount > 0;
     res.json({ tag, following, posts: rows.map(mapPost) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // $CASHTAG page — a stock/crypto symbol. Returns a live quote+chart when a market
@@ -23058,7 +23072,7 @@ app.get('/api/cashtag/:sym', auth.requireAuth, async (req, res) => {
     );
     const quote = await getCachedQuote(sym, range);
     res.json({ symbol: sym, range, quote, financeEnabled: finance.isConfigured(), posts: rows.map(mapPost) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Short in-memory quote cache (60s) — many feed cards / viewers can hit the same
@@ -23083,7 +23097,7 @@ app.get('/api/quote/:sym', auth.requireAuth, async (req, res) => {
   try {
     const quote = await getCachedQuote(sym, '1D');
     res.json({ symbol: sym, quote, financeEnabled: finance.isConfigured() });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Follow / unfollow a hashtag.
 app.post('/api/social/hashtag/:tag/follow', auth.requireAuth, async (req, res) => {
@@ -23124,7 +23138,7 @@ app.get('/api/social/lists', auth.requireAuth, async (req, res) => {
       [req.user.id]
     );
     res.json({ lists: rows.map((l) => ({ id: l.id, name: l.name, members: l.members, created_at: l.created_at })) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.post('/api/social/lists', auth.requireAuth, rateLimit(30, 60000, 'list-create'), async (req, res) => {
   const name = (req.body.name || '').trim().slice(0, 60);
@@ -23163,7 +23177,7 @@ app.get('/api/social/lists/:id', auth.requireAuth, async (req, res) => {
       [id]
     );
     res.json({ list: { id: l.rows[0].id, name: l.rows[0].name }, members: m.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null })) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.post('/api/social/lists/:id/members', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id), uid = parseInt(req.body.uid, 10);
@@ -23200,7 +23214,7 @@ app.get('/api/social/lists/:id/timeline', auth.requireAuth, async (req, res) => 
       [req.user.id, id]
     );
     res.json({ posts: rows.map(mapPost) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Vote on a poll (one vote per user, can't be changed).
@@ -23222,7 +23236,7 @@ app.post('/api/social/posts/:id/vote', auth.requireAuth, async (req, res) => {
     res.json({ post: mapPost(rows[0]) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -23276,7 +23290,7 @@ app.get('/api/circles', auth.requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -23319,7 +23333,7 @@ app.post('/api/circles/group/feed', auth.requireAuth, async (req, res) => {
     res.json({ posts, hasMore: q.rows.length > 40 });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -23349,7 +23363,7 @@ app.get('/api/circles/by-username/:username', auth.requireAuth, async (req, res)
     res.json({ id: r.rows[0].id });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -23383,7 +23397,7 @@ app.get('/api/circles/:id', auth.requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -23399,7 +23413,7 @@ app.post('/api/circles/:id/join', auth.requireAuth, rateLimit(60, 60000, 'circle
     res.json({ ok: true, isMember: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 app.delete('/api/circles/:id/join', auth.requireAuth, async (req, res) => {
@@ -23410,7 +23424,7 @@ app.delete('/api/circles/:id/join', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, isMember: false });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -23450,7 +23464,7 @@ app.patch('/api/circles/:id', auth.requireAuth, async (req, res) => {
     res.json({ circle: { id: r.id, username: r.username, name: r.name, bio: r.bio || null, avatar: r.avatar || null, isAdmin: true, isMember: true } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -23481,7 +23495,7 @@ app.post('/api/circles/:id/delete-request', auth.requireAuth, rateLimit(10, 6000
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -26003,7 +26017,7 @@ apiV1.get('/me', requireApiKey('profile.read'), async (req, res) => {
     if (!u) return res.status(404).json({ error: 'Account not found.' });
     res.json({ id: u.id, name: u.name, username: u.username, accountType: u.account_type,
       plan: u.plan, verified: !!u.verified, createdAt: u.created_at });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 apiV1.get('/orders', requireApiKey('orders.read'), async (req, res) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
@@ -26027,7 +26041,7 @@ apiV1.get('/orders', requireApiKey('orders.read'), async (req, res) => {
       discountCents: o.discount_cents || 0, buyer: o.buyer_username,
       carrier: o.carrier, tracking: o.tracking, shippedAt: o.shipped_at,
       deliveredAt: o.delivered_at, createdAt: o.created_at })) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 apiV1.get('/products', requireApiKey('products.read'), async (req, res) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
@@ -26039,7 +26053,7 @@ apiV1.get('/products', requireApiKey('products.read'), async (req, res) => {
     res.json({ products: rows.map((p) => ({ id: p.id, name: p.name, description: p.description,
       priceCents: p.price_cents, kind: p.kind, active: p.active, stock: p.stock,
       category: p.category, createdAt: p.created_at })) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 apiV1.post('/products', requireApiKey('products.write'), async (req, res) => {
   const name = String(req.body.name || '').trim().slice(0, 140);
@@ -26082,7 +26096,7 @@ apiV1.get('/webhooks', requireApiKey('webhooks.read'), async (req, res) => {
     const { rows } = await db.query(
       'SELECT id, url, events, active, last_status, last_at FROM webhook_endpoints WHERE owner_id = $1 ORDER BY id', [req.apiKey.ownerId]);
     res.json({ webhooks: rows });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // An unknown v1 path should say so in the API's own voice, not fall through to
 // the app shell and hand an integration a page of HTML.
@@ -26197,7 +26211,7 @@ app.get('/api/webhooks/:id/secret', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query('SELECT secret FROM webhook_endpoints WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Endpoint not found.' });
     res.json({ secret: rows[0].secret });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 /* ─── Admin oversight of the developer platform ─── */
@@ -37003,7 +37017,7 @@ app.post('/api/admin/users/:id/identity', auth.requirePerm('users'), async (req,
     adminAudit(req, on ? 'identity.verify' : 'identity.unverify', 'user', id, { method });
     notify(id, req.user.id, on ? 'identity_verified' : 'identity_unverified');
     res.json({ user: rows[0] });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 /* ── Can this person actually do the job? ──
@@ -40857,7 +40871,7 @@ app.post('/api/feeds', auth.requireAuth, rateLimit(20, 60000, 'feed-create'), as
     res.json({ feed: { id: fid, username: u.username, name, bio: bio || null, avatar: avatar || null, open, members: 1, isMember: true, isAdmin: true, requested: false } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -40883,7 +40897,7 @@ app.get('/api/feeds', auth.requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -40931,7 +40945,7 @@ app.get('/api/feeds/:id', auth.requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -40954,7 +40968,7 @@ app.post('/api/feeds/:id/join', auth.requireAuth, rateLimit(60, 60000, 'feed-joi
     res.json({ ok: true, isMember: false, requested: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 app.delete('/api/feeds/:id/join', auth.requireAuth, async (req, res) => {
@@ -40966,7 +40980,7 @@ app.delete('/api/feeds/:id/join', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, isMember: false, requested: false });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -40987,7 +41001,7 @@ app.post('/api/feeds/:id/requests/:uid', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41032,7 +41046,7 @@ app.patch('/api/feeds/:id', auth.requireAuth, async (req, res) => {
     res.json({ feed: { id: r.id, username: r.username, name: r.name, bio: r.bio || null, avatar: r.avatar || null, open: r.open, isAdmin: true, isMember: true } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41067,7 +41081,7 @@ app.get('/api/notifications', auth.requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 app.get('/api/notifications/count', auth.requireAuth, async (req, res) => {
@@ -41098,7 +41112,7 @@ app.delete('/api/notifications', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, cleared: rowCount, scope: readOnly ? 'read' : 'all' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41412,7 +41426,7 @@ app.put('/api/plan', auth.requireAuth, async (req, res) => {
     }
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41439,7 +41453,7 @@ app.post('/api/billing/checkout', auth.requireAuth, async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41553,7 +41567,7 @@ app.post('/api/refunds', auth.requireAuth, rateLimit(20, 60000, 'refund-req'), a
     if (!rows[0]) return res.status(409).json({ error: 'You already have an open request for this payment.' });
     logEvent('money', 'refund.requested', { req, subjectType: 'refund', subjectId: rows[0].id, meta: { kind, amountCents: pay.amountCents } });
     res.status(201).json({ request: rows[0] });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Member sees their own refund requests + status.
 app.get('/api/refunds', auth.requireAuth, async (req, res) => {
@@ -41562,7 +41576,7 @@ app.get('/api/refunds', auth.requireAuth, async (req, res) => {
       `SELECT id, kind, ref_id, amount_cents, reason, status, resolution_note, refunded_cents, created_at, resolved_at
        FROM refund_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`, [req.user.id]);
     res.json({ requests: rows });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // The member's recent refundable payments (to populate the "request a refund" picker).
 app.get('/api/refunds/eligible', auth.requireAuth, async (req, res) => {
@@ -41581,7 +41595,7 @@ app.get('/api/refunds/eligible', auth.requireAuth, async (req, res) => {
     const items = [...charges, ...orders, ...tips].filter(x => !open.has(x.kind + ':' + x.ref_id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     res.json({ items });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Peer-to-peer "wrong send" — we don't force-claw money already in someone's balance
 // (it may be spent). Instead notify the recipient with a polite return request.
@@ -41594,7 +41608,7 @@ app.post('/api/wallet/return-request', auth.requireAuth, rateLimit(10, 60000, 'r
     if (!tx || !tx.peer_id) return res.status(404).json({ error: 'We couldn’t find that transfer.' });
     notify(tx.peer_id, req.user.id, 'return_request');
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Appeal a suspension / ban. A locked-out member can't log in, so this is public —
@@ -41618,7 +41632,7 @@ app.post('/api/auth/appeal', rateLimit(5, 3600000, 'appeal'), async (req, res) =
     if (!ins.rows[0]) return res.status(409).json({ error: 'You already have an appeal under review.' });
     logEvent('account', 'appeal.filed', { actorId: user.id, subjectType: 'user', subjectId: user.id, meta: { statusKind: user.status } });
     res.status(201).json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // GDPR/CCPA data-subject request — a member formally asks for a copy of their data
@@ -41642,14 +41656,14 @@ app.post('/api/data-requests', auth.requireAuth, rateLimit(5, 3600000, 'data-req
     if (!rows[0]) return res.status(409).json({ error: 'You already have a request of this type in progress.' });
     logEvent('compliance', 'data_request.filed', { req, subjectType: 'user', subjectId: req.user.id, meta: { kind } });
     res.status(201).json({ request: rows[0] });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.get('/api/data-requests', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT id, kind, note, state, resolution_note, due_at, created_at, resolved_at FROM data_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [req.user.id]);
     res.json({ requests: rows });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 /* ═══════════════════════════════════════════════
@@ -41787,7 +41801,7 @@ app.get('/api/admin/users', auth.requirePerm('users'), async (req, res) => {
     res.json({ users: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41806,7 +41820,7 @@ app.get('/api/admin/users/:id/chats', auth.requirePerm('users'), async (req, res
     res.json({ user: u.rows[0], chats: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41843,7 +41857,7 @@ app.get('/api/admin/users/:id/atchat', auth.requirePerm('users'), async (req, re
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41868,7 +41882,7 @@ app.get('/api/admin/users/:id/messages', auth.requirePerm('users'), async (req, 
     res.json({ user: u.rows[0], messages: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41898,7 +41912,7 @@ app.post('/api/admin/users/:id/messages', auth.requirePerm('users'), rateLimit(6
     res.json({ message: { ...rows[0], image: rows[0].image || null } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41972,7 +41986,7 @@ app.patch('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =>
     res.json({ user: rows[0] });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -41996,7 +42010,7 @@ app.delete('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -42925,7 +42939,7 @@ app.post('/api/admin/users/:id/status', auth.requirePerm('users'), async (req, r
     res.json({ user: rows[0] });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -42947,7 +42961,7 @@ app.post('/api/admin/users/:id/wallet-freeze', auth.requirePerm('users'), async 
     adminAudit(req, frozen ? 'wallet.freeze' : 'wallet.unfreeze', 'user', id, { reason });
     notify(id, req.user.id, frozen ? 'wallet_frozen' : 'wallet_unfrozen');
     res.json({ user: rows[0] });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 /* ── Atwe Certified: the staff override ──
@@ -42978,7 +42992,7 @@ app.post('/api/admin/users/:id/certificate', auth.requirePerm('users'), async (r
       notify(id, req.user.id, ts.certified ? 'certified_granted' : 'certified_removed');
     }
     res.json({ user: rows[0], trustScore: ts });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Everyone who currently holds the mark, and how they got it.
@@ -43008,7 +43022,7 @@ app.get('/api/admin/certificates', auth.requirePerm('users'), async (req, res) =
       })),
       counts, minScore: CERT_MIN_SCORE, minDealings: CERT_MIN_DEALINGS, label: CERT_LABEL,
     });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // "View as user" — a fully-logged, time-boxed support impersonation. Returns a
@@ -43036,7 +43050,7 @@ app.post('/api/admin/users/:id/impersonate', auth.requirePerm('users'), async (r
     logEvent('staff', 'user.impersonate', { req, subjectType: 'user', subjectId: id, subjectName: target.name });
     const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '') + '/?imp=' + encodeURIComponent(token);
     res.json({ token, appUrl, target: { id: target.id, name: target.name, username: target.username }, expiresInMin: 45 });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // End an impersonation session early (the token also self-expires in 45m).
 app.post('/api/admin/impersonation/:id/end', auth.requirePerm('users'), async (req, res) => {
@@ -43045,7 +43059,7 @@ app.post('/api/admin/impersonation/:id/end', auth.requirePerm('users'), async (r
   try {
     await db.query('UPDATE impersonation_sessions SET ended_at = now() WHERE id = $1 AND ended_at IS NULL', [id]);
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Recent impersonation sessions (the accountability record).
 app.get('/api/admin/impersonations', auth.requirePerm('users'), async (_req, res) => {
@@ -43056,7 +43070,7 @@ app.get('/api/admin/impersonations', auth.requirePerm('users'), async (_req, res
        FROM impersonation_sessions s LEFT JOIN users u ON u.id = s.target_id
        ORDER BY s.started_at DESC LIMIT 100`);
     res.json({ sessions: rows });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // Admin audit log — read-only, paginated, filterable (by actor / action / target).
@@ -43076,7 +43090,7 @@ app.get('/api/admin/activity', auth.requireAdmin, async (req, res) => {
       `SELECT id, category, action, actor_id, actor_name, subject_type, subject_id, subject_name, meta, created_at
        FROM platform_events ${clause} ORDER BY id DESC LIMIT $${vals.length}`, vals);
     res.json({ events: rows });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.get('/api/admin/audit', auth.requireAdmin, async (req, res) => {
   const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 100));
@@ -43097,7 +43111,7 @@ app.get('/api/admin/audit', auth.requireAdmin, async (req, res) => {
     res.json({ entries: rows, total: total.rows[0] ? total.rows[0].n : rows.length, limit, offset });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -43110,7 +43124,7 @@ app.get('/api/admin/staff', auth.requireAdmin, async (_req, res) => {
        FROM users WHERE is_admin = true OR jsonb_array_length(admin_perms) > 0
        ORDER BY is_admin DESC, name`);
     res.json({ staff: rows, scopes: ADMIN_SCOPES });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Grant / update a staff member's scoped access. Superadmin-only. Identify the
 // account by userId, @username or email. `perms` is validated against ADMIN_SCOPES.
@@ -43134,7 +43148,7 @@ app.post('/api/admin/staff', auth.requireAdmin, async (req, res) => {
       [JSON.stringify(perms), role, target.id]);
     adminAudit(req, 'staff.grant', 'user', target.id, { role, perms });
     res.json({ member: rows[0] });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Revoke a staff member's scoped access entirely (does not touch a superadmin —
 // remove their admin flag from the Users tab instead).
@@ -43148,7 +43162,7 @@ app.delete('/api/admin/staff/:id', auth.requireAdmin, async (req, res) => {
     await db.query("UPDATE users SET admin_perms = '[]'::jsonb, admin_role = NULL WHERE id = $1", [id]);
     adminAudit(req, 'staff.revoke', 'user', id, {});
     res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // ─── Admin: system accounts (e.g. @support) — username + password, no real email ───
@@ -43356,7 +43370,7 @@ app.get('/api/admin/appeals', auth.requirePerm('users'), async (req, res) => {
       state ? [state] : []);
     const openCount = await db.query(`SELECT COUNT(*)::int AS n FROM appeals WHERE state = 'open'`).then(x => x.rows[0].n).catch(() => 0);
     res.json({ appeals: rows, openCount });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Grant (reinstate the account) or deny an appeal.
 app.post('/api/admin/appeals/:id/resolve', auth.requirePerm('users'), async (req, res) => {
@@ -43379,7 +43393,7 @@ app.post('/api/admin/appeals/:id/resolve', auth.requirePerm('users'), async (req
     await db.query(`UPDATE appeals SET state = $2, review_note = $3, reviewed_by = $4, resolved_at = now() WHERE id = $1`, [id, action === 'grant' ? 'granted' : 'denied', note, req.user.id]);
     adminAudit(req, action === 'grant' ? 'appeal.grant' : 'appeal.deny', 'user', ap.user_id, { appealId: id, note });
     res.json({ ok: true, state: action === 'grant' ? 'granted' : 'denied' });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // ─── Admin: Data-subject requests (GDPR/CCPA) — staff `users` scope ───
@@ -43397,7 +43411,7 @@ app.get('/api/admin/data-requests', auth.requirePerm('users'), async (req, res) 
       state ? [state] : []);
     const openCount = await db.query(`SELECT COUNT(*)::int AS n FROM data_requests WHERE state='open'`).then(x => x.rows[0].n).catch(() => 0);
     res.json({ requests: rows.map((r) => ({ ...r, daysLeft: r.days_left != null ? Math.floor(Number(r.days_left)) : null, overdue: r.days_left != null && Number(r.days_left) < 0 })), openCount });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Admin logs a request that arrived out-of-band (email, letter) on a member's behalf.
 app.post('/api/admin/data-requests', auth.requirePerm('users'), async (req, res) => {
@@ -43417,7 +43431,7 @@ app.post('/api/admin/data-requests', auth.requirePerm('users'), async (req, res)
     if (!rows[0]) return res.status(409).json({ error: 'That member already has an open request of this type.' });
     adminAudit(req, 'data_request.log', 'user', u.id, { kind });
     res.status(201).json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.post('/api/admin/data-requests/:id/resolve', auth.requirePerm('users'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
@@ -43433,7 +43447,7 @@ app.post('/api/admin/data-requests/:id/resolve', auth.requirePerm('users'), asyn
     if (!rows[0]) return res.status(409).json({ error: 'That request was already handled.' });
     adminAudit(req, 'data_request.' + (action === 'completed' ? 'complete' : 'reject'), 'user', rows[0].user_id, { kind: rows[0].kind });
     res.json({ ok: true, state: action });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // ─── Admin: Refunds queue (staff `refunds` scope) ───
@@ -43451,7 +43465,7 @@ app.get('/api/admin/refunds', auth.requirePerm('refunds'), async (req, res) => {
       status ? [status] : []);
     const openCount = await db.query(`SELECT COUNT(*)::int AS n FROM refund_requests WHERE status = 'open'`).then(x => x.rows[0].n).catch(() => 0);
     res.json({ requests: rows, openCount });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Approve (money reversed to the member's wallet) or decline a refund request.
 app.post('/api/admin/refunds/:id/resolve', auth.requirePerm('refunds'), async (req, res) => {
@@ -43519,7 +43533,7 @@ app.post('/api/admin/refunds/:id/resolve', auth.requirePerm('refunds'), async (r
     adminAudit(req, 'refund.approve', 'refund', id, { kind: rr.kind, refId: rr.ref_id, amountCents: paidCents });
     notify(rr.user_id, req.user.id, 'refund_approved');
     res.json({ ok: true, status: 'approved', refundedCents: paidCents });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 
 // ─── Admin: Finance oversight — the "money is safe + reconciled" screen ───
@@ -43568,7 +43582,7 @@ app.get('/api/admin/finance', auth.requirePerm('revenue'), async (_req, res) => 
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -43613,7 +43627,7 @@ app.get('/api/admin/growth', auth.requirePerm('growth'), async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -44712,7 +44726,7 @@ app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFea
     res.json({ content: text, usage: msg.usage });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    fault(res);
   }
 });
 
@@ -44887,14 +44901,14 @@ app.get('/api/resumes', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query('SELECT id, title, data, created_at, updated_at FROM resumes WHERE user_id = $1 ORDER BY updated_at DESC', [req.user.id]);
     res.json({ resumes: rows.map(mapResume) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 app.get('/api/resumes/:id', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query('SELECT id, title, data, created_at, updated_at FROM resumes WHERE id = $1 AND user_id = $2', [String(req.params.id), req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Resume not found.' });
     res.json({ resume: mapResume(rows[0]) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  } catch (err) { console.error(err); fault(res); }
 });
 // Create / update a resume (owner-scoped upsert, idempotent on the client id).
 app.put('/api/resumes/:id', auth.requireAuth, async (req, res) => {
@@ -45476,7 +45490,7 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body.' });
   console.error(err);
   logServerError(req.method + ' ' + (req.path || req.url || '?'), err);   // the admin Error log reads from this
-  res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  fault(res);
 });
 // Errors that never reach Express still land in the admin Error log. Neither
 // hook exits: this server prefers staying up (the pre-existing behaviour) and
