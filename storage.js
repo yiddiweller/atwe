@@ -62,7 +62,7 @@ const PREFIX = (envStr('S3_PREFIX', 'atwe')).replace(/^\/|\/$/g, '');
 
 const ok = !!(BUCKET && ACCESS && SECRET);
 if (!ok) {
-  console.warn('⚠️  Object storage not configured — media stays in the database (which is fine, just heavier). Set S3_BUCKET / S3_ACCESS_KEY / S3_SECRET_KEY to move it out.');
+  console.warn('⚠️  Object storage not configured. Media stays in the database (which is fine, just heavier). Set S3_BUCKET / S3_ACCESS_KEY / S3_SECRET_KEY to move it out.');
 }
 
 function isConfigured() { return ok; }
@@ -173,7 +173,7 @@ async function putDataUrl(dataUrl, kind) {
       // exactly what was wrong all along.
       let detail = '';
       try { detail = (await r.text() || '').slice(0, 300).replace(/\s+/g, ' ').trim(); } catch (e) {}
-      _lastError = `HTTP ${r.status}${detail ? ' — ' + detail : ''}`;
+      _lastError = `HTTP ${r.status}${detail ? ' - ' + detail : ''}`;
       console.warn('[storage] upload failed', _lastError);
       return null;
     }
@@ -216,7 +216,7 @@ async function selfTest() {
   const probe = 'data:text/plain;base64,' + Buffer.from('atwe-storage-check').toString('base64');
   const url = await putDataUrl(probe, 'healthcheck');
   if (!url) {
-    return { ok: false, reason: 'upload was refused — check the key, the bucket name and the permissions'
+    return { ok: false, reason: 'upload was refused: check the key, the bucket name and the permissions'
       + (_lastError ? ` (the store said: ${_lastError})` : '') };
   }
   let readable = false;

@@ -1830,7 +1830,7 @@ changes shape as the profile lands. It is shared with the circle and feed screen
 **THE RUNNER HAS UNDER-COVERED ITSELF THREE TIMES NOW, in three different ways** — worth
 naming as one pattern: a stale path in `/tmp` (it ran a frozen copy of every probe), probes
 missing from its list (gapmob, notifhdr, acctbug — and notifhdr then went stale unnoticed),
-and a probe present in the list that could only ever skip (lastseen, above). It is at **113
+and a probe present in the list that could only ever skip (lastseen, above). It is at **114
 probes** today. When you add one, add it to `run-all.sh` in the same commit, and check a
 full run for `skipped` and `MISSING` as well as `FAILED`.
 
@@ -2861,6 +2861,75 @@ for the call — two real browsers.
 - **`rtSource` is a top-level `let`, not a window property** (after `S` and `_caps`), and
   **the call screen shrinks away over .36s** — reading `.hidden` in the same tick calls a
   screen on its way out one that never left.
+
+### ATWE NEVER WRITES AN EM DASH — `tools/nodash.js` · `tools/jstext.js` · `scratchpad/nodash.js`
+
+The founder's instruction, and it is a BRAND decision rather than a style one: the long dash
+is the most recognisable tell of machine-written text, so a product wearing 1,201 of them
+reads as generated rather than made. They had asked once, it was half-done, and they were
+still meeting them. **A member's own writing is never touched** — their words, their
+punctuation, which is the founder's own carve-out: *"except if someone posted"*.
+
+**THE CLEANUP IS THE SMALLER HALF.** Atwe AI writes NEW text on every reply, so a sweep alone
+is undone by tea time. There are **forty** AI calls in `server.js` and a forty-first will be
+written by somebody who has not read this, so both halves live on the ONE client wrapper every
+call already passes through (the same one that meters usage and remaps models): `aiAppendRule`
+puts the rule on every system prompt, `aiCleanOut` rewrites the text blocks of every reply.
+**Tool-use blocks are deliberately untouched** — a dash inside an action's arguments is data,
+and mangling it would break the thing the member is about to confirm.
+
+**`atweOwnWords: true` is the exception, and it is enforced in code.** Only `proofread` sets
+it, and it turns off the instruction AND the net. Every other writing task (improve, rephrase,
+a drafted reply) DOES follow the rule: that is Atwe writing prose on somebody's behalf, and
+putting a machine tell into a member's own message is the worse version of this fault. The
+flag is ours, not the API's, so it is deleted from a COPY of the params before the request —
+the caller's own object is reused on the failover path.
+
+**A HAND-ROLLED COMMENT STRIPPER CANNOT DO THIS, and the first one inflated the job by 400.**
+It broke on three things this file is full of: **a regex literal containing a slash**
+(`/https?:\/\//` is not a comment and `/'/` is not a string), **a template literal with
+`${...}`** (inside the braces it is code again, with its own strings and nested templates —
+and almost every screen here is built that way), and **an apostrophe in a comment** ("doesn't"
+ends the comment as far as a quote-counter is concerned, and everything after it reads as a
+string). `tools/jstext.js` is a real tokeniser, self-tested, and `readableRanges`/
+`rewriteReadable` return exact offsets so a 4.7MB file comes back byte-identical apart from
+the runs touched. **Its own bug worth knowing: a CLOSING `</style>` was treated as an opening
+one**, so it hunted for the next `</style>`, found none, and swallowed every string in the
+app's script block that followed it.
+
+**"REPLACE IT WITH A HYPHEN" WOULD BE WORSE THAN LEAVING IT** — it reads as a typo rather than
+a sentence. `deDash` does what a person editing the line would do, and which punctuation that
+is depends entirely on the job the dash was doing: a **pair** in one sentence is an aside (two
+commas); a **lone** dash joins a statement to its elaboration (full stop + capital); a dash
+before a **list** is introducing it (colon); an **unspaced** dash is a range ("to"); a
+**joining word** after it — and, which, so, because — takes a comma, since those cannot open a
+sentence; a run that is **nothing but a dash** is a table's empty cell (a hyphen); a **leading**
+dash is a signature line and simply goes; and a `·`-separated **label** is a trail of crumbs,
+not a sentence, so the dash becomes another `·`.
+
+**TWO THINGS IT NEARLY SHIPPED, both caught by reading the proposed diff before writing it:**
+
+- **IT WAS REFORMATTING EVERY SQL QUERY.** A harmless-looking "collapse runs of spaces" tidy
+  at the end of the rule flattened multi-line queries onto one line, because a query is a
+  string like any other. Queries are skipped outright now (`LOOKS_LIKE_CODE`), and the tidy
+  never touches a character that was not beside a dash. **A text rule let loose on a file must
+  be told what is not text.**
+- **IT TURNED A RANGE INTO A COMMA.** "canvas chart (1D–ALL), inline cards — optional data"
+  matched as one parenthetical pair spanning the bracket and produced "(1D, ALL)". An aside's
+  middle contains no bracket, and an unspaced dash is never prose punctuation.
+
+**Guarded by `scratchpad/nodash.js`** (6 checks): every readable run in every source file —
+99,498 of them — carries none; and a **scripted model that answers with a dash EVERY time**
+stands in front of the real server to prove the instruction and the net, which is better than
+a live model for a rule test, because a real one might simply not use a dash that day and
+leave the hole untested. It asserts the reply arrives clean, that it was turned into real
+punctuation rather than deleted, that the system prompt carried the rule, and that proofread
+is exempt on both counts. Self-tested: one injected dash fails it with the file and line.
+
+**What is deliberately left: the app's own CODE COMMENTS**, which nobody reads, and seven SQL
+runs. **And the sweep fixes CODE, not the DATABASE** — rows written before it keep their
+punctuation, which is right for member posts and means demo mode needs a reseed to pick up
+the corrected sample copy.
 
 ### HOW IT FEELS TO SCROLL, MEASURED — `scratchpad/motion.js`
 

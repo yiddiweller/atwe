@@ -164,7 +164,7 @@ function checkClientData(clientDataJSON, expectedType, expectedChallenge, allowe
   try { d = JSON.parse(Buffer.from(clientDataJSON).toString('utf8')); }
   catch (e) { throw new Error('the browser sent something we could not read'); }
   if (d.type !== expectedType) throw new Error('this response is for the wrong kind of request');
-  if (d.challenge !== expectedChallenge) throw new Error('that sign-in attempt has expired — try again');
+  if (d.challenge !== expectedChallenge) throw new Error('that sign-in attempt has expired. Try again');
   const origin = String(d.origin || '');
   if (!allowedOrigins.includes(origin)) throw new Error('this came from an unexpected address');
   return d;

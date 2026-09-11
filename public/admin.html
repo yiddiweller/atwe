@@ -1283,7 +1283,7 @@
       <div class="chat-who">
         <div class="avatar" id="chatAvatar">?</div>
         <div style="min-width:0;">
-          <div class="ct-name" id="chatName">—</div>
+          <div class="ct-name" id="chatName">-</div>
           <div class="ct-email" id="chatEmail"></div>
         </div>
       </div>
@@ -1410,14 +1410,14 @@ function avatarHtml(u, cls){
 }
 
 function fmtDate(d){
-  if (!d) return '—';
+  if (!d) return '-';
   try { return new Date(d).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' }); }
-  catch (e) { return '—'; }
+  catch (e) { return '-'; }
 }
 function fmtDateTime(d){
-  if (!d) return '—';
+  if (!d) return '-';
   try { return new Date(d).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
-  catch (e) { return '—'; }
+  catch (e) { return '-'; }
 }
 function ago(d){
   if (!d) return 'never';
@@ -1452,7 +1452,7 @@ function showGate(){
         <img src="/logo-mark.png" alt="Atwe"/>
       </button>
       <h2 class="gate-title">Not open to everyone.</h2>
-      <p class="gate-sub">You've reached Atwe's control room — where the platform is run. Access is for the team only.</p>
+      <p class="gate-sub">You've reached Atwe's control room, where the platform is run. Access is for the team only.</p>
     </div>`;
 }
 
@@ -1627,7 +1627,7 @@ async function pinSubmit(code){
 
   if (_pin.mode === 'unlock') {
     if (hash === stored) pass(() => { _adminSessionUnlocked = true; load(); });
-    else fail('Wrong PIN — try again');
+    else fail('Wrong PIN. Try again');
     return;
   }
   // 'set' or 'change' — same create-then-confirm flow.
@@ -1640,7 +1640,7 @@ async function pinSubmit(code){
     });
   } else {
     _pin.stage = 0; _pin.first = '';
-    fail("PINs didn't match — start again");
+    fail("PINs didn't match. Start again");
   }
 }
 function pinCancel(){ if (_pin.mode === 'unlock') showGate(); else renderView(); }
@@ -1787,7 +1787,7 @@ async function load(){
     else document.getElementById('attnBtn')?.classList.add('hidden');
   } catch (e) {
     if (e.data && e.data.needs2fa) { show2faGate(); return; }
-    if (e.status === 401) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired — please sign in.'); }
+    if (e.status === 401) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired. Please sign in.'); }
     else if (e.status === 403) { token = null; localStorage.removeItem('atwe_token'); showLogin('That account does not have admin access.'); }
     else gate(esc(e.message));
   }
@@ -1799,7 +1799,7 @@ function show2faGate(){
     <div style="font-size:34px;margin-bottom:14px;">🔐</div>
     <h2 style="margin:0 0 10px;font-size:20px;">Two-factor authentication required</h2>
     <p style="color:var(--t3);font-size:14.5px;line-height:1.55;">Staff accounts can move money and read member messages, so they must be protected by 2FA. Open the <b>Atwe app → Settings → Security &amp; access → Two-factor authentication</b>, turn it on, then return here and refresh.</p>
-    <button class="btn" style="margin-top:16px;" onclick="location.reload()">I've enabled it — reload</button>
+    <button class="btn" style="margin-top:16px;" onclick="location.reload()">I've enabled it. Reload</button>
   </div>`);
 }
 // Show only the tabs this staffer is allowed to see.
@@ -1995,8 +1995,8 @@ function renderAnnouncements(){
       <div class="custom-row" style="margin-top:14px;"><button class="act" id="annSaveBtn" onclick="saveAnn()">Publish announcement</button></div>
     </div>
     <div class="panel" style="margin-top:18px;"><h3>Post to the feed as Atwe</h3>
-      <div class="sub">Product news and tips, in Atwe's own voice. Unlike the banner above, this is a real post in the main feed — people can reply to it, like it and share it, and it stays there.</div>
-      <textarea id="offMsg" maxlength="2000" rows="3" placeholder="e.g. You can now split a bill with anyone on Atwe — tap Split a bill in your Profile. #atwe" style="width:100%;box-sizing:border-box;background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:11px 13px;font:inherit;resize:vertical;margin-top:10px;"></textarea>
+      <div class="sub">Product news and tips, in Atwe's own voice. Unlike the banner above, this is a real post in the main feed. People can reply to it, like it and share it, and it stays there.</div>
+      <textarea id="offMsg" maxlength="2000" rows="3" placeholder="e.g. You can now split a bill with anyone on Atwe. Tap Split a bill in your Profile. #atwe" style="width:100%;box-sizing:border-box;background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:11px 13px;font:inherit;resize:vertical;margin-top:10px;"></textarea>
       <div id="offWho" class="srs" style="margin-top:8px;">Checking the Atwe account…</div>
       <div class="custom-row" style="margin-top:12px;"><button class="act accent" id="offBtn" onclick="publishOfficial()">Publish post</button></div>
     </div>
@@ -2131,7 +2131,7 @@ function renderControls(){
   meta.forEach(f => { if (!byCat[f.cat]) { byCat[f.cat] = []; cats.push(f.cat); } byCat[f.cat].push(f); });
   let html = ''
     + '<div class="fc-head">'
-    +   '<div class="fc-intro"><b>Feature Controls.</b> Turn any of your live features off across the whole app — the moment you do, anyone who opens it sees <b>“Unavailable.”</b> Everything defaults to <span style="color:var(--accent)">Active</span>. Money features are also blocked on the server when off.</div>'
+    +   '<div class="fc-intro"><b>Feature Controls.</b> Turn any of your live features off across the whole app. The moment you do, anyone who opens it sees <b>“Unavailable.”</b> Everything defaults to <span style="color:var(--accent)">Active</span>. Money features are also blocked on the server when off.</div>'
     +   '<div class="fc-stat"><span class="fc-num">' + (total - off) + '</span> active · <span class="fc-num" style="color:var(--danger)">' + off + '</span> off · ' + total + ' total</div>'
     + '</div>'
     + '<input class="fc-search" id="fcSearch" placeholder="Search features…" value="' + esc(_fcSearch) + '" oninput="fcOnSearch(this.value)"/>';
@@ -2350,7 +2350,7 @@ function renderOvPicker(){
   const el = document.getElementById('ovPicker'); if (!el) return;
   const shown = OV_PICKED ? new Set(OV_PICKED) : new Set(OV_CARDS.map((c) => c.key));
   el.innerHTML = `<div class="panel"><h3>Your Overview</h3>
-    <div class="sub">Tick the numbers you want to see first. This is yours alone — it doesn't change what anyone else sees.</div>
+    <div class="sub">Tick the numbers you want to see first. This is yours alone. It doesn't change what anyone else sees.</div>
     <div class="ovp-grid">${OV_CARDS.map((c) => `<label class="ovp-item"><input type="checkbox" ${shown.has(c.key)?'checked':''} onchange="ovToggle('${c.key}',this.checked)"/><span>${esc(c.label)}</span></label>`).join('')}</div>
     <div style="display:flex;gap:8px;margin-top:12px;"><button class="act accent" onclick="saveOvPrefs()">Save</button><button class="act" onclick="resetOvPrefs()">Show everything</button></div>
   </div>`;
@@ -2379,8 +2379,8 @@ async function loadTurnStatus(){
     const isFallback = t.provider === 'fallback';
     const color = isFallback ? 'var(--amber)' : (t.ok ? 'var(--green)' : 'var(--red)');
     const status = isFallback
-      ? 'Working, but shared & rate-limited — add a Cloudflare TURN key in Railway for production reliability.'
-      : (t.ok ? 'Active &amp; healthy — calls route through your own relay.' : 'Configured but FAILING: ' + esc(t.error || 'could not mint credentials. Check the key/token.'));
+      ? 'Working, but shared & rate-limited. Add a Cloudflare TURN key in Railway for production reliability.'
+      : (t.ok ? 'Active &amp; healthy. Calls route through your own relay.' : 'Configured but FAILING: ' + esc(t.error || 'could not mint credentials. Check the key/token.'));
     const urls = t.urls ? `<div class="turn-urls">${esc((Array.isArray(t.urls) ? t.urls : [t.urls]).join('  ·  '))}</div>` : '';
     el.innerHTML = `<span class="turn-dot" style="background:${color}"></span>
       <div><div class="turn-name">${names[t.provider] || esc(t.provider)}</div>
@@ -2398,7 +2398,7 @@ function renderUsernamesView(){
   document.getElementById('content').innerHTML = `
     <div class="panel">
       <h3>Reserve premium names</h3>
-      <div class="sub">Lock names in bulk so nobody can register or switch to them. Unlock any one later, or assign it straight to the right account — for a partnership, a verified owner, or a paid handle.</div>
+      <div class="sub">Lock names in bulk so nobody can register or switch to them. Unlock any one later, or assign it straight to the right account, for a partnership, a verified owner, or a paid handle.</div>
       <div class="tiers">
         <label class="tier"><input type="checkbox" id="tier-curated" checked><span>Curated <b>brands, people &amp; words</b></span><span class="tc">446</span></label>
         <label class="tier"><input type="checkbox" id="tier-len1"><span>Every <b>1-character</b> handle</span><span class="tc">36</span></label>
@@ -2406,9 +2406,9 @@ function renderUsernamesView(){
         <label class="tier"><input type="checkbox" id="tier-len3"><span>Every <b>3-character</b> handle</span><span class="tc">46,656</span></label>
         <label class="tier"><input type="checkbox" id="tier-len4"><span>Every <b>4-character</b> handle</span><span class="tc warn">1,679,616 ⚠</span></label>
       </div>
-      <div class="muted" style="margin:4px 2px 12px;">Tip: curated + 1–2 char covers impersonation risk and the genuinely scarce short handles. The 3–4 char tiers are huge — they’ll block ordinary short names too, so only reserve them if you mean to sell every short handle.</div>
+      <div class="muted" style="margin:4px 2px 12px;">Tip: curated + 1 to 2 char covers impersonation risk and the genuinely scarce short handles. The 3 to 4 char tiers are huge. They’ll block ordinary short names too, so only reserve them if you mean to sell every short handle.</div>
       <div class="lock-form" style="margin-bottom:10px;">
-        <input id="seedPrice" type="number" min="0" step="1" placeholder="sale price $ (optional — puts them on self-serve sale)" style="flex:1;min-width:180px;"/>
+        <input id="seedPrice" type="number" min="0" step="1" placeholder="sale price $ (optional. Puts them on self-serve sale)" style="flex:1;min-width:180px;"/>
       </div>
       <button class="act" onclick="seedLocks()">Reserve selected</button>
     </div>
@@ -2420,7 +2420,7 @@ function renderUsernamesView(){
         <input id="lockPrice" type="number" min="0" step="1" placeholder="$ price (optional)" style="max-width:130px;"/>
         <button class="act" onclick="addLock()">Lock</button>
       </div>
-      <textarea id="lockBulk" placeholder="…or paste many — one per line, or comma-separated" rows="3" style="width:100%;margin-top:10px;box-sizing:border-box;resize:vertical;"></textarea>
+      <textarea id="lockBulk" placeholder="…or paste many. One per line, or comma-separated" rows="3" style="width:100%;margin-top:10px;box-sizing:border-box;resize:vertical;"></textarea>
       <button class="act" style="margin-top:8px;" onclick="bulkLock()">Lock all pasted</button>
     </div>
     <div class="panel">
@@ -2463,7 +2463,7 @@ async function renderSetupView(){
   liveBox('setupBody').innerHTML = `
     <div class="panel">
       <h3>Setup <span class="muted">· ${d.connected} of ${d.total} connected</span></h3>
-      <div class="sub">Everything outside Atwe that it can plug into. Each one is optional — without it the app keeps running and quietly does less. This page is where that "quietly" stops. Add a key in Railway → Variables, redeploy, and the light turns green.</div>
+      <div class="sub">Everything outside Atwe that it can plug into. Each one is optional, without it the app keeps running and quietly does less. This page is where that "quietly" stops. Add a key in Railway → Variables, redeploy, and the light turns green.</div>
       <div class="tf-chart" style="height:8px;margin-top:12px;background:var(--s2);border-radius:99px;overflow:hidden;">
         <div style="height:100%;width:${pct}%;background:var(--accent-fill);"></div>
       </div>
@@ -2479,7 +2479,7 @@ async function testMail(){
   try {
     const r = await api('POST', '/api/admin/mail-test', {});
     el.innerHTML = r.ok
-      ? `<div class="srs" style="margin-top:8px;"><b>Sent.</b> Check <code>${esc(r.to||'')}</code>. If it arrives, sign-up codes and password resets can reach real people. Look in spam too — landing there is its own problem, and worth knowing about now rather than from a member who never got their code.</div>`
+      ? `<div class="srs" style="margin-top:8px;"><b>Sent.</b> Check <code>${esc(r.to||'')}</code>. If it arrives, sign-up codes and password resets can reach real people. Look in spam too. Landing there is its own problem, and worth knowing about now rather than from a member who never got their code.</div>`
       : `<div class="srs" style="margin-top:8px;color:var(--amber);"><b>It did not send.</b> ${esc(r.reason||'')}</div>`;
   } catch(e){ el.innerHTML = '<div class="srs" style="margin-top:8px;">The test could not run.</div>'; }
 }
@@ -2526,7 +2526,7 @@ function renderSite(){
   const s = SITE; const len = s.codeLength || 4; const pm = s.passMinutes || 0;
   const status = s.effectiveLocked
     ? `<span class="dot red"></span> Site is <b>locked</b>${s.lockUntil ? ` until ${esc(fmtDateTime(s.lockUntil))} <span class="muted">· auto-unlocks</span>` : ''}`
-    : `<span class="dot green"></span> Site is <b>live</b> — anyone can visit`;
+    : `<span class="dot green"></span> Site is <b>live</b>. Anyone can visit`;
   const maint = (typeof MAINT !== 'undefined' && MAINT) || { title: '', body: '', until: null };
   const jobRows = (JOBS.jobs||[]).map(j => {
     const cls = j.status==='ok'?'green':(j.status==='error'?'red':(j.status==='stale'?'amber':'grey'));
@@ -2535,7 +2535,7 @@ function renderSite(){
       + (j.runnable ? `<button class="act" onclick="jobAct(${jstr(j.name)},'run')">Run now</button>` : '')
       + `<button class="act${j.paused ? ' accent' : ''}" onclick="jobAct(${jstr(j.name)},${j.paused ? "'resume'" : "'pause'"})">${j.paused ? 'Resume' : 'Pause'}</button></div>`;
     const last = j.lastRunAt ? relTime(j.ageMs) : 'not yet';
-    const sub = j.status==='error' ? esc(j.lastError||'last run failed') : (j.status==='stale' ? ('overdue — last ran '+last) : ('ran '+last+' · every '+jobEvery(j.intervalMs)));
+    const sub = j.status==='error' ? esc(j.lastError||'last run failed') : (j.status==='stale' ? ('overdue. Last ran '+last) : ('ran '+last+' · every '+jobEvery(j.intervalMs)));
     return `<div class="site-row" style="border-top:1px solid var(--b1);"><div style="display:flex;align-items:center;gap:11px;min-width:0;"><span class="jdot ${cls}"></span><div><div class="srt">${esc(j.label)}</div><div class="srs">${sub}${j.lastProcessed!=null?' · '+j.lastProcessed+' handled':''}</div></div></div><span class="pill ${j.status==='ok'?'pro':(j.status==='error'?'ban':(j.status==='stale'?'susp':''))}">${esc(j.status)}</span>${acts}</div>`;
   }).join('');
   const crashes = (typeof CRASHES !== 'undefined' && CRASHES.crashes) || [];
@@ -2565,7 +2565,7 @@ function renderSite(){
   const errPanel = `
     <div class="panel">
       <h3>App errors <span class="muted">· what broke for someone</span></h3>
-      <div class="sub">Every time the app — or this dashboard — throws an error in somebody's browser it lands here; a line starting <b>admin /</b> broke for a staffer, in here. One line per distinct fault, with how many DIFFERENT people hit it. A brand-new one also sends you a notification. Mark one fixed and it only comes back if it happens again on a newer build.</div>
+      <div class="sub">Every time the app, or this dashboard, throws an error in somebody's browser it lands here; a line starting <b>admin /</b> broke for a staffer, in here. One line per distinct fault, with how many DIFFERENT people hit it. A brand-new one also sends you a notification. Mark one fixed and it only comes back if it happens again on a newer build.</div>
       ${errRows || '<div class="empty" style="padding:14px 0;">Nothing has broken. 🎉</div>'}
     </div>`;
   const crashPanel = `
@@ -2580,7 +2580,7 @@ function renderSite(){
       <div class="sub">While the site is locked, visitors see this instead of the app. Leave it blank for the plain wording.</div>
       <input class="in" id="mtTitle" maxlength="80" placeholder="Heading (e.g. Back shortly)" value="${esc(maint.title || '')}" style="width:100%;margin-top:10px;"/>
       <input class="in" id="mtBody" maxlength="400" placeholder="A line explaining why" value="${esc(maint.body || '')}" style="width:100%;margin-top:8px;"/>
-      <label class="ann-f" style="margin-top:8px;display:block;"><span>Back by <span class="muted">(optional — shows a countdown)</span></span>
+      <label class="ann-f" style="margin-top:8px;display:block;"><span>Back by <span class="muted">(optional. Shows a countdown)</span></span>
         <input id="mtUntil" type="datetime-local" value="${maint.until ? new Date(new Date(maint.until) - new Date().getTimezoneOffset()*60000).toISOString().slice(0,16) : ''}"/></label>
       <div class="custom-row" style="margin-top:12px;"><button class="act accent" onclick="saveMaintenance()">Save the message</button></div>
     </div>
@@ -2618,7 +2618,7 @@ function renderSite(){
         <button class="refresh" onclick="regen()" style="margin-left:auto;">Regenerate</button>
       </div>
       <div class="custom-row">
-        <input id="customCode" inputmode="numeric" maxlength="10" placeholder="set a custom code (4–10 digits)" autocomplete="off"/>
+        <input id="customCode" inputmode="numeric" maxlength="10" placeholder="set a custom code (4 to 10 digits)" autocomplete="off"/>
         <button class="act" onclick="setCustom()">Set</button>
       </div>
     </div>
@@ -2634,7 +2634,7 @@ function renderSite(){
     </div>
     <div class="panel">
       <h3>Let certain people in <span class="muted">· no code needed</span></h3>
-      <div class="sub">Pick the people who should keep using Atwe completely normally while it’s locked — no lock screen, no code. Everyone else still needs the code. They have to be signed in to their Atwe account on that device for this to work.</div>
+      <div class="sub">Pick the people who should keep using Atwe completely normally while it’s locked. No lock screen, no code. Everyone else still needs the code. They have to be signed in to their Atwe account on that device for this to work.</div>
       <div class="custom-row" style="margin-top:12px;">
         <input id="allowSearch" placeholder="Search by name, @username or email" autocomplete="off" value="${esc(ALLOW_Q || '')}" oninput="allowSearch()"/>
       </div>
@@ -2644,8 +2644,8 @@ function renderSite(){
     </div>
     <div class="panel">
       <h3>Demo mode <span class="muted">· preview</span></h3>
-      <div class="sub">Fill the platform with ~100 sample accounts — real-looking profiles, photos, banners, posts (with images), stories, businesses and products, all networked together — so you can see how it feels fully used. Sample items can’t be bought. Turn it off and every sample is removed, leaving only real users.</div>
-      <div class="site-status">${DEMO.on ? `<span class="dot amber"></span> Demo mode is <b>ON</b> — <b>${DEMO.count||0}</b> sample accounts live` : `<span class="dot green"></span> Real platform — real users only`}</div>
+      <div class="sub">Fill the platform with ~100 sample accounts. Real-looking profiles, photos, banners, posts (with images), stories, businesses and products, all networked together, so you can see how it feels fully used. Sample items can’t be bought. Turn it off and every sample is removed, leaving only real users.</div>
+      <div class="site-status">${DEMO.on ? `<span class="dot amber"></span> Demo mode is <b>ON</b>. <b>${DEMO.count||0}</b> sample accounts live` : `<span class="dot green"></span> Real platform. Real users only`}</div>
       <div class="site-row">
         <div><div class="srt">Show a busy demo platform</div><div class="srs">Temporary &amp; off by default. Best used before launch. Removes cleanly.</div></div>
         <button class="switch demo ${DEMO.on ? 'on' : ''}" id="demoSwitch" onclick="toggleDemo()" aria-label="Demo mode"><span></span></button>
@@ -2653,7 +2653,7 @@ function renderSite(){
     </div>
     <div class="panel">
       <h3>Feature switches <span class="muted">· kill switches</span></h3>
-      <div class="sub">Turn a feature off platform-wide instantly — no deploy — if it's being abused or misbehaving. Off blocks the action server-side and hides it in the app. Everything is on by default.</div>
+      <div class="sub">Turn a feature off platform-wide instantly, no deploy, if it's being abused or misbehaving. Off blocks the action server-side and hides it in the app. Everything is on by default.</div>
       ${(FLAGS.meta || []).map(f => {
         const on = (FLAGS.flags || {})[f.key] !== false;
         return `<div class="site-row"><div><div class="srt">${esc(f.label)}${on ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">${esc(f.help)}</div></div>
@@ -2662,7 +2662,7 @@ function renderSite(){
     </div>
     <div class="panel">
       <h3>Roll out gradually <span class="muted">· let a few people try it first</span></h3>
-      <div class="sub">Instead of switching a feature on for everyone at once, give it to a slice — <b>5%</b>, then <b>25%</b>, then everyone — and watch. Whoever is in the trial <b>stays</b> in it, so nothing flickers on and off for them, and two features at 5% reach two different groups rather than picking on the same unlucky few. <b>100% means everyone</b>, which is how it has always worked.</div>
+      <div class="sub">Instead of switching a feature on for everyone at once, give it to a slice, <b>5%</b>, then <b>25%</b>, then everyone, and watch. Whoever is in the trial <b>stays</b> in it, so nothing flickers on and off for them, and two features at 5% reach two different groups rather than picking on the same unlucky few. <b>100% means everyone</b>, which is how it has always worked.</div>
       ${(ROLLOUT.meta || FLAGS.meta || []).map(f => {
         const pct = (ROLLOUT.rollout || {})[f.key];
         const v = pct == null ? 100 : pct;
@@ -2679,9 +2679,9 @@ function renderSite(){
     </div>
     <div class="panel">
       <h3>Who can open this dashboard <span class="muted">· by network</span></h3>
-      <div class="sub">Lock the admin dashboard to addresses you trust — your office, your home, a VPN. Everything here runs on top of the normal sign-in, never instead of it. <b>You cannot switch this on from an address that isn't on the list</b>, so it can't lock you out by accident.</div>
+      <div class="sub">Lock the admin dashboard to addresses you trust. Your office, your home, a VPN. Everything here runs on top of the normal sign-in, never instead of it. <b>You cannot switch this on from an address that isn't on the list</b>, so it can't lock you out by accident.</div>
       <div class="site-status"><span class="dot ${IPALLOW.config && IPALLOW.config.enabled ? 'green' : ''}"></span>
-        ${IPALLOW.config && IPALLOW.config.enabled ? 'Restricted to <b>' + (IPALLOW.config.entries||[]).length + '</b> address' + ((IPALLOW.config.entries||[]).length === 1 ? '' : 'es') : 'Open — any network with a valid sign-in'}
+        ${IPALLOW.config && IPALLOW.config.enabled ? 'Restricted to <b>' + (IPALLOW.config.entries||[]).length + '</b> address' + ((IPALLOW.config.entries||[]).length === 1 ? '' : 'es') : 'Open. Any network with a valid sign-in'}
         · you are on <b>${esc(IPALLOW.myIp || 'an unknown address')}</b></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <input class="in" id="ipEntry" maxlength="60" placeholder="203.0.113.9 or 203.0.113.0/24" style="flex:1;min-width:180px;margin:0;"/>
@@ -2695,7 +2695,7 @@ function renderSite(){
     </div>
     <div class="panel">
       <h3>Promo codes <span class="muted">· Atwe-funded</span></h3>
-      <div class="sub">A discount <b>Atwe pays for</b> — the buyer pays less and the seller is topped back up to the full price, so campaigns never cost your sellers anything. A seller's own coupon always wins if the codes clash. The cost shows in Revenue as a negative line.</div>
+      <div class="sub">A discount <b>Atwe pays for</b>. The buyer pays less and the seller is topped back up to the full price, so campaigns never cost your sellers anything. A seller's own coupon always wins if the codes clash. The cost shows in Revenue as a negative line.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <input class="in" id="pmCode" maxlength="24" placeholder="WELCOME10" style="width:150px;margin:0;"/>
         <select class="in" id="pmKind" style="width:130px;margin:0;"><option value="percent">% off</option><option value="fixed">$ off</option></select>
@@ -2708,7 +2708,7 @@ function renderSite(){
     </div>
     <div class="panel">
       <h3>Legal details <span class="muted">· who Atwe legally is</span></h3>
-      <div class="sub">Your Terms and Privacy Policy are written, but they don't yet say which company stands behind them. Fill these in and both pages update straight away — no deploy. Every field is optional: anything you leave blank simply doesn't appear.</div>
+      <div class="sub">Your Terms and Privacy Policy are written, but they don't yet say which company stands behind them. Fill these in and both pages update straight away. No deploy. Every field is optional: anything you leave blank simply doesn't appear.</div>
       <div id="legalWarn" class="sub" style="margin-top:8px;"></div>
       <div style="display:grid;gap:8px;margin-top:12px;">
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -2731,7 +2731,7 @@ function renderSite(){
     </div>
     <div class="panel">
       <h3>Platform fee <span class="muted">· your marketplace take-rate</span></h3>
-      <div class="sub">A share of each completed sale, taken from the <b>seller's</b> proceeds when they're paid — never added on top of what the buyer sees, so a listed price stays the price. Atwe starts at <b>1%</b>; set <b>0</b> to take nothing. Whatever you save here is what applies from that moment on.</div>
+      <div class="sub">A share of each completed sale, taken from the <b>seller's</b> proceeds when they're paid. Never added on top of what the buyer sees, so a listed price stays the price. Atwe starts at <b>1%</b>; set <b>0</b> to take nothing. Whatever you save here is what applies from that moment on.</div>
       <div id="feeStats" class="sub" style="margin-top:8px;"></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
         <input class="in" id="feePct" type="number" min="0" max="20" step="0.25" placeholder="%" style="width:110px;margin:0;"/>
@@ -2742,7 +2742,7 @@ function renderSite(){
     </div>
     <div class="panel">
       <h3>Blocked links <span class="muted">· scam &amp; phishing domains</span></h3>
-      <div class="sub">Blocks a domain everywhere members write — posts, messages and listings. Subdomains and bare mentions are covered too. New accounts also can't post any link for their first <b id="probHrs">48</b> hours.</div>
+      <div class="sub">Blocks a domain everywhere members write. Posts, messages and listings. Subdomains and bare mentions are covered too. New accounts also can't post any link for their first <b id="probHrs">48</b> hours.</div>
       <div style="display:flex;gap:8px;margin-top:10px;">
         <input class="in" id="bdDomain" maxlength="190" placeholder="scam-site.com" style="flex:1;margin:0;"/>
         <input class="in" id="bdNote" maxlength="200" placeholder="Note (optional)" style="flex:1;margin:0;"/>
@@ -2970,14 +2970,14 @@ async function toggleDemo(){
   try {
     DEMO = await api('POST', '/api/admin/demo', { on: want });
     renderSite();
-    notify(want ? `Demo mode ON — ${DEMO.count||0} sample accounts added. Open the app to explore.` : 'Demo mode off — back to real users only.');
+    notify(want ? `Demo mode ON.${DEMO.count||0} sample accounts added. Open the app to explore.` : 'Demo mode off. Back to real users only.');
   } catch (e){ notify(e.message); if (btn) btn.classList.remove('busy'); }
 }
 async function patchSite(body, msg){
   try { SITE = await api('PATCH', '/api/admin/site', body); renderSite(); if (msg) notify(msg); }
   catch (e){ notify(e.message); }
 }
-function toggleLock(){ patchSite({ locked: !SITE.locked }, SITE.locked ? 'Website unlocked — now live.' : 'Website locked.'); }
+function toggleLock(){ patchSite({ locked: !SITE.locked }, SITE.locked ? 'Website unlocked. Now live.' : 'Website locked.'); }
 function lockFor(min, label){ patchSite({ lockForMinutes: min }, 'Locked for ' + label + '.'); }
 function setLen(n){ patchSite({ codeLength: n }, n + '-digit code generated.'); }
 function regen(){ patchSite({ regenerate: true }, 'New code generated.'); }
@@ -3000,7 +3000,7 @@ function allowRow(u, on){
 function allowListHtml(){
   const a = (typeof SITE !== 'undefined' && SITE && SITE.allowUsers) || [];
   return a.length ? a.map(u => allowRow(u, true)).join('')
-    : '<div class="muted" style="font-size:13px;">Nobody yet — while the site is locked, everyone needs the code.</div>';
+    : '<div class="muted" style="font-size:13px;">Nobody yet, while the site is locked, everyone needs the code.</div>';
 }
 function allowSearch(){
   const inp = document.getElementById('allowSearch');
@@ -3034,7 +3034,7 @@ async function setAllow(id, on){
 }
 function setCustom(){
   const v = (document.getElementById('customCode').value || '').trim();
-  if (!/^[0-9]{4,10}$/.test(v)) { notify('Code must be 4–10 digits.'); return; }
+  if (!/^[0-9]{4,10}$/.test(v)) { notify('Code must be 4 to 10 digits.'); return; }
   patchSite({ code: v }, 'Custom code set.');
 }
 function copyCode(){
@@ -3057,7 +3057,7 @@ function renderLockList(){
   const el = document.getElementById('lockList'); if (!el) return;
   const cnt = document.getElementById('lockCount');
   if (cnt) cnt.textContent = LOCK_Q ? `· ${LOCK_TOTAL.toLocaleString()} match${LOCK_TOTAL === 1 ? '' : 'es'} of ${LOCK_GRAND.toLocaleString()}` : (LOCK_GRAND ? `· ${LOCK_GRAND.toLocaleString()} reserved` : '');
-  if (!LOCKS.length) { el.innerHTML = `<div class="empty">${LOCK_Q ? 'No reserved names match “' + esc(LOCK_Q) + '”.' : 'No reserved names yet — reserve a tier above, or lock names by hand.'}</div>`; }
+  if (!LOCKS.length) { el.innerHTML = `<div class="empty">${LOCK_Q ? 'No reserved names match “' + esc(LOCK_Q) + '”.' : 'No reserved names yet: reserve a tier above, or lock names by hand.'}</div>`; }
   else el.innerHTML = LOCKS.map(l => `
     <div class="lock-item">
       <div class="lock-main">
@@ -3155,7 +3155,7 @@ async function removeLock(username){
 let TRAFFIC = null, TRAFFIC_RANGE = 'week', TRAFFIC_T = null;
 let TRAFFIC_DAYS = 30;
 function setTrafficCustom(){
-  const d = parseInt(prompt('How many days back? (1–365)', String(TRAFFIC_DAYS)), 10);
+  const d = parseInt(prompt('How many days back? (1 to 365)', String(TRAFFIC_DAYS)), 10);
   if (!Number.isInteger(d) || d < 1) return;
   TRAFFIC_DAYS = Math.min(365, d); TRAFFIC_RANGE = 'custom'; renderTrafficView();
 }
@@ -3217,7 +3217,7 @@ function onMemberRow(m){
   return `<button class="on-row" onclick="openUser(${m.id})">
     ${onAva(m)}
     <span class="on-main">
-      <span class="on-name">${esc(m.name || '—')}${m.verified ? '<span class="on-check">✓</span>' : ''}${tags.join('')}</span>
+      <span class="on-name">${esc(m.name || '-')}${m.verified ? '<span class="on-check">✓</span>' : ''}${tags.join('')}</span>
       <span class="on-sub">@${esc(m.username || '')}${m.headline ? ' · ' + esc(m.headline) : ''}</span>
       <span class="on-meta">${metaBits}</span>
     </span>
@@ -3273,18 +3273,18 @@ function onlinePanel(){
   return shell(`
     <div class="sub" style="margin:-2px 0 10px;">${head}${plat ? ' &nbsp;·&nbsp; ' + plat : ''}</div>
     ${rows || `<div class="empty">${empty}</div>`}
-    <div class="muted" style="margin-top:10px;">Showing ${esc(cur.note)}. A guest is a visitor who is not signed in — nothing that identifies them is recorded, only where they are.
+    <div class="muted" style="margin-top:10px;">Showing ${esc(cur.note)}. A guest is a visitor who is not signed in. Nothing that identifies them is recorded, only where they are.
     A location marked <b>approximate</b> was guessed from the network address, which is often wrong on a mobile connection; the rest were reported by the device itself.</div>`);
 }
 // Say plainly how sure we are about a place, rather than stating a guess as fact.
 function placeHtml(loc, source){
   if (!loc) return '<span class="muted">Location unknown</span>';
-  if (source === 'lookup') return `${esc(loc)} <span class="on-tag" title="Guessed from the network address — often wrong on a mobile connection.">approximate</span>`;
+  if (source === 'lookup') return `${esc(loc)} <span class="on-tag" title="Guessed from the network address. Often wrong on a mobile connection.">approximate</span>`;
   return esc(loc);
 }
 function tfNum(n){ return (n||0).toLocaleString(); }
 function tfChange(cur, prev){
-  if (!prev) return cur > 0 ? { txt: '▲ new', cls: 'up' } : { txt: '—', cls: 'flat' };
+  if (!prev) return cur > 0 ? { txt: '▲ new', cls: 'up' } : { txt: '-', cls: 'flat' };
   const d = Math.round((cur - prev) / prev * 100);
   if (d > 0) return { txt: '▲ ' + d + '%', cls: 'up' };
   if (d < 0) return { txt: '▼ ' + Math.abs(d) + '%', cls: 'down' };
@@ -3348,9 +3348,9 @@ function renderTraffic(){
     </div>`;
   }).join('');
   const ACC_LABEL = {
-    device: 'The device told us — exact country',
-    edge:   'The network told us — exact country',
-    lookup: 'Guessed from the address — approximate',
+    device: 'The device told us. Exact country',
+    edge:   'The network told us. Exact country',
+    lookup: 'Guessed from the address. Approximate',
   };
   const accs = t.accuracy || [];
   const accTotal = accs.reduce((n, a) => n + a.views, 0) || 1;
@@ -3359,7 +3359,7 @@ function renderTraffic(){
       <div class="tf-loc-bar"><div style="width:${Math.round(a.views / accTotal * 100)}%"></div></div>
       <span class="tf-loc-v">${Math.round(a.views / accTotal * 100)}%</span></div>`).join('')
     : '<div class="empty">Nothing yet.</div>';
-  const geoNote = t.geoEnabled ? '' : '<div class="muted" style="margin-top:8px;">Location lookup is off — set <code>GEOIP_URL</code> (or unset <code>GEOIP_DISABLED</code>) to break traffic down by place.</div>';
+  const geoNote = t.geoEnabled ? '' : '<div class="muted" style="margin-top:8px;">Location lookup is off. Set <code>GEOIP_URL</code> (or unset <code>GEOIP_DISABLED</code>) to break traffic down by place.</div>';
   document.getElementById('tfBody').innerHTML = `
     <div class="tf-cards">
       <div class="tf-card"><div class="tf-cl">Views · ${rangeLabel}</div><div class="tf-cv">${tfNum(t.totals.views)}</div><div class="tf-cd ${vc.cls}">${vc.txt} <span class="muted">vs previous</span></div></div>
@@ -3432,7 +3432,7 @@ function renderRevenue(){
   const t = REV; if (!t) return;
   const mc = tfChange(t.totals.thisMonthCents, t.totals.prevMonthCents);
   const top = t.recent[0];
-  if (top && REV_LASTPAY != null && top.id !== REV_LASTPAY) notify('💰 New payment · ' + money(top.amountCents) + ' — ' + (top.label || ''));
+  if (top && REV_LASTPAY != null && top.id !== REV_LASTPAY) notify('💰 New payment · ' + money(top.amountCents) + ' - ' + (top.label || ''));
   if (top) REV_LASTPAY = top.id;
   const max = Math.max(1, ...t.trend.map(x => x.cents));
   const bars = t.trend.map(x => { const h = Math.max(2, Math.round(x.cents / max * 100)); return `<div class="tf-bar" title="${revBucketLabel(x.bucket,t.range)}: ${money(x.cents)}"><div class="tf-barfill" style="height:${h}%"></div><span class="tf-barlbl">${revBucketLabel(x.bucket,t.range)}</span></div>`; }).join('');
@@ -3471,12 +3471,12 @@ const TX_IC = { send:ICONS.send, receive:ICONS.money, topup:ICONS.plus, cashout:
 function renderFinance(f){
   const kind = (r) => (TX_IC[r.kind] || ICONS.card);
   const rows = f.recent.length ? f.recent.map(r => {
-    const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||'—');
+    const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||'-');
     const peer = r.peer_username ? ' → @'+esc(r.peer_username) : '';
     const sign = r.delta_cents < 0 ? '' : '+';
     return `<div class="rev-pay"><span class="rev-pay-ic">${kind(r)}</span><div class="rev-pay-main"><div class="rev-pay-t">${esc(r.kind)}${peer}</div><div class="rev-pay-s">${who} · ${new Date(r.created_at).toLocaleString()}</div></div><span class="rev-pay-v" style="color:${r.delta_cents<0?'var(--red)':'var(--green)'}">${sign}${money(r.delta_cents)}</span></div>`;
   }).join('') : '<div class="empty">No wallet activity yet.</div>';
-  const topB = f.topBalances.length ? f.topBalances.map(u => `<div class="rev-src"><span class="rev-src-n">${u.username?'@'+esc(u.username):esc(u.name||'—')}</span><span class="rev-src-v">${money(u.balance_cents)}</span></div>`).join('') : '<div class="empty">No funded wallets.</div>';
+  const topB = f.topBalances.length ? f.topBalances.map(u => `<div class="rev-src"><span class="rev-src-n">${u.username?'@'+esc(u.username):esc(u.name||'-')}</span><span class="rev-src-v">${money(u.balance_cents)}</span></div>`).join('') : '<div class="empty">No funded wallets.</div>';
   document.getElementById('finBody').innerHTML = `
     <div class="rev-hero"><div class="rl">Total custodial float (money you hold for users)</div><div class="rv">${money(f.floatCents)}</div><div class="rd">${money(f.userBalanceCents)} spendable · ${money(f.potsCents)} in pots · ${money(f.escrowHeldCents)} held in escrow</div></div>
     <div class="tf-cards">
@@ -3540,7 +3540,7 @@ function renderAuditView(){
   document.getElementById('content').innerHTML = `
     <div class="panel">
       <h3>Admin audit log</h3>
-      <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Every staff action is recorded here — who did what, to whom, and when. Append-only.</div>
+      <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Every staff action is recorded here, who did what, to whom, and when. Append-only.</div>
       <input class="in" id="auditSearch" placeholder="Filter by action (e.g. user.ban, dispute, ad.approve)…" oninput="auditFilter(this.value)" style="margin-bottom:12px;max-width:420px;"/>
       <div id="auditBody"><div class="ld"><span class="ab-mark"></span></div></div>
     </div>`;
@@ -3571,7 +3571,7 @@ function renderInvestigateView(){
   document.getElementById('content').innerHTML = `
     <div class="panel">
       <h3>Blocked words &amp; links</h3>
-      <div class="sub">Any new post that contains one of these words, or links to one of these domains, is blocked the moment someone tries to post it — with a clear message asking them to edit. One entry per line. Words match whole words (so "ass" won't catch "grass"); a domain also covers its subdomains.</div>
+      <div class="sub">Any new post that contains one of these words, or links to one of these domains, is blocked the moment someone tries to post it, with a clear message asking them to edit. One entry per line. Words match whole words (so "ass" won't catch "grass"); a domain also covers its subdomains.</div>
       <div class="ann-grid">
         <label class="ann-f"><span>Blocked words / phrases</span><textarea id="blkTerms" rows="7" placeholder="scam&#10;free crypto&#10;…" style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:10px 12px;font:inherit;font-size:14px;resize:vertical;"></textarea></label>
         <label class="ann-f"><span>Blocked link domains</span><textarea id="blkDomains" rows="7" placeholder="spam-site.com&#10;bad.example&#10;…" style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:10px 12px;font:inherit;font-size:14px;resize:vertical;"></textarea></label>
@@ -3580,7 +3580,7 @@ function renderInvestigateView(){
     </div>
     <div class="panel">
       <h3>Investigate</h3>
-      <div class="sub">Search across all people, posts and listings — for abuse investigations or a legal/data request. Tap a person to open their account.</div>
+      <div class="sub">Search across all people, posts and listings, for abuse investigations or a legal/data request. Tap a person to open their account.</div>
       <input class="in" id="invQ" placeholder="Search name, @username, email, post text, listing…" oninput="invSearch(this.value)" style="max-width:460px;margin-bottom:10px;"/>
       <div class="tf-ranges" style="flex-wrap:wrap;margin-bottom:6px;">${INV_TYPES.map(([k,l])=>`<button class="tf-r ${INV_TYPE===k?'on':''}" onclick="invSetType('${k}')">${l}</button>`).join('')}</div>
       <div id="invBody"><div class="muted" style="padding:12px 2px;font-size:13px;">Type at least 2 characters to search.</div></div>
@@ -3634,7 +3634,7 @@ function renderModerateView(){
   document.getElementById('content').innerHTML = `
     <div class="panel">
       <h3>AI content scan</h3>
-      <div class="sub">Sweep everything public on Atwe — posts, group messages, listings, ads and profiles — for inappropriate behavior: abuse, hate, violence, pornography, prostitution, drugs, scams, spam and illegal activity. Private 1-to-1 messages are never scanned.</div>
+      <div class="sub">Sweep everything public on Atwe, posts, group messages, listings, ads and profiles, for inappropriate behavior: abuse, hate, violence, pornography, prostitution, drugs, scams, spam and illegal activity. Private 1-to-1 messages are never scanned.</div>
       <button class="mod-scan-btn" id="modScanBtn" onclick="modStartScan('full')">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         Scan Atwe</button>
@@ -3679,11 +3679,11 @@ async function modPoll(){
     const prog = document.getElementById('modProgress');
     const aiTag = scan.ai ? '' : ' · heuristic only (set ANTHROPIC_API_KEY for full AI)';
     if (scan.status === 'running') {
-      if (prog) prog.innerHTML = `<div class="mod-prog"><span class="mod-spin"></span> Scanning <b>${esc(scan.label||'')}</b> — ${scan.scanned} checked · <b>${scan.flagged}</b> flagged</div>`;
+      if (prog) prog.innerHTML = `<div class="mod-prog"><span class="mod-spin"></span> Scanning <b>${esc(scan.label||'')}</b>.${scan.scanned} checked · <b>${scan.flagged}</b> flagged</div>`;
       MOD.poll = setTimeout(modPoll, 1200);
     } else {
       const btn = document.getElementById('modScanBtn'); if (btn) btn.disabled = false;
-      if (prog) prog.innerHTML = `<div class="mod-prog done">✓ Scan of <b>${esc(scan.label||'')}</b> complete — ${scan.scanned} items checked, <b>${scan.flagged}</b> flagged${aiTag}</div>`;
+      if (prog) prog.innerHTML = `<div class="mod-prog done">✓ Scan of <b>${esc(scan.label||'')}</b> complete.${scan.scanned} items checked, <b>${scan.flagged}</b> flagged${aiTag}</div>`;
       MOD.status = 'open'; modSetStatus('open');
     }
   } catch (e) { const prog = document.getElementById('modProgress'); if (prog) prog.innerHTML = '<div class="mod-prog err">'+esc(e.message||'Scan error')+'</div>'; }
@@ -3693,7 +3693,7 @@ async function modLoadFlags(){
   el.innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
   try {
     const { flags } = await api('GET', '/api/admin/moderation/flags?status=' + MOD.status);
-    if (!flags.length) { el.innerHTML = `<div class="empty">${MOD.status==='open'?'No open flags — you\'re clean. Run a scan above.':'Nothing here.'}</div>`; return; }
+    if (!flags.length) { el.innerHTML = `<div class="empty">${MOD.status==='open'?'No open flags. You\'re clean. Run a scan above.':'Nothing here.'}</div>`; return; }
     el.innerHTML = flags.map(modFlagCard).join('');
   } catch (e) { el.innerHTML = '<div class="empty">'+esc(e.message)+'</div>'; }
 }
@@ -3786,7 +3786,7 @@ function renderActivityView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="act-filter" id="actFilter">${ACT_CATS.map(([k,l])=>`<button class="tf-r ${ACT.cat===k?'on':''}" onclick="actSetCat('${k}')">${l}</button>`).join('')}</div>
-    <div class="muted" style="font-size:12.5px;margin:8px 2px 12px;"><span class="live-pulse"></span> Live — updates automatically. Everything happening across the platform.</div>
+    <div class="muted" style="font-size:12.5px;margin:8px 2px 12px;"><span class="live-pulse"></span> Live. Updates automatically. Everything happening across the platform.</div>
     <div id="actBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   ACT.events = []; ACT.maxId = 0;
   loadActivity(true);
@@ -3807,7 +3807,7 @@ async function loadActivity(reset){
 }
 function renderActivity(newIds){
   const el = document.getElementById('actBody'); if (!el) return;
-  if (!ACT.events.length) { el.innerHTML = '<div class="empty">Nothing yet — activity will appear here as it happens.</div>'; return; }
+  if (!ACT.events.length) { el.innerHTML = '<div class="empty">Nothing yet. Activity will appear here as it happens.</div>'; return; }
   el.innerHTML = ACT.events.map(e => {
     const isNew = newIds && newIds.has(e.id);
     return `<div class="act-row${isNew?' act-new':''}"><span class="act-ic act-${esc(e.category)}">${ACT_ICON[e.category]||'•'}</span><div class="act-main"><div class="act-txt">${actLabel(e)}</div><div class="act-sub">${esc(e.category)}${e.subject_name?' · '+esc(e.subject_name):''}</div></div><span class="act-time">${relTime(Date.now()-new Date(e.created_at).getTime())}</span></div>`;
@@ -3853,7 +3853,7 @@ async function loadDataReq(){
     const d = await api('GET', '/api/admin/data-requests' + (DR_FILTER?('?state='+DR_FILTER):'?state=open'));
     if (!d.requests.length) { el.innerHTML = '<div class="empty">No ' + (DR_FILTER||'open') + ' requests.</div>'; return; }
     el.innerHTML = d.requests.map(r => {
-      const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||r.email||'—');
+      const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||r.email||'-');
       const kind = r.kind === 'delete' ? '🗑️ Deletion' : '📦 Data export';
       let due = '';
       if (r.state === 'open' && r.daysLeft != null) due = r.overdue ? `<span class="pill ban">${Math.abs(r.daysLeft)}d overdue</span>` : `<span class="pill ${r.daysLeft<=5?'susp':''}">${r.daysLeft}d left</span>`;
@@ -3894,7 +3894,7 @@ async function loadAppeals(){
     const d = await api('GET', '/api/admin/appeals' + q);
     if (!d.appeals.length) { el.innerHTML = '<div class="empty">No ' + (APP_FILTER || 'open') + ' appeals.</div>'; return; }
     el.innerHTML = d.appeals.map(a => {
-      const who = a.user_username ? '@'+esc(a.user_username) : esc(a.user_name||a.user_email||'—');
+      const who = a.user_username ? '@'+esc(a.user_username) : esc(a.user_name||a.user_email||'-');
       const badge = a.current_status === 'banned' ? '<span class="pill ban">banned</span>' : (a.current_status === 'suspended' ? '<span class="pill susp">suspended</span>' : '<span class="pill pro">active</span>');
       const actions = a.state === 'open'
         ? `<div class="ref-acts"><button class="act accent" onclick="resolveAppeal(${a.id}, 'grant')">Grant · reinstate</button><button class="act danger" onclick="resolveAppeal(${a.id}, 'deny')">Deny</button></div>`
@@ -3907,7 +3907,7 @@ async function resolveAppeal(id, action){
   if (action === 'grant' && !confirm('Grant this appeal? The account will be reinstated and able to sign in again.')) return;
   const note = prompt(action === 'grant' ? 'Optional note (shown to the member):' : 'Reason for denying (shown to the member):', '');
   if (action === 'deny' && note === null) return;
-  try { await api('POST', '/api/admin/appeals/' + id + '/resolve', { action, note: note || null }); notify(action === 'grant' ? 'Appeal granted — account reinstated.' : 'Appeal denied.'); loadAppeals(); }
+  try { await api('POST', '/api/admin/appeals/' + id + '/resolve', { action, note: note || null }); notify(action === 'grant' ? 'Appeal granted. Account reinstated.' : 'Appeal denied.'); loadAppeals(); }
   catch (e){ notify(e.message); }
 }
 
@@ -3944,7 +3944,7 @@ function renderRevShare(){
     </div></div>`).join('') || '<div class="empty">Nobody earned a share in this month.</div>';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Paying the people who bring the audience</h3>
-      <div class="sub">Atwe earns money from ads. This gives a slice of it back to the creators whose work carried those ads. The sum is deliberately simple so you can explain it to anyone who asks: take a share of the month's <b>ad</b> revenue (never orders or subscriptions — that is somebody else's money), then split it by how much genuine attention each creator's work got, counting a like or a share as worth ten views.</div>
+      <div class="sub">Atwe earns money from ads. This gives a slice of it back to the creators whose work carried those ads. The sum is deliberately simple so you can explain it to anyone who asks: take a share of the month's <b>ad</b> revenue (never orders or subscriptions, that is somebody else's money), then split it by how much genuine attention each creator's work got, counting a like or a share as worth ten views.</div>
       <div class="site-row"><div><div class="srt">Share ad revenue with creators${c.enabled ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">Nothing is paid while this is off.</div></div>
         <button class="switch ${c.enabled?'on':''}" onclick="rsToggle()" aria-label="Revenue share"><span></span></button></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
@@ -3967,7 +3967,7 @@ function renderRevShare(){
         <button class="act" onclick="rsPrepare()">Write down this month's payouts</button>
         <button class="act accent" onclick="rsPay()" ${pending ? '' : 'disabled'}>Pay the ${pending} waiting</button>
       </div>
-      <div class="sub" style="margin-top:8px;">Writing them down does not move any money — it just makes the list, so you can look at it first.</div>
+      <div class="sub" style="margin-top:8px;">Writing them down does not move any money. It just makes the list, so you can look at it first.</div>
     </div>
     <div class="panel"><h3>Who would be paid</h3></div>${rows}`;
 }
@@ -4012,7 +4012,7 @@ async function loadAuth(){
     AU = await api('GET', '/api/admin/authentications' + (AU_ALL ? '?state=all' : ''));
     const c = AU.config || {};
     const head = `<div class="panel"><h3>Checking an item is real before the buyer gets it</h3>
-      <div class="sub">For the things people are afraid to buy from a stranger — a watch, a pair of trainers, a bag. The item comes to a checker first and only goes on to the buyer if it is genuine. It sits on top of protected payment: the money is already being held, so if the check fails the buyer is simply refunded.</div>
+      <div class="sub">For the things people are afraid to buy from a stranger. A watch, a pair of trainers, a bag. The item comes to a checker first and only goes on to the buyer if it is genuine. It sits on top of protected payment: the money is already being held, so if the check fails the buyer is simply refunded.</div>
       <div class="site-row"><div><div class="srt">Offer authentication${c.enabled ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">Buyers only see the option when this is on.</div></div>
         <button class="switch ${c.enabled?'on':''}" onclick="auToggle()" aria-label="Authentication"><span></span></button></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
@@ -4032,7 +4032,7 @@ async function loadAuth(){
       </div><div class="ref-side"><div class="ref-acts">
         ${a.status === 'requested' ? `<button class="act" onclick="auAct(${a.id},'receive')">It has arrived</button>` : ''}
         ${open ? `<button class="act accent" onclick="auAct(${a.id},'pass')">It is genuine</button>
-                  <button class="act danger" onclick="auAct(${a.id},'fail')">It is not — refund</button>` : ''}
+                  <button class="act danger" onclick="auAct(${a.id},'fail')">It is not. Refund</button>` : ''}
       </div></div></div>`;
     }).join('');
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
@@ -4080,7 +4080,7 @@ async function loadChargebacks(){
     const d = await api('GET', '/api/admin/chargebacks' + (CB_ALL ? '?state=all' : ''));
     const t = d.totals || {};
     const head = `<div class="panel"><h3>When a bank takes the money back</h3>
-      <div class="sub">A chargeback is a customer disputing a card payment with their own bank. The money is pulled from you straight away, and you get a deadline to argue your side — <b>miss it and you lose automatically</b>. That deadline is the reason this page exists.
+      <div class="sub">A chargeback is a customer disputing a card payment with their own bank. The money is pulled from you straight away, and you get a deadline to argue your side. <b>miss it and you lose automatically</b>. That deadline is the reason this page exists.
       ${d.cardsEnabled ? '' : '<br><b>Note:</b> card payments are not set up on this server, so nothing will appear here.'}</div>
       <div class="ov-grid" style="margin-top:14px;">
         ${ovCard('shield', t.needs_response || 0, 'Waiting on you')}
@@ -4106,7 +4106,7 @@ async function loadChargebacks(){
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 async function cbReply(id){
-  const text = prompt('What happened? Say it plainly — this goes to the bank as your evidence.', '');
+  const text = prompt('What happened? Say it plainly. This goes to the bank as your evidence.', '');
   if (!text) return;
   try { await api('POST', '/api/admin/chargebacks/' + id + '/evidence', { text }); notify('Reply sent to the bank.'); loadChargebacks(); }
   catch (e){ notify(e.message); }
@@ -4149,7 +4149,7 @@ function renderReportBuilder(){
     `<div class="al-row"><span class="al-p">${esc(r.bucket)}</span><span class="al-ms">${esc(fmt(r.value))}</span></div>`).join('') : '';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Ask your own question</h3>
-      <div class="sub">Pick a number and how to slice it. No formulas, no query language — just the numbers Atwe already keeps, arranged the way you want them.</div>
+      <div class="sub">Pick a number and how to slice it. No formulas, no query language. Just the numbers Atwe already keeps, arranged the way you want them.</div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
         <select class="in" style="width:auto;min-width:180px;margin:0;" onchange="rbSet('metric', this.value)">
           ${(RB.opts.metrics||[]).map(m => `<option value="${esc(m.key)}"${RB.metric===m.key?' selected':''}>${esc(m.label)}</option>`).join('')}
@@ -4215,7 +4215,7 @@ function renderChurn(){
   }).join('') || '<div class="empty">Nobody in this group.</div>';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Who is drifting away</h3>
-      <div class="sub">Ranked by how likely someone is to be gone for good. "Risk" is simply <b>how long they've been away</b>, weighted by <b>how much they used Atwe before</b> — so a regular who has vanished for a week ranks above someone who never really started. Pick a group here, then message them from Campaigns.</div>
+      <div class="sub">Ranked by how likely someone is to be gone for good. "Risk" is simply <b>how long they've been away</b>, weighted by <b>how much they used Atwe before</b>, so a regular who has vanished for a week ranks above someone who never really started. Pick a group here, then message them from Campaigns.</div>
       <div class="tf-ranges" style="margin-top:12px;">
         ${(CH.segments||[]).map(sg => `<button class="tf-r ${CH.segment===sg.key?'on':''}" onclick="chSeg('${sg.key}')">${esc(sg.label)} (${sg.count})</button>`).join('')}
       </div>
@@ -4249,14 +4249,14 @@ function renderCampaigns(){
       <div class="ref-sub">${sent
         ? `Reached ${c.reached||0}${c.emailed?', '+c.emailed+' emailed':''}${c.pushed?', '+c.pushed+' pushed':''} · ${new Date(c.sentAt).toLocaleString()}`
         : 'Not sent yet · saved ' + new Date(c.createdAt).toLocaleString()}</div>
-      ${sent ? `<div class="ref-note"><b>${c.returned || 0}</b> of them came back${backPct != null ? ` — ${backPct}%` : ''}</div>` : ''}
+      ${sent ? `<div class="ref-note"><b>${c.returned || 0}</b> of them came back${backPct != null ? ` - ${backPct}%` : ''}</div>` : ''}
       <div class="ref-reason">${esc((c.body||'').slice(0,180))}</div>
     </div><div class="ref-side">${sent ? '' :
       `<div class="ref-acts"><button class="act accent" onclick="cpSend(${c.id})">Send</button><button class="act danger" onclick="cpDelete(${c.id})">Delete</button></div>`}</div></div>`;
   }).join('') || '<div class="empty">No campaigns yet.</div>';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Win people back</h3>
-      <div class="sub">Pick a group, write one message, and send it where you choose — the Atwe inbox, email, a phone notification, or all three. Afterwards Atwe counts how many of the people you reached <b>actually came back</b>, which is the only number that tells you whether it worked.</div>
+      <div class="sub">Pick a group, write one message, and send it where you choose. The Atwe inbox, email, a phone notification, or all three. Afterwards Atwe counts how many of the people you reached <b>actually came back</b>, which is the only number that tells you whether it worked.</div>
       <input class="in" id="cpName" maxlength="80" placeholder="Name it (just for you)" style="width:100%;margin:10px 0 8px;"/>
       <input class="in" id="cpSubject" maxlength="160" placeholder="Subject, if you're emailing" style="width:100%;margin:0 0 8px;"/>
       <textarea class="in" id="cpBody" rows="4" maxlength="2000" placeholder="What do you want to say?" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
@@ -4320,12 +4320,12 @@ function renderExperiments(){
   if (VIEW !== 'experiments') return;
   const rows = (EX.experiments || []).map(e => {
     const arms = (e.arms || []).map(a =>
-      `<div class="fr-cond">${esc(a.variant)} — <b>${a.saw}</b> saw it, <b>${a.did}</b> did it${a.ratePct != null ? ' (<b>'+a.ratePct+'%</b>)' : ''}</div>`).join('')
+      `<div class="fr-cond">${esc(a.variant)}<b>${a.saw}</b> saw it, <b>${a.did}</b> did it${a.ratePct != null ? ' (<b>'+a.ratePct+'%</b>)' : ''}</div>`).join('')
       || '<span class="muted">nobody has seen it yet</span>';
     const verdict = !e.arms || e.arms.length < 2 ? ''
       : e.enoughData
         ? `<div class="ref-note"><b>${esc(e.leading)}</b> is ahead.</div>`
-        : '<div class="ref-note">Too early to say — wait for at least 100 people on each side.</div>';
+        : '<div class="ref-note">Too early to say. Wait for at least 100 people on each side.</div>';
     const live = e.status === 'running';
     return `<div class="ref-row"><div class="ref-main">
       <div class="ref-top"><span class="ref-kind">${esc(e.name)}</span>
@@ -4342,7 +4342,7 @@ function renderExperiments(){
   }).join('') || '<div class="empty">No experiments running.</div>';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Show two versions, keep the winner</h3>
-      <div class="sub">Half your members see one thing, half see another, and Atwe counts which group does more of what you care about. Everyone stays on the same side for the whole test, so nothing flickers. This is about <b>Atwe itself</b> — a seller testing their own listing has a separate tool in Manage store.</div>
+      <div class="sub">Half your members see one thing, half see another, and Atwe counts which group does more of what you care about. Everyone stays on the same side for the whole test, so nothing flickers. This is about <b>Atwe itself</b>. A seller testing their own listing has a separate tool in Manage store.</div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <input class="in" id="exKey" maxlength="40" placeholder="short key (e.g. new-signup-copy)" style="flex:1;min-width:180px;margin:0;"/>
         <input class="in" id="exName" maxlength="80" placeholder="Name it" style="flex:1;min-width:160px;margin:0;"/>
@@ -4401,10 +4401,10 @@ function renderWording(){
       <div class="ref-reason">${esc(o.value)}</div>
       <div class="ref-sub">${o.updated_by_name ? 'changed by ' + esc(o.updated_by_name) + ' · ' : ''}${new Date(o.updated_at).toLocaleString()}</div>
     </div><div class="ref-side"><button class="act danger" onclick="wdClear(${jstr(o.src)})">Put back</button></div></div>`).join('')
-    || '<div class="empty">Nothing changed in this language — it reads exactly as it ships.</div>';
+    || '<div class="empty">Nothing changed in this language. It reads exactly as it ships.</div>';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Change a word, anywhere in Atwe</h3>
-      <div class="sub">Atwe speaks 14 languages. If a translation reads oddly, fix it here and it changes for everyone the next time they open the app — no waiting for a release. Only the phrases you actually change are stored; everything else keeps the wording Atwe ships with.</div>
+      <div class="sub">Atwe speaks 14 languages. If a translation reads oddly, fix it here and it changes for everyone the next time they open the app. No waiting for a release. Only the phrases you actually change are stored; everything else keeps the wording Atwe ships with.</div>
       <div class="tf-ranges" style="margin-top:12px;">
         ${WD_LANGS.map(([c,n]) => `<button class="tf-r ${WD.lang===c?'on':''}" onclick="wdLang('${c}')">${n}${byLang[c]?' ('+byLang[c]+')':''}</button>`).join('')}
       </div>
@@ -4451,7 +4451,7 @@ function renderPlaces(){
     `<button class="tf-r" onclick="plAdd('${esc(String(x.country).slice(0,2).toUpperCase())}')">${esc(x.country)} (${x.visitors})</button>`).join('');
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Where Atwe is available</h3>
-      <div class="sub">Some things are against the law in some places, and some places are simply not worth the fraud. You can shut a country out entirely, or leave it open and switch off just the risky parts. <b>If Atwe can't tell where someone is, they are let through</b> — turning away a real customer because a lookup hiccuped is worse than missing one bad actor.
+      <div class="sub">Some things are against the law in some places, and some places are simply not worth the fraud. You can shut a country out entirely, or leave it open and switch off just the risky parts. <b>If Atwe can't tell where someone is, they are let through</b>. Turning away a real customer because a lookup hiccuped is worse than missing one bad actor.
       ${PL.geoEnabled ? '' : '<br><b>Note:</b> location lookup is switched off on this server, so no rule here will ever match.'}</div>
       <div class="site-row"><div><div class="srt">Use these rules${r.enabled ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">Nothing applies until this is on.</div></div>
         <button class="switch ${r.enabled?'on':''}" onclick="plToggle()" aria-label="Country rules"><span></span></button></div>
@@ -4502,7 +4502,7 @@ function renderEmailBrand(){
   const b = EB.branding || {}, d = EB.defaults || {};
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>How your emails look</h3>
-      <div class="sub">Every email Atwe sends — the sign-in alerts, the receipts, the campaigns — uses the same design. Change it here and everything sent afterwards follows. Leave a box empty to keep what Atwe ships with.
+      <div class="sub">Every email Atwe sends, the sign-in alerts, the receipts, the campaigns, uses the same design. Change it here and everything sent afterwards follows. Leave a box empty to keep what Atwe ships with.
       ${EB.emailEnabled ? '' : '<br><b>Note:</b> email is not set up on this server, so nothing is actually delivered yet.'}</div>
       <div class="fr-grid" style="margin-top:14px;">
         <div class="fr-in"><label>Name in the header</label>
@@ -4541,7 +4541,7 @@ async function ebReset(){
 }
 async function ebPreview(){
   try { const r = await api('POST', '/api/admin/email-branding/preview', {});
-    notify(r.delivered ? 'Sent to ' + r.sent + '.' : 'Email is not set up — the sample went to the server log.'); }
+    notify(r.delivered ? 'Sent to ' + r.sent + '.' : 'Email is not set up. The sample went to the server log.'); }
   catch (e){ notify(e.message); }
 }
 
@@ -4594,18 +4594,18 @@ function renderFraud(){
   const condInputs = (FR.conditions || []).map(c => c.unit === 'flag'
     ? `<label class="ovp-item"><input type="checkbox" id="frc-${c.key}"/><span>${esc(c.label)}</span></label>`
     : `<div class="fr-in"><label>${esc(c.label)}${c.unit === 'money' ? ' ($)' : ''}</label>
-        <input class="in" id="frc-${c.key}" type="number" min="0" step="${c.unit === 'money' ? '1' : '1'}" placeholder="—" style="margin:0;"/></div>`
+        <input class="in" id="frc-${c.key}" type="number" min="0" step="${c.unit === 'money' ? '1' : '1'}" placeholder=". " style="margin:0;"/></div>`
   ).join('');
 
   const hits = (FR.hits || []).slice(0, 30).map(h => `<div class="ref-row"><div class="ref-main">
       <div class="ref-top"><span class="ref-kind">${esc(h.rule_name || 'deleted rule')}</span>
         <span class="pill ${h.action==='freeze'?'ban':(h.action==='block'?'susp':'')}">${esc(h.action)}</span></div>
-      <div class="ref-sub">${h.username ? '@'+esc(h.username) : 'account #' + h.user_id} · ${h.amount_cents != null ? money(h.amount_cents) : '—'} · ${new Date(h.created_at).toLocaleString()}</div>
+      <div class="ref-sub">${h.username ? '@'+esc(h.username) : 'account #' + h.user_id} · ${h.amount_cents != null ? money(h.amount_cents) : '-'} · ${new Date(h.created_at).toLocaleString()}</div>
     </div></div>`).join('') || '<div class="empty">No rule has fired yet.</div>';
 
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Your own fraud rules</h3>
-      <div class="sub">The standard limits are one blunt number for everyone. A rule lets you say the specific thing you mean — <b>"a brand-new account trying to send $500"</b> — and choose what happens: write it down, refuse the payment, or freeze the wallet for a person to look at. Every condition on a rule must be true at once. Rules run on every payment leaving a wallet, and a broken rule never stops someone spending their own money.</div>
+      <div class="sub">The standard limits are one blunt number for everyone. A rule lets you say the specific thing you mean, <b>"a brand-new account trying to send $500"</b>, and choose what happens: write it down, refuse the payment, or freeze the wallet for a person to look at. Every condition on a rule must be true at once. Rules run on every payment leaving a wallet, and a broken rule never stops someone spending their own money.</div>
     </div>
     <div class="panel"><h3>Add a rule</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
@@ -4621,7 +4621,7 @@ function renderFraud(){
       <button class="act accent" style="margin-top:12px;" onclick="frCreate()">Create rule</button>
     </div>
     <div class="panel"><h3>Try it against a real account</h3>
-      <div class="sub">A dry run — nothing is charged, frozen or recorded.</div>
+      <div class="sub">A dry run. Nothing is charged, frozen or recorded.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <input class="in" id="frTestUser" placeholder="@username" style="flex:1;min-width:160px;margin:0;"/>
         <input class="in" id="frTestAmt" type="number" placeholder="amount $" style="width:130px;margin:0;"/>
@@ -4648,7 +4648,7 @@ async function frCreate(){
   const action = document.getElementById('frAction').value;
   const conditions = frReadConditions();
   if (!name) { notify('Give the rule a name.'); return; }
-  if (!Object.keys(conditions).length) { notify('Add at least one condition — a rule with none would match every payment.'); return; }
+  if (!Object.keys(conditions).length) { notify('Add at least one condition. A rule with none would match every payment.'); return; }
   try { await api('POST', '/api/admin/fraud-rules', { name, action, conditions }); notify('Rule created.'); loadFraud(); }
   catch (e){ notify(e.message); }
 }
@@ -4713,7 +4713,7 @@ async function loadModQa(){
       </div></div>`).join('') || '<div class="empty">No second reviews yet.</div>';
     el.innerHTML = `
       <div class="panel"><h3>How the team is deciding</h3>
-        <div class="sub">Decisions made, and how often an appeal overturned them. A climbing overturn rate usually means the <b>guidance</b> is unclear, not that the person is bad at their job — read it that way.
+        <div class="sub">Decisions made, and how often an appeal overturned them. A climbing overturn rate usually means the <b>guidance</b> is unclear, not that the person is bad at their job. Read it that way.
         ${MQ.agreementPct != null ? ` Second reviewers have agreed with <b>${MQ.agreementPct}%</b> of the calls they looked at.` : ''}</div>
       </div>${staff}
       <div class="panel"><h3>Second look <span class="muted">· a random sample</span></h3>
@@ -4765,7 +4765,7 @@ function renderBroadcasts(){
   }).join('') || '<div class="empty">Nothing saved yet.</div>';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Write it now, send it when you mean to</h3>
-      <div class="sub">A broadcast reaches every member you pick — in the app, and by email or push if you choose. Save it as a draft and sleep on it, or set a time and let it go out on its own. Once it has gone, it can't be edited: the words are already in people's inboxes.</div>
+      <div class="sub">A broadcast reaches every member you pick. In the app, and by email or push if you choose. Save it as a draft and sleep on it, or set a time and let it go out on its own. Once it has gone, it can't be edited: the words are already in people's inboxes.</div>
       <input class="in" id="bcSubject" maxlength="160" placeholder="Subject (used as the email subject)" style="width:100%;margin:10px 0 8px;"/>
       <textarea class="in" id="bcBody" rows="5" maxlength="4000" placeholder="What do you want to say?" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
@@ -4847,7 +4847,7 @@ function renderDevelopers(){
   ).join('') || '<div class="empty">Nobody has created an API key yet.</div>';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>The developer platform</h3>
-      <div class="sub">A business can now connect Atwe to whatever else they run: a <b>key</b> to call us with, a <b>webhook</b> so we can call them when something happens, and a log of both. Keys are stored as a one-way hash — nobody, including you, can read a key back after it is created. You can revoke any of them from here.</div>
+      <div class="sub">A business can now connect Atwe to whatever else they run: a <b>key</b> to call us with, a <b>webhook</b> so we can call them when something happens, and a log of both. Keys are stored as a one-way hash. Nobody, including you, can read a key back after it is created. You can revoke any of them from here.</div>
       <div class="ov-grid" style="margin-top:14px;">
         ${ovCard('at', s.live || 0, 'Live keys')}
         ${ovCard('lock', s.revoked || 0, 'Revoked')}
@@ -4901,7 +4901,7 @@ async function loadApiLog(){
       </div>`).join('') || '<div class="empty">Nothing here.</div>';
     el.innerHTML = `
       <div class="panel"><h3>What the API did</h3>
-        <div class="sub">Every call to the public API, plus anything anywhere on Atwe that <b>failed</b> or took longer than ${AL.slowMs} ms. Ordinary fast requests aren't recorded — that would be a firehose nobody reads. Kept for 30 days.</div>
+        <div class="sub">Every call to the public API, plus anything anywhere on Atwe that <b>failed</b> or took longer than ${AL.slowMs} ms. Ordinary fast requests aren't recorded, that would be a firehose nobody reads. Kept for 30 days.</div>
         <div class="ov-grid" style="margin-top:14px;">
           ${ovCard('post', t.n || 0, 'Recorded')}
           ${ovCard('shield', t.server_errors || 0, 'Server errors')}
@@ -4942,7 +4942,7 @@ function renderIncidents(){
   }).join('') || '<div class="empty">No incidents. Long may it last.</div>';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Your public status page</h3>
-      <div class="sub">Live at <a href="/status" target="_blank" rel="noopener" style="color:var(--accent)">/status</a> — no sign-in, and it keeps working when the app doesn't. Businesses check a page like this before they trust a platform with their money. Opening an incident here puts it there straight away.</div>
+      <div class="sub">Live at <a href="/status" target="_blank" rel="noopener" style="color:var(--accent)">/status</a>. No sign-in, and it keeps working when the app doesn't. Businesses check a page like this before they trust a platform with their money. Opening an incident here puts it there straight away.</div>
     </div>
     <div class="panel"><h3>Open an incident</h3>
       <input class="in" id="incTitle" maxlength="160" placeholder="What's wrong, in plain words (e.g. Payments are slow)" style="width:100%;margin:8px 0;"/>
@@ -4951,7 +4951,7 @@ function renderIncidents(){
           ${(INC.impacts||[]).map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}
         </select>
       </div>
-      <textarea class="in" id="incBody" rows="3" maxlength="2000" placeholder="First update — what you know so far" style="width:100%;box-sizing:border-box;margin-top:8px;resize:vertical;"></textarea>
+      <textarea class="in" id="incBody" rows="3" maxlength="2000" placeholder="First update. What you know so far" style="width:100%;box-sizing:border-box;margin-top:8px;resize:vertical;"></textarea>
       <button class="act accent" style="margin-top:10px;" onclick="incCreate()">Publish</button>
     </div>
     ${rows}`;
@@ -5018,7 +5018,7 @@ async function loadApprovals(){
       const when = new Date(a.created_at).toLocaleString();
       const acts = a.status === 'pending'
         ? (mine
-            ? '<span class="muted">You asked for this — someone else has to approve it.</span>'
+            ? '<span class="muted">You asked for this. Someone else has to approve it.</span>'
             : `<div class="ref-acts"><button class="act accent" onclick="resolveApproval(${a.id},'approve')">Approve</button><button class="act danger" onclick="resolveApproval(${a.id},'reject')">Reject</button></div>`)
         : `<span class="pill ${a.status==='approved'?'pro':(a.status==='rejected'?'ban':'')}">${esc(a.status)}</span>${a.approved_by_name?' <span class="muted">by '+esc(a.approved_by_name)+'</span>':''}`;
       return `<div class="ref-row"><div class="ref-main">
@@ -5026,7 +5026,7 @@ async function loadApprovals(){
         <div class="ref-sub">Asked for by ${esc(a.requested_by_name || 'a staffer')}${a.requested_by_username?' (@'+esc(a.requested_by_username)+')':''} · ${when}</div>
         ${a.reason?`<div class="ref-reason">“${esc(a.reason)}”</div>`:''}
         ${a.staff_note?`<div class="ref-note">Note: ${esc(a.staff_note)}</div>`:''}
-        ${a.status==='approved'?'<div class="ref-note">Approved — whoever asked can now carry it out.</div>':''}
+        ${a.status==='approved'?'<div class="ref-note">Approved. Whoever asked can now carry it out.</div>':''}
       </div><div class="ref-side">${acts}</div></div>`;
     }).join('');
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
@@ -5034,7 +5034,7 @@ async function loadApprovals(){
 function apvSettingsHtml(c, meta){
   return `<div class="panel">
     <h3>Four-eyes rule <span class="muted">· two people for the dangerous things</span></h3>
-    <div class="sub">When this is on, the actions below don't run straight away — they open a request that a <b>different</b> admin has to approve. The standard control in any bank's back office. (Wallet adjustments already work this way and always will.)</div>
+    <div class="sub">When this is on, the actions below don't run straight away. They open a request that a <b>different</b> admin has to approve. The standard control in any bank's back office. (Wallet adjustments already work this way and always will.)</div>
     <div class="site-row"><div><div class="srt">Require a second admin${c.enabled?'':' <span class="pill ban">off</span>'}</div><div class="srs">You need at least one other person with dashboard access before this can be switched on.</div></div>
       <button class="switch ${c.enabled?'on':''}" onclick="toggleDual()" aria-label="Four-eyes rule"><span></span></button></div>
     ${(meta||[]).map(m => `<div class="site-row"><div><div class="srt">${esc(m.label)}</div><div class="srs">${esc(m.help)}</div></div>
@@ -5070,7 +5070,7 @@ async function resolveApproval(id, action){
   const note = prompt(action === 'approve' ? 'Optional note:' : 'Why are you rejecting this?', '');
   if (action === 'reject' && note === null) return;
   try { await api('POST', '/api/admin/approvals/' + id + '/' + action, { note: note || null });
-    notify(action === 'approve' ? 'Approved — the person who asked can now carry it out.' : 'Rejected.'); loadApprovals(); }
+    notify(action === 'approve' ? 'Approved. The person who asked can now carry it out.' : 'Rejected.'); loadApprovals(); }
   catch (e){ notify(e.message); }
 }
 
@@ -5109,7 +5109,7 @@ async function loadDmca(){
         <div class="ref-top"><span class="ref-kind">${esc(c.targetLabel)} #${c.target_id}</span> ${contested?'<span class="pill susp">contested</span>':''} ${c.gone?'<span class="pill">already gone</span>':''}</div>
         <div class="ref-sub">Claimed by ${esc(c.claimant_name || 'a member')}${c.claimant_email?' · '+esc(c.claimant_email):''} · posted by ${owner} · ${new Date(c.created_at).toLocaleString()}</div>
         ${c.excerpt?`<div class="ref-note">Content: “${esc(c.excerpt)}”</div>`:''}
-        <div class="ref-reason">Their work: ${esc(c.work_desc || '—')}</div>
+        <div class="ref-reason">Their work: ${esc(c.work_desc || '-')}</div>
         ${c.note?`<div class="ref-note">${esc(c.note)}</div>`:''}
         ${c.counter_text?`<div class="ref-reason">Counter-notice: “${esc(c.counter_text)}”</div>`:''}
         ${c.staff_note?`<div class="ref-note">Decision note: ${esc(c.staff_note)}</div>`:''}
@@ -5152,12 +5152,12 @@ function impProfile(u, tag){
   const row = (k, v) => `<div class="imp-row"><span class="imp-k">${esc(k)}</span><span class="imp-v">${v}</span></div>`;
   return `<div class="imp-col">
     <div class="imp-tag">${esc(tag)}</div>
-    <div class="imp-head">${av}<div><div class="imp-name">${esc(u.name || '—')}${u.verified?' <span class="pill pro">verified</span>':''}</div>
+    <div class="imp-head">${av}<div><div class="imp-name">${esc(u.name || '-')}${u.verified?' <span class="pill pro">verified</span>':''}</div>
       <div class="muted">${u.username?'@'+esc(u.username):'no @username'}</div></div></div>
-    ${row('Headline', esc(u.headline || '—'))}
-    ${row('Bio', esc((u.bio || '—').slice(0, 120)))}
+    ${row('Headline', esc(u.headline || '-'))}
+    ${row('Bio', esc((u.bio || '-').slice(0, 120)))}
     ${row('Type', esc(u.account_type || 'personal'))}
-    ${row('Age', age == null ? '—' : age + ' day' + (age===1?'':'s'))}
+    ${row('Age', age == null ? '-' : age + ' day' + (age===1?'':'s'))}
     ${row('Followers', Number(u.followers||0).toLocaleString())}
     ${row('Posts', Number(u.posts||0).toLocaleString())}
     ${row('Email', u.email_verified ? 'verified' : '<span class="pill ban">unverified</span>')}
@@ -5216,7 +5216,7 @@ async function loadAlerts(){
     let rulesHtml = '', digestHtml = '';
     try { rulesHtml = alertRulesPanel(await api('GET', '/api/admin/alert-rules')); } catch (e) {}
     try { digestHtml = digestPanel(await api('GET', '/api/admin/owner-digest')); } catch (e) {}
-    const head = `<div class="panel"><h3>Watching for surprises</h3><div class="sub">Every ${d.nextScanMins} minutes, Atwe compares the last 24 hours against the previous week — signups, revenue, orders, refunds, disputes, errors and reports — and raises a flag when something moves far enough to be worth your attention. Quiet is good news.</div></div>` + rulesHtml + digestHtml;
+    const head = `<div class="panel"><h3>Watching for surprises</h3><div class="sub">Every ${d.nextScanMins} minutes, Atwe compares the last 24 hours against the previous week, signups, revenue, orders, refunds, disputes, errors and reports, and raises a flag when something moves far enough to be worth your attention. Quiet is good news.</div></div>` + rulesHtml + digestHtml;
     if (!d.alerts.length) { el.innerHTML = head + '<div class="empty">' + (ALERT_ALL ? 'No alerts have ever been raised.' : 'Nothing unusual. All quiet.') + '</div>'; return; }
     el.innerHTML = head + d.alerts.map(a => {
       const up = a.direction === 'up';
@@ -5255,7 +5255,7 @@ function alertRulesPanel(d){
       </div></div>`;
   }).join('');
   return `<div class="panel"><h3>Tell me if… <span class="muted">· your own alert rules</span></h3>
-    <div class="sub">Each number can be watched on its own terms. "Tell me past 60" means a 60% move against a normal week. Turn one off and Atwe stops raising it — the number is still tracked, you just stop hearing about it.</div>
+    <div class="sub">Each number can be watched on its own terms. "Tell me past 60" means a 60% move against a normal week. Turn one off and Atwe stops raising it. The number is still tracked, you just stop hearing about it.</div>
     ${rows}</div>`;
 }
 async function arSave(metric){
@@ -5276,7 +5276,7 @@ function digestPanel(d){
   const c = d.config || {}, p = d.preview || {};
   const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   return `<div class="panel"><h3>Your week in an email</h3>
-    <div class="sub">A short summary in your inbox — money in, who joined, and what is waiting on you — so you get the platform's pulse without opening a laptop. It goes to every admin.
+    <div class="sub">A short summary in your inbox, money in, who joined, and what is waiting on you, so you get the platform's pulse without opening a laptop. It goes to every admin.
       ${d.emailEnabled ? '' : '<br><b>Note:</b> email isn\'t set up on this server yet, so it is written to the server log instead of sent.'}</div>
     <div class="site-row"><div><div class="srt">Send it weekly</div><div class="srs">One email a week, on the day and hour you choose.</div></div>
       <button class="switch ${c.enabled !== false ? 'on':''}" onclick="digToggle()" aria-label="Weekly digest"><span></span></button></div>
@@ -5345,7 +5345,7 @@ async function loadAiStudio(){
 function aisPromptsHtml(){
   const slots = (AIS_PROMPTS && AIS_PROMPTS.slots) || [];
   return `<div class="panel"><h3>Atwe AI's own words</h3>
-    <div class="sub">These are the standing instructions the assistant reads before every reply — its personality, its manners, what it is allowed to say. Change one here and it takes effect on the very next answer, with no code change and no deploy. Leave a box empty to go back to what Atwe ships with.</div></div>` +
+    <div class="sub">These are the standing instructions the assistant reads before every reply. Its personality, its manners, what it is allowed to say. Change one here and it takes effect on the very next answer, with no code change and no deploy. Leave a box empty to go back to what Atwe ships with.</div></div>` +
     slots.map(sl => `<div class="panel">
       <h3>${esc(sl.label)} ${sl.overridden ? '<span class="pill pro">edited</span>' : '<span class="muted">· as shipped</span>'}</h3>
       <div class="sub">${esc(sl.help)}</div>
@@ -5360,7 +5360,7 @@ function aisPromptsHtml(){
 function showAiDefault(key){
   const sl = (AIS_PROMPTS.slots || []).find(x => x.key === key);
   if (!sl || !sl.def) return;
-  document.getElementById('modalCard').innerHTML = `<h3>${esc(sl.label)} — as shipped</h3>
+  document.getElementById('modalCard').innerHTML = `<h3>${esc(sl.label)}as shipped</h3>
     <div class="sub" style="white-space:pre-wrap;line-height:1.55;max-height:50vh;overflow:auto;">${esc(sl.def)}</div>
     <div style="margin-top:14px;display:flex;gap:8px;"><button class="act" onclick="closeModal()">Close</button>
     <button class="act accent" onclick="useAiDefault('${esc(key)}')">Put it in the box</button></div>`;
@@ -5374,7 +5374,7 @@ function useAiDefault(key){
 }
 async function saveAiPrompt(key){
   const v = (document.getElementById('aip-' + key)?.value || '').trim();
-  try { await api('PUT', '/api/admin/ai-prompts', { prompts: { [key]: v } }); notify('Saved — the next answer uses it.'); loadAiStudio(); }
+  try { await api('PUT', '/api/admin/ai-prompts', { prompts: { [key]: v } }); notify('Saved. The next answer uses it.'); loadAiStudio(); }
   catch (e){ notify(e.message); }
 }
 async function resetAiPrompt(key){
@@ -5385,25 +5385,25 @@ async function resetAiPrompt(key){
 function aisModelsHtml(){
   const d = AIS_MODELS || {}; const c = d.config || {}; const ch = d.choices || [];
   const sel = (id, val, allowNone) => `<select class="in" id="${id}" style="width:100%;margin:0;">
-    ${allowNone ? `<option value=""${!val?' selected':''}>No standby — fail with an error</option>` : `<option value=""${!val?' selected':''}>Whatever Atwe ships with</option>`}
-    ${ch.map(m => `<option value="${esc(m.id)}"${val===m.id?' selected':''}>${esc(m.label)} — ${esc(m.help)}</option>`).join('')}</select>`;
+    ${allowNone ? `<option value=""${!val?' selected':''}>No standby. Fail with an error</option>` : `<option value=""${!val?' selected':''}>Whatever Atwe ships with</option>`}
+    ${ch.map(m => `<option value="${esc(m.id)}"${val===m.id?' selected':''}>${esc(m.label)} - ${esc(m.help)}</option>`).join('')}</select>`;
   return `<div class="panel"><h3>Which brain answers</h3>
-    <div class="sub">Atwe AI uses two speeds: a <b>thoughtful</b> one for real conversation and long work, and a <b>fast</b> one for small jobs like rewriting a sentence. Pick a different model for either, and name a <b>standby</b> to fall back to if the provider is having a bad hour — that way a bad ten minutes upstream doesn't take Atwe AI down with it.
+    <div class="sub">Atwe AI uses two speeds: a <b>thoughtful</b> one for real conversation and long work, and a <b>fast</b> one for small jobs like rewriting a sentence. Pick a different model for either, and name a <b>standby</b> to fall back to if the provider is having a bad hour, that way a bad ten minutes upstream doesn't take Atwe AI down with it.
     ${d.hasKey ? '' : '<br><b>Note:</b> no AI key is set on this server, so nothing here has any effect yet.'}</div></div>
-  <div class="panel"><h3>Thoughtful — conversation &amp; long work</h3>
-    <div class="sub" style="margin-bottom:8px;">Ships with: ${esc((d.defaults||{}).smart || '—')}</div>
+  <div class="panel"><h3>Thoughtful. Conversation &amp; long work</h3>
+    <div class="sub" style="margin-bottom:8px;">Ships with: ${esc((d.defaults||{}).smart || '-')}</div>
     ${sel('aimSmart', c.smart)}
     <div class="sub" style="margin:12px 0 8px;">Standby if that one fails</div>
     ${sel('aimSmartFb', c.smartFallback, true)}
   </div>
-  <div class="panel"><h3>Fast — short jobs</h3>
-    <div class="sub" style="margin-bottom:8px;">Ships with: ${esc((d.defaults||{}).fast || '—')}</div>
+  <div class="panel"><h3>Fast. Short jobs</h3>
+    <div class="sub" style="margin-bottom:8px;">Ships with: ${esc((d.defaults||{}).fast || '-')}</div>
     ${sel('aimFast', c.fast)}
     <div class="sub" style="margin:12px 0 8px;">Standby if that one fails</div>
     ${sel('aimFastFb', c.fastFallback, true)}
   </div>
   <div class="panel">
-    <div class="site-row"><div><div class="srt">Use the standby automatically</div><div class="srs">Only for real provider trouble — a timeout, an overload, a server error. A mistake in our own request is never retried.</div></div>
+    <div class="site-row"><div><div class="srt">Use the standby automatically</div><div class="srs">Only for real provider trouble. A timeout, an overload, a server error. A mistake in our own request is never retried.</div></div>
       <button class="switch ${c.failover !== false ? 'on':''}" onclick="toggleAiFailover()" aria-label="Automatic failover"><span></span></button></div>
     <button class="act accent" style="margin-top:12px;" onclick="saveAiModels()">Save</button>
   </div>`;
@@ -5430,7 +5430,7 @@ function aisFeedbackHtml(d){
   const s = d.summary || {};
   const head = `<div class="panel"><h3>What people think of Atwe AI</h3>
     <div class="sub">Every answer carries a thumbs up and a thumbs down. A thumbs-down asks what went wrong and lands here. Last 30 days:
-      <b>${s.up||0}</b> good, <b>${s.down||0}</b> bad${s.satisfactionPct != null ? ` — <b>${s.satisfactionPct}%</b> happy` : ''}.</div>
+      <b>${s.up||0}</b> good, <b>${s.down||0}</b> bad${s.satisfactionPct != null ? `<b>${s.satisfactionPct}%</b> happy` : ''}.</div>
     <div class="tf-ranges" style="margin-top:12px;">
       <button class="tf-r ${AIFB_FILTER==='open'?'on':''}" onclick="aifbFilter('open')">Needs a look (${s.open||0})</button>
       <button class="tf-r ${AIFB_FILTER==='reviewed'?'on':''}" onclick="aifbFilter('reviewed')">Handled</button>
@@ -5483,7 +5483,7 @@ async function loadRefunds(){
     const d = await api('GET', '/api/admin/refunds' + q);
     if (!d.requests.length) { el.innerHTML = '<div class="empty">No ' + (REF_FILTER || 'open') + ' refund requests.</div>'; return; }
     el.innerHTML = d.requests.map(r => {
-      const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||r.user_email||'—');
+      const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||r.user_email||'-');
       const actions = r.status === 'open'
         ? `<div class="ref-acts"><button class="act accent" onclick="resolveRefund(${r.id}, 'approve', ${r.amount_cents})">Approve · refund ${money(r.amount_cents)}</button><button class="act danger" onclick="resolveRefund(${r.id}, 'decline')">Decline</button></div>`
         : `<span class="pill ${r.status==='approved'?'pro':''}">${esc(r.status)}${r.status==='approved'&&r.refunded_cents?' · '+money(r.refunded_cents):''}</span>${r.resolved_by_name?' <span class="muted">by '+esc(r.resolved_by_name)+'</span>':''}`;
@@ -5528,7 +5528,7 @@ function renderCards(){
       const active = c.status === 'active';
       const icCls = active ? (c.companyIssued ? 'gc-ic co' : 'gc-ic') : 'gc-ic vd';
       const holder = c.owner ? ('held by @' + esc(c.owner)) : (c.recipient ? ('sent to @' + esc(c.recipient) + ' · unclaimed') : 'unclaimed');
-      const from = c.companyIssued ? 'Atwe (company-issued)' : (c.buyer ? '@' + esc(c.buyer) : '—');
+      const from = c.companyIssued ? 'Atwe (company-issued)' : (c.buyer ? '@' + esc(c.buyer) : '-');
       const badges = `<span class="gcb ${active ? 'gcb-active' : 'gcb-void'}">${active ? 'Active' : 'Frozen'}</span>${c.companyIssued ? '<span class="gcb gcb-co">Company</span>' : ''}`;
       const btn = active
         ? `<button class="act danger" onclick="voidCard(${c.id})">Freeze</button>`
@@ -5538,7 +5538,7 @@ function renderCards(){
     return `
       <div class="panel">
         <h3>Issue a gift card</h3>
-        <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Send a company gift card (promo, apology, comp). No one is charged — Atwe funds it. Leave the username blank to just mint a code you can share.</div>
+        <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Send a company gift card (promo, apology, comp). No one is charged. Atwe funds it. Leave the username blank to just mint a code you can share.</div>
         <div class="gc-issue">
           <div class="fld"><label>Amount (USD)</label><input class="in" id="gcAmount" type="number" min="1" step="1" placeholder="25" style="width:120px;"/></div>
           <div class="fld"><label>To @username <span style="text-transform:none;letter-spacing:0;font-weight:400;">(optional)</span></label><input class="in" id="gcTo" placeholder="username" style="width:180px;"/></div>
@@ -5550,10 +5550,10 @@ function renderCards(){
       <div class="panel"><h3>Gift cards ${CARDS_Q ? '· matching “' + esc(CARDS_Q) + '”' : '· newest 100'}</h3>${cards || '<div class="empty">No gift cards yet.</div>'}</div>`;
   };
   const debitBody = () => {
-    const rows = (wl.waitlist || []).map(w => `<div class="wl-row"><div class="wl-main"><div class="wl-email">${esc(w.email)}</div><div class="wl-sub">${w.username ? '@' + esc(w.username) : esc(w.name || '—')} · joined ${new Date(w.joinedAt).toLocaleDateString()}</div></div></div>`).join('');
+    const rows = (wl.waitlist || []).map(w => `<div class="wl-row"><div class="wl-main"><div class="wl-email">${esc(w.email)}</div><div class="wl-sub">${w.username ? '@' + esc(w.username) : esc(w.name || '-')} · joined ${new Date(w.joinedAt).toLocaleDateString()}</div></div></div>`).join('');
     return `
       <div class="panel">
-        <h3>Atwe Card — coming soon</h3>
+        <h3>Atwe Card. Coming soon</h3>
         <div class="muted" style="font-size:13px;line-height:1.6;">A wallet-linked debit card (open-loop, spend anywhere) is on the roadmap and gated behind card-issuing partner approval + KYC/compliance. Members can join the waiting list from the app; their interest is captured here so you can invite the first cohort the moment it's legal to launch.</div>
       </div>
       <div class="panel"><h3>Waiting list · ${wl.waitlistCount} ${wl.waitlistCount === 1 ? 'person' : 'people'}</h3>${rows || '<div class="empty">No one on the waiting list yet.</div>'}</div>`;
@@ -5626,7 +5626,7 @@ async function loadStaff(){
     const perms = Object.keys(SCOPE_LABEL).map(s => `<label class="staff-perm"><input type="checkbox" ${STAFF_NEW.perms.has(s)?'checked':''} onchange="staffTogglePerm('${s}',this.checked)"> ${esc(SCOPE_LABEL[s])}</label>`).join('');
     const rows = d.staff.map(s => {
       const chips = s.is_admin ? '<span class="pill admin">full access</span>' : (Array.isArray(s.admin_perms)&&s.admin_perms.length ? s.admin_perms.map(p => `<span class="staff-chip">${esc(SCOPE_LABEL[p]||p)}</span>`).join('') : '<span class="muted">none</span>');
-      return `<div class="staff-row"><div class="staff-main"><div class="staff-name">${esc(s.name||'—')}${s.username?' <span class="muted">@'+esc(s.username)+'</span>':''}${s.admin_role?' · <span class="staff-role">'+esc(s.admin_role)+'</span>':''}</div><div class="staff-chips">${chips}</div></div>${s.is_admin?'':`<button class="act danger" onclick="revokeStaff(${s.id})">Revoke</button>`}</div>`;
+      return `<div class="staff-row"><div class="staff-main"><div class="staff-name">${esc(s.name||'-')}${s.username?' <span class="muted">@'+esc(s.username)+'</span>':''}${s.admin_role?' · <span class="staff-role">'+esc(s.admin_role)+'</span>':''}</div><div class="staff-chips">${chips}</div></div>${s.is_admin?'':`<button class="act danger" onclick="revokeStaff(${s.id})">Revoke</button>`}</div>`;
     }).join('');
     el.innerHTML = `
       <div class="panel">
@@ -5639,10 +5639,10 @@ async function loadStaff(){
         <div class="staff-perms">${perms}</div>
         <button class="btn" style="margin-top:14px;" onclick="grantStaff()">Grant access</button>
       </div>
-      <div class="panel"><h3>Current staff</h3>${rows || '<div class="empty">No staff yet — you are the only admin.</div>'}</div>
+      <div class="panel"><h3>Current staff</h3>${rows || '<div class="empty">No staff yet. You are the only admin.</div>'}</div>
       <div class="panel">
         <h3>Atwe system accounts</h3>
-        <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Platform accounts like <b>@support</b> — they sign in with a <b>username</b> (no email needed). You set and manage the password here; there is no "forgot password" for them, so if it's ever lost just reset it below.</div>
+        <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Platform accounts like <b>@support</b>. They sign in with a <b>username</b> (no email needed). You set and manage the password here; there is no "forgot password" for them, so if it's ever lost just reset it below.</div>
         <input class="in" id="sysUser" placeholder="username (e.g. support)" style="max-width:220px;margin:0 8px 10px 0;"/>
         <input class="in" id="sysName" placeholder="Display name (optional)" style="max-width:220px;margin:0 8px 10px 0;"/>
         <input class="in" id="sysPass" type="text" placeholder="password (min 8 chars)" style="max-width:220px;margin:0 8px 10px 0;"/>
@@ -5657,7 +5657,7 @@ async function loadSystemAccounts(){
   try {
     const d = await api('GET', '/api/admin/system-accounts');
     if (!d.accounts.length){ el.innerHTML = '<div class="muted" style="font-size:13px;">No system accounts yet.</div>'; return; }
-    el.innerHTML = d.accounts.map(a => `<div class="staff-row"><div class="staff-main"><div class="staff-name">${esc(a.name||'—')} <span class="muted">@${esc(a.username)}</span></div><div class="muted" style="font-size:12px;">signs in with username · created ${new Date(a.created_at).toLocaleDateString()}</div></div><div style="display:flex;gap:8px;"><button class="act" onclick="resetSystemPassword(${a.id},'${esc(a.username)}')">Reset password</button><button class="act danger" onclick="deleteSystemAccount(${a.id},'${esc(a.username)}')">Delete</button></div></div>`).join('');
+    el.innerHTML = d.accounts.map(a => `<div class="staff-row"><div class="staff-main"><div class="staff-name">${esc(a.name||'-')} <span class="muted">@${esc(a.username)}</span></div><div class="muted" style="font-size:12px;">signs in with username · created ${new Date(a.created_at).toLocaleDateString()}</div></div><div style="display:flex;gap:8px;"><button class="act" onclick="resetSystemPassword(${a.id},'${esc(a.username)}')">Reset password</button><button class="act danger" onclick="deleteSystemAccount(${a.id},'${esc(a.username)}')">Delete</button></div></div>`).join('');
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 async function createSystemAccount(){
@@ -5666,13 +5666,13 @@ async function createSystemAccount(){
   if (p.length < 8) { notify('Password must be at least 8 characters.'); return; }
   try {
     const r = await api('POST', '/api/admin/system-accounts', { username: u.trim(), name: n.trim(), password: p });
-    notify('Created @' + r.account.username + ' — it can sign in with that username + this password.');
+    notify('Created @' + r.account.username + 'it can sign in with that username + this password.');
     ['sysUser','sysName','sysPass'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
     loadSystemAccounts();
   } catch (e){ notify(e.message); }
 }
 async function resetSystemPassword(id, uname){
-  const p = prompt('New password for @' + uname + ' (min 8 characters). You\'ll see it once here — note it down:');
+  const p = prompt('New password for @' + uname + ' (min 8 characters). You\'ll see it once here. Note it down:');
   if (p === null) return;
   if (p.length < 8) { notify('Password must be at least 8 characters.'); return; }
   try { await api('POST', '/api/admin/system-accounts/' + id + '/password', { password: p }); notify('Password for @' + uname + ' is now: ' + p); }
@@ -5721,7 +5721,7 @@ function renderAdsAdminView(){
     <div id="adsBody"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="panel" style="margin-top:22px;">
       <h3>Sponsored listings</h3>
-      <div class="sub">Seller-run marketplace CPC campaigns (self-serve — not a review queue). Search or filter, then pause/end an abusive one.</div>
+      <div class="sub">Seller-run marketplace CPC campaigns (self-serve. Not a review queue). Search or filter, then pause/end an abusive one.</div>
       <div class="tf-head">
         <div class="tf-ranges" id="sponFilters"></div>
         <input class="in" id="sponSearchIn" placeholder="Search seller or listing…" style="max-width:240px;" oninput="sponSearchDebounced(this.value)"/>
@@ -5753,7 +5753,7 @@ function adRow(a){
   else if (a.status==='active') acts = `<button onclick="adAct(${a.id},'pause')">Pause</button>`;
   else if (a.status==='paused') acts = `<button class="ok" onclick="adAct(${a.id},'resume')">Resume</button>`;
   acts += `<button onclick="adOpen('${esc(a.destUrl)}')">Open link</button><button class="warn" onclick="adDelete(${a.id})">Delete</button>`;
-  return `<div class="ad-row">${thumb}<div class="ad-main"><div class="ad-title">${esc(a.sponsorName)}${a.title ? ' — ' + esc(a.title) : ''}</div>
+  return `<div class="ad-row">${thumb}<div class="ad-main"><div class="ad-title">${esc(a.sponsorName)}${a.title ? ' - ' + esc(a.title) : ''}</div>
     <div class="ad-sub"><span class="ad-badge adb-${a.status}">${AD_LABEL[a.status]||a.status}</span>${who} · ${perf}</div>
     ${a.body ? `<div class="ad-sub">${esc(a.body)}</div>` : ''}
     <div class="ad-sub">→ ${esc(a.destUrl)}</div>
@@ -5761,7 +5761,7 @@ function adRow(a){
     <div class="ad-acts">${acts}</div></div></div>`;
 }
 async function adAct(id, action){ try { await api('POST', '/api/admin/ads/' + id + '/' + action); notify('Done.'); loadAdsAdmin(); if (VIEW==='revenue') loadRevenue(); } catch (e){ notify(e.message); } }
-function adReject(id){ const note = prompt('Reason for rejection (optional — shown to the advertiser):') || ''; api('POST', '/api/admin/ads/' + id + '/reject', { note }).then(() => { notify('Ad rejected.'); loadAdsAdmin(); }).catch(e => notify(e.message)); }
+function adReject(id){ const note = prompt('Reason for rejection (optional. Shown to the advertiser):') || ''; api('POST', '/api/admin/ads/' + id + '/reject', { note }).then(() => { notify('Ad rejected.'); loadAdsAdmin(); }).catch(e => notify(e.message)); }
 async function adDelete(id){ if (!confirm('Delete this ad permanently?')) return; try { await api('DELETE', '/api/admin/ads/' + id); notify('Deleted.'); loadAdsAdmin(); } catch (e){ notify(e.message); } }
 function adOpen(url){ window.open(url, '_blank', 'noopener'); }
 
@@ -5813,7 +5813,7 @@ function openAdCreate(){
       <input class="in" id="adc-cta" placeholder="Button text (e.g. Shop now)" maxlength="40"/>
       <input class="in" id="adc-url" placeholder="Destination link (https://…)"/>
       <input class="in" id="adc-days" type="number" min="1" placeholder="Days to run (e.g. 7)" value="7"/>
-      <input class="in" id="adc-amt" type="number" min="0" step="0.01" placeholder="Amount paid (optional, $ — logs to revenue)"/>
+      <input class="in" id="adc-amt" type="number" min="0" step="0.01" placeholder="Amount paid (optional, $. Logs to revenue)"/>
       <button class="tf-r" onclick="document.getElementById('adc-file').click()" id="adcPick">Add image or video</button>
       <input type="file" id="adc-file" accept="image/*,video/*" style="display:none" onchange="adcPick(this)"/>
       <div id="adcPreview"></div>
@@ -5857,7 +5857,7 @@ function renderAffAdmin(){
     <div class="panel"><h3>Active badges (${d.active.length})</h3>${activeHtml}</div>`;
 }
 async function affAct(id, action){ try { await api('POST', '/api/admin/affiliations/uploads/' + id + '/' + action); notify('Done.'); loadAffAdmin(); } catch (e){ notify(e.message); } }
-function affReject(id){ const note = prompt('Reason (optional — shown to the user):') || ''; api('POST', '/api/admin/affiliations/uploads/' + id + '/reject', { note }).then(() => { notify('Rejected.'); loadAffAdmin(); }).catch(e => notify(e.message)); }
+function affReject(id){ const note = prompt('Reason (optional. Shown to the user):') || ''; api('POST', '/api/admin/affiliations/uploads/' + id + '/reject', { note }).then(() => { notify('Rejected.'); loadAffAdmin(); }).catch(e => notify(e.message)); }
 async function affRevoke(uid){ if (!confirm('Revoke this user’s affiliation badge?')) return; try { await api('POST', '/api/admin/affiliations/' + uid + '/revoke'); notify('Revoked.'); loadAffAdmin(); } catch (e){ notify(e.message); } }
 
 /* ─── Posts moderation ─── */
@@ -5932,7 +5932,7 @@ function renderSupportView(){
   const broadcast = ME.superadmin ? `
     <div class="panel bc-box">
       <h3>Broadcast</h3>
-      <div class="sub">Drops a message in members' Atwe inbox, and optionally emails it and buzzes their phone. Pick who it goes to — the count is live.</div>
+      <div class="sub">Drops a message in members' Atwe inbox, and optionally emails it and buzzes their phone. Pick who it goes to. The count is live.</div>
       <input id="bcSubject" maxlength="160" placeholder="Subject (e.g. What's new in Atwe)" />
       <textarea id="bcInput" maxlength="4000" placeholder="Write your message…"></textarea>
       <div style="margin:10px 0 4px;font-size:12px;color:var(--muted);">Who gets it</div>
@@ -6030,7 +6030,7 @@ async function useMacro(id, userId){
       notify('Sent to their Atwe inbox.'); closeModal(); return;
     }
     try { await navigator.clipboard.writeText(m.body); notify('Copied.'); }
-    catch (_) { notify('Copy it manually — the browser blocked the clipboard.'); }
+    catch (_) { notify('Copy it manually. The browser blocked the clipboard.'); }
   } catch (e){ notify(e.message); }
 }
 async function loadSupport(){
@@ -6173,7 +6173,7 @@ function renderReportList(){
         <span class="sup-email">${r.target_username ? '@' + esc(r.target_username) + ' · ' : ''}reported by ${r.auto ? 'Atwe moderation' : (r.reporter_username ? '@' + esc(r.reporter_username) : 'a user')}</span>
         <span class="sup-date">${fmtDateTime(r.created_at)}</span>
       </div>
-      <div class="sup-msg"><b>${esc(r.reason || 'other')}</b>${r.note ? ' — ' + esc(r.note) : ''}</div>
+      <div class="sup-msg"><b>${esc(r.reason || 'other')}</b>${r.note ? ' - ' + esc(r.note) : ''}</div>
       <div class="sup-acts">
         ${r.target_type === 'user' ? `<button class="act" onclick="openUser(${r.target_id})">View user</button>` : ''}
         ${r.target_type !== 'user' ? `<button class="act danger" onclick="resolveReport(${r.id}, true)">Remove item</button>` : ''}
@@ -6222,7 +6222,7 @@ function renderCatalogView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Categories <span class="muted">· what sellers pick from</span></h3>
-      <div class="sub">One per line. Listings store the category as text, so editing this list can never orphan an existing listing — it only changes what's offered next time.</div>
+      <div class="sub">One per line. Listings store the category as text, so editing this list can never orphan an existing listing. It only changes what's offered next time.</div>
       <textarea class="in" id="taxBox" rows="6" style="margin-top:10px;"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px;"><button class="act accent" onclick="saveTaxonomy()">Save list</button><span id="taxInfo" class="muted" style="align-self:center;font-size:12px;"></span></div>
     </div>
@@ -6268,7 +6268,7 @@ async function loadCatalog(){
 async function setListingVisibility(id, hide){
   let reason = '';
   if (hide) { reason = prompt('Why is it being hidden? (the seller is told)', '') || ''; if (!reason) return; }
-  try { await api('POST', '/api/admin/listings/' + id + '/visibility', { hide, reason }); notify(hide ? 'Hidden — the seller has been told.' : 'Restored.'); loadCatalog(); }
+  try { await api('POST', '/api/admin/listings/' + id + '/visibility', { hide, reason }); notify(hide ? 'Hidden. The seller has been told.' : 'Restored.'); loadCatalog(); }
   catch (e){ notify(e.message); }
 }
 // Editorial curation: hand-picked shelves shown in Discover. One system for
@@ -6277,7 +6277,7 @@ function renderCurateView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Curated shelves <span class="muted">· shown in Discover</span></h3>
-      <div class="sub">Hand-pick listings or profiles to spotlight. A shelf with nothing in it — or one you turn off — simply isn't shown to members.</div>
+      <div class="sub">Hand-pick listings or profiles to spotlight. A shelf with nothing in it, or one you turn off, simply isn't shown to members.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <input class="in" id="colTitle" maxlength="80" placeholder="Title (e.g. Featured this week)" style="flex:1;min-width:200px;margin:0;"/>
         <input class="in" id="colSub" maxlength="140" placeholder="Subtitle (optional)" style="flex:1;min-width:180px;margin:0;"/>
@@ -6286,7 +6286,7 @@ function renderCurateView(){
       </div></div>
     <div id="colList"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="panel"><h3>Trending topics</h3>
-      <div class="sub">What people are posting about this week. You can hide a topic from Trending, add a line of context so it reads clearly, or pin one to the top — a pinned topic shows even if it isn't trending on its own yet.</div>
+      <div class="sub">What people are posting about this week. You can hide a topic from Trending, add a line of context so it reads clearly, or pin one to the top. A pinned topic shows even if it isn't trending on its own yet.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <input class="in" id="trNew" maxlength="60" placeholder="Pin a topic, e.g. atwe" style="flex:1;min-width:180px;margin:0;"/>
         <button class="act accent" onclick="pinNewTrend()">Pin to top</button>
@@ -6522,7 +6522,7 @@ const ADMIN_PANELS = [
   { tab: "audit", l: "Admin audit log", kw: "who did what history" },
   { tab: "broadcasts", l: "Write it now, send it when you mean to" },
   { tab: "campaigns", l: "Win people back" },
-  { tab: "cards", l: "Atwe Card — coming soon", kw: "debit card waiting list" },
+  { tab: "cards", l: "Atwe Card. Coming soon", kw: "debit card waiting list" },
   { tab: "cards", l: "Issue a gift card", kw: "gift card voucher comp promo give credit" },
   { tab: "catalog", l: "Categories" },
   { tab: "chargebacks", l: "When a bank takes the money back" },
@@ -6805,7 +6805,7 @@ async function escalateCase(id, on){
 // Reduced reach: their followers still see everything, but strangers stop
 // being shown their posts. They are never told — but it is audit-logged.
 async function setReach(id, limited){
-  if (limited && !confirm('Reduce this account\u2019s reach?\n\nTheir followers still see everything. They stop being shown to strangers in For You. They are not told — but this is recorded in the audit log.')) return;
+  if (limited && !confirm('Reduce this account\u2019s reach?\n\nTheir followers still see everything. They stop being shown to strangers in For You. They are not told, but this is recorded in the audit log.')) return;
   try {
     await api('POST', '/api/admin/users/' + id + '/reach', { limited });
     notify(limited ? 'Reach reduced.' : 'Reach restored.');
@@ -6873,7 +6873,7 @@ function renderSafetyView(){
     <div id="ipBox"><div class="ld"><span class="ab-mark"></span></div></div>
 
     <div class="panel"><h3>Send a notification</h3>
-      <div class="sub">Write it once and it goes to people's phones. Only members who installed Atwe and allowed notifications can receive one, so the number below is who it can actually reach — not how many members there are.</div>
+      <div class="sub">Write it once and it goes to people's phones. Only members who installed Atwe and allowed notifications can receive one, so the number below is who it can actually reach. Not how many members there are.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <input class="in" id="pbTitle" maxlength="80" placeholder="Title" style="flex:1;min-width:180px;margin:0;"/>
         <select class="in" id="pbAud" onchange="pushReach()" style="width:190px;margin:0;">
@@ -6887,7 +6887,7 @@ function renderSafetyView(){
       <div class="custom-row" style="margin-top:10px;"><button class="act accent" onclick="sendPush()">Send it</button></div></div>
 
     <div class="panel"><h3>Possible ban evasion</h3>
-      <div class="sub">New accounts signing in from an address a suspended or banned account also used. This is a lead worth a look, never a verdict — households and offices share addresses.</div></div>
+      <div class="sub">New accounts signing in from an address a suspended or banned account also used. This is a lead worth a look, never a verdict. Households and offices share addresses.</div></div>
     <div id="beBox"><div class="ld"><span class="ab-mark"></span></div></div>
 
     <div class="panel"><h3>Enforcement report</h3>
@@ -7090,7 +7090,7 @@ async function loadNumbers(){
           `<div class="site-row"><div class="srt">${esc(i.intent)}</div><span class="pill">${i.n}</span></div>`).join('')}</div>` : ''}</div>
 
       ${rev ? `<div class="panel"><h3>Money</h3>
-        <div class="sub">What Atwe itself earned — fees, ads and subscriptions. Not money moving between members.</div>
+        <div class="sub">What Atwe itself earned. Fees, ads and subscriptions. Not money moving between members.</div>
         <div class="ci-row" style="margin-top:12px;">
           ${stat(money0(rev.totalCents), 'in this period')}${stat(money0(rev.arpuCents), 'per paying member')}
           ${stat(money0(rev.perDayCents), 'a day')}${stat(money0(rev.runRateCents), 'a year at this rate')}
@@ -7128,7 +7128,7 @@ async function loadNumbers(){
         <div id="dormBox" style="margin-top:12px;"></div></div>
 
       <div class="panel"><h3>What each seller earned</h3>
-        <div class="sub">Gross taken through Atwe, by year — the figure a seller needs at tax time.</div>
+        <div class="sub">Gross taken through Atwe, by year. The figure a seller needs at tax time.</div>
         <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
           <input class="in" id="seYear" type="number" min="2020" max="2100" value="${new Date().getFullYear()}" style="width:120px;margin:0;"/>
           <button class="act" onclick="loadSellerEarnings()">Show</button>
@@ -7194,7 +7194,7 @@ function renderOpsView(){
       <div class="dur-row" style="margin-top:10px;"><button class="act danger" onclick="clearErrors()">Clear the list</button></div></div>
     <div id="errBox"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="panel"><h3>Identity checks</h3>
-      <div class="sub">People asking to be ID-verified. Atwe never holds their document — check it with them however you normally would, then record the decision here.</div>
+      <div class="sub">People asking to be ID-verified. Atwe never holds their document. Check it with them however you normally would, then record the decision here.</div>
       <div class="tf-ranges" style="margin-top:10px;">
         <button class="tf-r on" onclick="idvState('pending');this.parentNode.querySelectorAll('.tf-r').forEach(b=>b.classList.remove('on'));this.classList.add('on')">Waiting</button>
         <button class="tf-r" onclick="idvState('approved');this.parentNode.querySelectorAll('.tf-r').forEach(b=>b.classList.remove('on'));this.classList.add('on')">Verified</button>
@@ -7202,7 +7202,7 @@ function renderOpsView(){
       </div></div>
     <div id="idvBox"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="panel"><h3>Staff signed in</h3>
-      <div class="sub">Every device with a staff or admin session. These are the accounts that can move money and read reports — sign one out the moment it shouldn't be there.</div></div>
+      <div class="sub">Every device with a staff or admin session. These are the accounts that can move money and read reports. Sign one out the moment it shouldn't be there.</div></div>
     <div id="sessBox"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="panel"><h3>What shipped, and when</h3>
       <div class="sub">The first question when something breaks is "did this start after Tuesday?". Recorded automatically each time a new build starts.</div>
@@ -7256,7 +7256,7 @@ function renderSegments(){
   const active = Object.entries(UFILT).some(([, v]) => v);
   box.innerHTML = '<span class="muted" style="font-size:11px;align-self:center;margin-right:2px;">SEGMENTS</span>'
     + SEGMENTS.map((g, i) =>
-      `<button class="bc-aud" onclick="useSegment(${i})" title="Apply — also pickable as a broadcast audience">${esc(g.name)} · ${g.count}</button>`).join('')
+      `<button class="bc-aud" onclick="useSegment(${i})" title="Apply, also pickable as a broadcast audience">${esc(g.name)} · ${g.count}</button>`).join('')
     + (active ? `<button class="bc-aud" onclick="saveSegment()">＋ Save as segment</button>` : '')
     + (SEGMENTS.length ? `<button class="bc-aud" onclick="dropSegment()">Remove…</button>` : '');
 }
@@ -7319,7 +7319,7 @@ async function loadDeploys(){
     box.innerHTML = deploys.length ? deploys.slice(0, 15).map((d, i) => `
       <div class="site-row"><div><div class="srt">Build ${esc(d.build)}${i === 0 ? ' <span class="pill pro">running now</span>' : ''}</div>
         <div class="srs">${fmtDateTime(d.at)}</div></div></div>`).join('')
-      : '<div class="empty">Nothing recorded yet — the next new build will appear here.</div>';
+      : '<div class="empty">Nothing recorded yet. The next new build will appear here.</div>';
   } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 async function loadBackup(){
@@ -7469,10 +7469,10 @@ function renderDemandView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Searches that found nothing</h3>
-      <div class="sub">What people looked for and didn't find. Counted by the words typed only — never tied back to a person. The ones at the top are the clearest gaps to fill.</div></div>
+      <div class="sub">What people looked for and didn't find. Counted by the words typed only. Never tied back to a person. The ones at the top are the clearest gaps to fill.</div></div>
     <div id="missBox"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="panel"><h3>Waiting lists</h3>
-      <div class="sub">A named list people can join for something that isn't ready yet, so the interest is captured instead of lost. When it's ready, invite the next people in line — they get a message from Atwe.</div>
+      <div class="sub">A named list people can join for something that isn't ready yet, so the interest is captured instead of lost. When it's ready, invite the next people in line. They get a message from Atwe.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <input class="in" id="wlTitle" maxlength="80" placeholder="Title (e.g. Atwe Card)" style="flex:1;min-width:180px;margin:0;"/>
         <input class="in" id="wlSlug" maxlength="60" placeholder="Short name (e.g. atwe-card)" style="flex:1;min-width:150px;margin:0;"/>
@@ -7542,7 +7542,7 @@ async function renderRetentionView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Retention</h3>
-      <div class="sub">Each row is everyone who joined that week. The columns are the weeks after — the share of that group still showing up. Week 0 is always high (they just joined); what matters is how gently the numbers fall to the right.</div>
+      <div class="sub">Each row is everyone who joined that week. The columns are the weeks after. The share of that group still showing up. Week 0 is always high (they just joined); what matters is how gently the numbers fall to the right.</div>
       <div class="tf-ranges" style="margin-top:10px;">${[4, 8, 12, 16].map(w => `<button class="tf-r ${(window.RET_WEEKS || 8) === w ? 'on' : ''}" onclick="window.RET_WEEKS=${w};renderRetentionView()">${w} weeks</button>`).join('')}</div></div>
     <div id="retBox"><div class="ld"><span class="ab-mark"></span></div></div>`;
   try {
@@ -7550,7 +7550,7 @@ async function renderRetentionView(){
     if (!cohorts.length) { liveBox('retBox').innerHTML = '<div class="empty">Not enough history yet.</div>'; return; }
     const head = ['<th>Joined</th><th>People</th>'].concat(Array.from({ length: weeks }, (_, i) => `<th>W${i}</th>`)).join('');
     const rows = cohorts.map(c => `<tr><td>${fmtDate(c.week)}</td><td><b>${c.size}</b></td>` +
-      c.cells.map(x => x == null ? '<td class="ret-na">–</td>'
+      c.cells.map(x => x == null ? '<td class="ret-na">. </td>'
         : `<td class="ret-c" style="background:rgba(0,136,255,${Math.min(0.6, x.pct / 160).toFixed(2)})" title="${x.active} of ${c.size}">${x.pct}%</td>`).join('') + '</tr>').join('');
     liveBox('retBox').innerHTML = `<div class="panel" style="overflow:auto;"><table class="ret-tbl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
   } catch (e){ liveBox('retBox').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
@@ -7569,7 +7569,7 @@ async function openLinked(id){
       <div class="modal-head"><div><h2>Linked accounts</h2><div class="u-email">${esc(d.user.name)} · a lead, not a verdict</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
       <div style="padding:0 20px 20px;">
         ${d.evasion.length ? `<div class="sub" style="color:var(--red,#f33);"><b>Possible ban evasion:</b> ${d.evasion.map(e => '@' + esc(e.username || '')).join(', ')}</div>` : ''}
-        <div class="sub">Shared IPs happen for honest reasons — households, offices, schools, mobile networks. Treat a match as something to look into, not proof.</div>
+        <div class="sub">Shared IPs happen for honest reasons. Households, offices, schools, mobile networks. Treat a match as something to look into, not proof.</div>
         <div style="margin-top:12px;">${rows}</div>
       </div>`;
     document.getElementById('modal').classList.add('show'); document.body.style.overflow = 'hidden';
@@ -7613,7 +7613,7 @@ function renderRiskView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Suspicious activity</h3>
-      <div class="sub">Computed live from the wallet ledger. Each flag is a rule you can argue with — money straight in and out, many payments in a day, paying lots of different people, or high volume from a brand-new account.</div>
+      <div class="sub">Computed live from the wallet ledger. Each flag is a rule you can argue with. Money straight in and out, many payments in a day, paying lots of different people, or high volume from a brand-new account.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <button class="act" onclick="downloadExport('ledger')">⇩ Ledger CSV</button>
         <button class="act" onclick="downloadExport('revenue')">⇩ Revenue CSV</button>
@@ -7675,7 +7675,7 @@ async function loadAdjust(){
     const { adjustments } = await api('GET', '/api/admin/wallet-adjustments?status=' + ADJ_STATUS);
     box.innerHTML = adjustments.length ? adjustments.map(a => `<div class="site-row">
         <div><div class="srt">${a.amountCents < 0 ? '−' : '+'}$${Math.abs(a.amountCents/100).toFixed(2)} → ${esc(a.user.name)} <span class="muted">@${esc(a.user.username||'')}</span></div>
-          <div class="srs">${esc(a.reason)} · requested by ${esc(a.requestedBy||'—')} · ${fmtDate(a.createdAt)}${a.approvedBy ? ' · resolved by ' + esc(a.approvedBy) : ''}</div></div>
+          <div class="srs">${esc(a.reason)} · requested by ${esc(a.requestedBy||'-')} · ${fmtDate(a.createdAt)}${a.approvedBy ? ' · resolved by ' + esc(a.approvedBy) : ''}</div></div>
         ${a.status === 'pending' ? (a.mine
           ? `<span class="pill admin">waiting for another admin</span>`
           : `<div style="display:flex;gap:6px;"><button class="act accent" onclick="resolveAdjust(${a.id},'approve')">Approve</button><button class="act danger" onclick="resolveAdjust(${a.id},'reject')">Reject</button></div>`) : ''}
@@ -7693,7 +7693,7 @@ async function requestAdjust(){
     document.getElementById('adjAmt').value = ''; document.getElementById('adjReason').value = '';
     // Say WHO, so a mistyped account is caught before the second admin approves.
     const nm = r && r.user ? (r.user.name + (r.user.username ? ' (@' + r.user.username + ')' : '')) : 'that account';
-    notify('Requested for ' + nm + ' — another admin has to approve it.'); ADJ_STATUS = 'pending'; renderAdjustView();
+    notify('Requested for ' + nm + 'another admin has to approve it.'); ADJ_STATUS = 'pending'; renderAdjustView();
   } catch (e){ notify(e.message); }
 }
 async function resolveAdjust(id, action){
@@ -7709,7 +7709,7 @@ async function openLimits(id){
     document.getElementById('modalCard').innerHTML = `
       <div class="modal-head"><div><h2>Sending limits</h2><div class="u-email">Blank = platform default ($${(d.defaults.dailyCapCents/100).toLocaleString()} a day, $${(d.defaults.weeklyCapCents/100).toLocaleString()} a week)</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
       <div style="padding:0 20px 20px;">
-        <div class="sub">Raise these for a trusted business, or tighten them on a risky account — without changing anyone else.</div>
+        <div class="sub">Raise these for a trusted business, or tighten them on a risky account, without changing anyone else.</div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <input class="in" id="limDay" placeholder="Daily ($)" value="${dv(d.dailyCapCents)}" style="flex:1;margin:0;"/>
           <input class="in" id="limWeek" placeholder="Weekly ($)" value="${dv(d.weeklyCapCents)}" style="flex:1;margin:0;"/>
@@ -7894,7 +7894,7 @@ async function renderWeightsEditor(){
       </div>`).join('');
     el.innerHTML = `
       <div style="background:var(--s1);border:none;border-radius:12px;padding:14px 16px;">
-        <div style="color:var(--t2);font-size:13px;margin-bottom:8px;">Live ranking weights — changes apply to the very next feed load (no deploy). Use the signal table below to decide what to raise or trim.</div>
+        <div style="color:var(--t2);font-size:13px;margin-bottom:8px;">Live ranking weights. Changes apply to the very next feed load (no deploy). Use the signal table below to decide what to raise or trim.</div>
         ${inputs}
         <div style="display:flex;gap:10px;margin-top:12px;">
           <button class="act" onclick="saveWeights()">Save weights</button>
@@ -7906,7 +7906,7 @@ async function renderWeightsEditor(){
 async function saveWeights(){
   const weights = {};
   WEIGHT_FIELDS.forEach(([k]) => { const inp = document.getElementById('wt_' + k); if (inp) weights[k] = parseFloat(inp.value); });
-  try { const d = await api('PUT', '/api/admin/ranking-weights', { weights }); notify('Weights saved — live now.'); renderWeightsEditor(); }
+  try { const d = await api('PUT', '/api/admin/ranking-weights', { weights }); notify('Weights saved. Live now.'); renderWeightsEditor(); }
   catch (e) { notify(e.message); }
 }
 async function resetWeights(){
@@ -7921,7 +7921,7 @@ async function renderCirclesView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Industry circles</h3>
-      <div class="sub">Circles are the industries Atwe defines — members join them, nobody creates them. This is where they come from.</div>
+      <div class="sub">Circles are the industries Atwe defines. Members join them, nobody creates them. This is where they come from.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <input class="in" id="circName" maxlength="60" placeholder="New circle (e.g. Hospitality)" style="flex:1;min-width:200px;margin:0;"/>
         <button class="act accent" onclick="createCircle()">Create</button>
@@ -8003,7 +8003,7 @@ async function bulkUsers(action){
     if (!m) return; body.body = m;
   }
   if (action === 'suspend') {
-    const why = prompt('Suspend ' + ids.length + ' account' + (ids.length === 1 ? '' : 's') + ' — the reason (applies to all of them):', '');
+    const why = prompt('Suspend ' + ids.length + ' account' + (ids.length === 1 ? '' : 's') + 'the reason (applies to all of them):', '');
     if (!why || !why.trim()) return;
     const d = parseInt(prompt('For how many days?', '7'), 10);
     body.reason = why.trim(); body.days = (Number.isInteger(d) && d > 0) ? d : 7;
@@ -8023,7 +8023,7 @@ async function bulkUsers(action){
   if (!confirm(action + ' ' + ids.length + ' account' + (ids.length === 1 ? '' : 's') + '?')) return;
   try {
     const r = await api('POST', '/api/admin/users/bulk', body);
-    notify('Done — ' + r.affected + ' updated' + (r.skipped ? ' (' + r.skipped + ' skipped: admins / yourself)' : '') + '.');
+    notify('Done.' + r.affected + ' updated' + (r.skipped ? ' (' + r.skipped + ' skipped: admins / yourself)' : '') + '.');
     clearUserSel(); load();
   } catch (e){ notify(e.message); }
 }
@@ -8159,7 +8159,7 @@ async function openUser(id){
       <button class="act" onclick="openLimits(${u.id})">Sending limits…</button>
       <button class="act" onclick="openLinked(${u.id})">Linked accounts…</button>
       <button class="act${u.wallet_frozen ? ' accent' : ''}" onclick="setWalletFreeze(${u.id}, ${u.wallet_frozen ? 'false' : 'true'})">${u.wallet_frozen ? 'Unfreeze wallet' : 'Freeze wallet…'}</button>
-      <button class="act${u.cert_active ? ' accent' : ''}" onclick="openCertificate(${u.id})" title="Atwe Certified — earned at 90+ reputation with 10+ completed orders or stays, or awarded by hand.">${u.cert_blocked ? 'Certificate: blocked' : u.cert_manual ? 'Certificate: granted' : u.cert_active ? 'Certified (earned)' : 'Certificate…'}</button>
+      <button class="act${u.cert_active ? ' accent' : ''}" onclick="openCertificate(${u.id})" title="Atwe Certified. Earned at 90+ reputation with 10+ completed orders or stays, or awarded by hand.">${u.cert_blocked ? 'Certificate: blocked' : u.cert_manual ? 'Certificate: granted' : u.cert_active ? 'Certified (earned)' : 'Certificate…'}</button>
       <button class="act${u.reach_limited ? ' accent' : ''}" onclick="setReach(${u.id}, ${u.reach_limited ? 'false' : 'true'})" title="Their followers still see everything; strangers stop being shown their posts">${u.reach_limited ? 'Restore their reach' : 'Reduce their reach…'}</button>
       ${u.is_admin ? '' : `<button class="act" onclick="impersonateUser(${u.id})">View as user…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
@@ -8409,7 +8409,7 @@ async function openUserNotes(id){
         <button class="act danger" onclick="deleteUserNote(${id}, ${n.id})">Delete</button></div>`).join('')
       : '<div class="muted" style="padding:6px 0;">No notes yet.</div>';
     document.getElementById('modalCard').innerHTML = `
-      <div class="modal-head"><div><h2>Notes &amp; tags</h2><div class="u-email">Private to staff — never shown to the member</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
+      <div class="modal-head"><div><h2>Notes &amp; tags</h2><div class="u-email">Private to staff. Never shown to the member</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
       <div style="padding:0 20px 20px;">
         <div class="sub">Labels</div>
         <div class="bc-auds" style="margin:8px 0 16px;">${tags}</div>
@@ -8471,10 +8471,10 @@ async function openStrikes(id){
 }
 async function addStrike(id, severity){
   const reason = (document.getElementById('stReason').value || '').trim();
-  if (!reason) { notify('Give a reason — the member is told what it was for.'); return; }
+  if (!reason) { notify('Give a reason. The member is told what it was for.'); return; }
   try {
     const r = await api('POST', '/api/admin/users/' + id + '/strikes', { reason, severity });
-    notify(r.applied ? ('Strike ' + r.activeCount + ' → ' + r.label + '.') : ('Strike ' + r.activeCount + ' — warning issued.'));
+    notify(r.applied ? ('Strike ' + r.activeCount + ' → ' + r.label + '.') : ('Strike ' + r.activeCount + 'warning issued.'));
     openStrikes(id); load();
   } catch (e){ notify(e.message); }
 }
@@ -8535,10 +8535,10 @@ async function openCertificate(id){
     : u.cert_active ? 'earned (90+ reputation, 10+ completed orders or stays)'
     : 'not certified';
   const pick = prompt(
-    'Atwe Certified — ' + who + '\nCurrently: ' + now +
-    '\n\nType one:\n  grant  — award the mark by hand, whatever the number says' +
-    '\n  block  — withhold it, whatever the number says' +
-    '\n  auto   — clear both and let the reputation decide', u.cert_active ? 'block' : 'grant');
+    'Atwe Certified.' + who + '\nCurrently: ' + now +
+    '\n\nType one:\n  grant: award the mark by hand, whatever the number says' +
+    '\n  block: withhold it, whatever the number says' +
+    '\n  auto. Clear both and let the reputation decide', u.cert_active ? 'block' : 'grant');
   if (!pick) return;
   const action = String(pick).trim().toLowerCase();
   if (!['grant','block','auto'].includes(action)) { notify('Type grant, block or auto.'); return; }
@@ -8547,7 +8547,7 @@ async function openCertificate(id){
     const r = await api('POST', '/api/admin/users/' + id + '/certificate', { action, note });
     const t = r.trustScore || {};
     merge({ ...r.user, cert_active: !!t.certified, cert_manual: !!r.user.cert_manual, cert_blocked: !!r.user.cert_blocked });
-    notify(t.certified ? 'Certified — the mark now shows on their profile.' : 'Not certified.');
+    notify(t.certified ? 'Certified. The mark now shows on their profile.' : 'Not certified.');
     if (modalOpen()) openUser(id);
   } catch (e) { notify(e.message); }
 }
@@ -8556,7 +8556,7 @@ async function openCertificate(id){
 async function impersonateUser(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   if (!confirm('Open ' + (u.username ? '@'+u.username : u.email) + '\'s account to reproduce an issue?\n\nThis is fully logged. Money transfers, email changes and account deletion are disabled while you view it.')) return;
-  const reason = prompt('Reason (recorded — e.g. a ticket number):', '') || '';
+  const reason = prompt('Reason (recorded. E.g. a ticket number):', '') || '';
   try {
     const r = await api('POST', '/api/admin/users/' + id + '/impersonate', { reason });
     if (r.appUrl) { window.open(r.appUrl, '_blank', 'noopener'); notify('Opened ' + (r.target && r.target.name ? r.target.name : 'the member') + '\'s account in a new tab.'); }
@@ -8616,13 +8616,13 @@ async function renderStorageView(){
   // A count we could not take is NOT zero. Rendering `null` as 0 would tell the owner
   // their database is already clean at the exact moment we failed to look.
   const inDb = d.inDatabase || {};
-  const n = (v) => (d.inDatabase ? (v || 0) : '—');
+  const n = (v) => (d.inDatabase ? (v || 0) : '-');
   c.innerHTML = `
     <div class="card">
       <div class="card-h">Media storage</div>
       <div class="ad-row"><div><b>${d.configured ? 'A file store is switched on' : 'Media is stored in the database'}</b>
         <div class="muted">${d.configured
-          ? 'New photos and videos go to your bucket and are served from there. Anything already in the database keeps working exactly as before — nothing was moved.'
+          ? 'New photos and videos go to your bucket and are served from there. Anything already in the database keeps working exactly as before. Nothing was moved.'
           : 'This is fine and it is how Atwe has always run. Setting up a bucket lets you take much bigger files and takes the weight off the database.'}</div></div>
         <span class="ad-badge ${d.configured ? 'ok' : ''}">${d.configured ? 'on' : 'off'}</span></div>
       ${d.configured ? '<button class="btn" onclick="testStorage()">Test it</button>' : ''}
@@ -8635,16 +8635,16 @@ async function renderStorageView(){
         <div class="stat"><b>${n(inDb.messages)}</b><span>messages</span></div>
         <div class="stat"><b>${n(inDb.listings)}</b><span>listings</span></div>
         <div class="stat"><b>${n(inDb.stories)}</b><span>stories</span></div>
-        <div class="stat"><b>${jstr(d.databaseSize||'—')}</b><span>database size</span></div>
+        <div class="stat"><b>${jstr(d.databaseSize||'-')}</b><span>database size</span></div>
       </div>
       <div class="muted" style="margin-top:10px;">${d.inDatabase
         ? 'These carry their pictures inside the database. They are counted here so the number going up (or not) is visible, not guessed at.'
-        : 'The count could not be taken this time — a dash means unknown, not zero. Everything above about the file store is still accurate.'}</div>
+        : 'The count could not be taken this time. A dash means unknown, not zero. Everything above about the file store is still accurate.'}</div>
     </div>
     ${d.configured ? '' : `<div class="card"><div class="card-h">Switching it on</div>
-      <div class="muted">Set <code>S3_BUCKET</code>, <code>S3_ACCESS_KEY</code> and <code>S3_SECRET_KEY</code> — plus
+      <div class="muted">Set <code>S3_BUCKET</code>, <code>S3_ACCESS_KEY</code> and <code>S3_SECRET_KEY</code>, plus
       <code>S3_ENDPOINT</code> for Cloudflare R2 or Backblaze, or <code>S3_REGION</code> for Amazon. The bucket must be
-      <b>publicly readable</b> and <code>CDN_URL</code> must point at that public address — phones fetch photos from it
+      <b>publicly readable</b> and <code>CDN_URL</code> must point at that public address. Phones fetch photos from it
       directly, so without it every new photo shows as a broken image. Restart, then come back and press Test.</div></div>`}`;
 }
 async function testStorage(){
@@ -8659,7 +8659,7 @@ async function testStorage(){
        through), so a private bucket means every new photo uploads happily and
        then shows as a broken image. That is worse than storage being off. */
     if (r.ok && !r.readable) {
-      el.innerHTML = `<div class="ad-row" style="margin-top:10px;"><div><b>Photos would be broken.</b><div class="muted">The file was written to <code>${jstr(r.bucket)}</code> and deleted again, so the keys are right — but it could not be read back from <code>${jstr(r.url||'')}</code>. Members' phones fetch that address directly, so new photos would upload and then show as broken images. Turn on public access for the bucket in Cloudflare (Settings → Public access → R2.dev subdomain) and set <code>CDN_URL</code> to the <code>pub-….r2.dev</code> address it gives you. Nothing is broken meanwhile — photos keep going into the database until this passes.</div></div><span class="ad-badge bad">fix this</span></div>`;
+      el.innerHTML = `<div class="ad-row" style="margin-top:10px;"><div><b>Photos would be broken.</b><div class="muted">The file was written to <code>${jstr(r.bucket)}</code> and deleted again, so the keys are right, but it could not be read back from <code>${jstr(r.url||'')}</code>. Members' phones fetch that address directly, so new photos would upload and then show as broken images. Turn on public access for the bucket in Cloudflare (Settings → Public access → R2.dev subdomain) and set <code>CDN_URL</code> to the <code>pub-….r2.dev</code> address it gives you. Nothing is broken meanwhile. Photos keep going into the database until this passes.</div></div><span class="ad-badge bad">fix this</span></div>`;
       return;
     }
     el.innerHTML = r.ok
@@ -8692,7 +8692,7 @@ async function renderClusterView(){
       <div class="card-h">This server, right now</div>
       <div class="stat-grid">
         <div class="stat"><b>${d.liveConnections}</b><span>people connected here</span></div>
-        <div class="stat"><b>${d.dbConnections == null ? '—' : d.dbConnections}</b><span>database connections</span></div>
+        <div class="stat"><b>${d.dbConnections == null ? '-' : d.dbConnections}</b><span>database connections</span></div>
         <div class="stat"><b>${jstr(d.instanceId||'')}</b><span>this server's id</span></div>
         <div class="stat"><b>${d.storage ? 'yes' : 'no'}</b><span>file store on</span></div>
       </div>
@@ -8753,7 +8753,7 @@ async function renderAppReviews(){
   const rows = d.reviews || [];
   c.innerHTML = `
     <div class="stat-grid">
-      <div class="stat"><b>${d.average ? d.average.toFixed(2) : '—'}</b><span>average</span></div>
+      <div class="stat"><b>${d.average ? d.average.toFixed(2) : '-'}</b><span>average</span></div>
       <div class="stat"><b>${d.total||0}</b><span>reviews</span></div>
       <div class="stat"><b>${d.bad||0}</b><span>one or two stars</span></div>
       <div class="stat"><b>${d.needReply||0}</b><span>worth a reply</span></div>
@@ -8768,7 +8768,7 @@ async function renderAppReviews(){
         : `<button class="btn" onclick="markAppReviewReplied(${jstr(JSON.stringify(r.id))})">Mark replied</button>`}
     </div>`).join('') : '<div class="muted">Nothing yet.</div>'}</div>
     <div class="card"><div class="card-h">Replying</div>
-      <div class="muted">Replies have to be posted in App Store Connect — Apple requires a signed key and the
+      <div class="muted">Replies have to be posted in App Store Connect. Apple requires a signed key and the
       review-response permission, which is deliberately not something a web dashboard should hold. Reply there,
       then mark it here so nobody answers the same person twice.</div></div>`;
 }

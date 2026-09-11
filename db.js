@@ -319,7 +319,7 @@ const OFFICIAL_CIRCLES = [
 async function init() {
   if (!pool) {
     console.warn(
-      '⚠️  DATABASE_URL not set — auth, history, projects and admin are disabled until a Postgres instance is attached.'
+      '⚠️  DATABASE_URL not set: auth, history, projects and admin are disabled until a Postgres instance is attached.'
     );
     return;
   }
@@ -2196,7 +2196,7 @@ async function initSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     -- NOT a primary key across those three: group_id is null for a personal
-    -- install, and Postgres forbids a null in a primary key — which silently
+    -- install, and Postgres forbids a null in a primary key, which silently
     -- made every personal install fail to store. COALESCE gives the same
     -- one-row-per-place guarantee without that trap.
     CREATE UNIQUE INDEX IF NOT EXISTS bot_installs_uniq ON bot_installs (bot_id, user_id, COALESCE(group_id, 0));
@@ -2434,11 +2434,11 @@ async function initSchema() {
     -- its header, so a receiving browser has to GUESS the length from the file,
     -- and that guess can come out wildly wrong (a 3-second note reading 12:10).
     -- Recording the real number at send time means nobody has to guess again.
-    -- (SQL comments are -- , not // — a // here silently kills the whole block.)
+    -- (SQL comments are --, not //. A // here silently kills the whole block.)
     -- The shape of a photo, so a chat can reserve its space before the bytes
     -- arrive and nothing on screen ever has to move once it does. Filled by the
     -- sender when the message is written, and read out of the file's header for
-    -- anything sent before that (once — then it is stored here for good).
+    -- anything sent before that (once. Then it is stored here for good).
     ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS image_w INTEGER;
     ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS image_h INTEGER;
     ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS image_w INTEGER;

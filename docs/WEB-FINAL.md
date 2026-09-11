@@ -67,6 +67,7 @@ list stays the honest measure of what is left.
 
 | # | what | where | state |
 |---|---|---|---|
+| T1 | **The em dash.** The founder had asked once, it was half-done, and they still kept meeting them: *"all AI sites and stuff comes a lot with this line and I don't see it unprofessional apps"* | 1,175 lines of copy across 15 files, plus the AI itself | **done**, build 1849, guarded by `nodash.js` |
 | P3-1 | **Nothing.** Every long surface scrolls with its ordinary frame on time, nothing stalls, and the app's own code is ~1ms of the 16.7ms budget. One no-op tidy shipped with it (cached per-frame lookups) | `_onWinScroll` · `_onListScroll` | **measured clean**, build 1848, guarded by `motion.js` |
 | P2-2 | **Two touch controls under the 44pt floor** — the Recent-searches chips (93x29) and the Translate-post line (92x19). Both only render once the account HAS the data, so no sweep had ever seen them | `public/index.html` `pointer:coarse` block | **fixed**, build 1847, guarded by `touchwide.js` |
 | P2-1 | **A block only worked in one direction** — the blocker could keep messaging AND calling the person they had blocked, while that person could not answer | `server.js` `canContact` + `dmAllowed` | **fixed**, build 1846, guarded by `twoperson.js` |
@@ -179,6 +180,77 @@ Both are in the app's own `pointer:coarse` block now, growing vertically only (e
 already past 44 wide, and vertical is the safe axis for a chip row and for a line sitting
 between a post's words and its pills). Both pseudo-element slots were checked free first —
 the trap that shipped a visible bug on ~90 screens in build 1832.
+
+---
+
+## THE TEAM'S LIST
+
+### T1 — the em dash, everywhere, and never again
+
+> *"I want you should make sure that this is not possible and none of the users should ever
+> see this AI mark again... Except if someone posted, but from our side there's no such thing."*
+
+**They were right that it had been half-done, and right about why it matters.** The long dash
+is the most recognisable tell of machine-written text, so a product wearing 1,201 of them reads
+as generated rather than made. It is a brand decision, not a style one.
+
+**THE HALF THAT MATTERED MOST WAS NOT THE CLEANUP.** Atwe AI writes NEW text on every reply,
+so sweeping the app's own copy would have been undone by tea time. There are forty separate AI
+calls in `server.js` and a forty-first will be written by somebody who has not read any of
+this, so both halves live on the ONE client wrapper every call already passes through: the
+instruction that stops it happening, and a net under it that catches a model doing it anyway.
+Proved end to end with a scripted model that answers with a dash **every single time** — better
+than a real model for this, which might simply not use one that day and leave the hole untested.
+
+**THE FOUNDER'S OWN EXCEPTION IS ENFORCED, NOT ASSUMED.** *"Except if someone posted."*
+Proofread hands a member their exact words back, so it is passed `atweOwnWords` and is left
+alone completely, instruction and net both. Every other writing task — improve, rephrase, a
+drafted reply — DOES follow the rule, because that is Atwe writing prose on somebody's behalf,
+and putting a machine tell into a member's own message is the worse version of this fault.
+
+### THE COUNT, AND WHY THE FIRST ONE WAS WRONG
+
+A first pass reported ~1,600 to fix. It was inflated by about four hundred: the hand-rolled
+comment stripper behind it broke on three things this codebase is full of — **a regex literal
+containing a slash** (`/https?:\/\//` is not a comment), **a template literal with `${...}`
+in it** (inside the braces it is code again, and almost every screen is built that way), and
+**an apostrophe in a comment** ("doesn't" ends the comment as far as a quote-counter is
+concerned). So it reported real comments as user-facing copy. `tools/jstext.js` is a proper
+tokeniser written for this and kept because the guard needs the same answer forever. The true
+number was **1,201**.
+
+### THE RULE IS NOT "REPLACE IT WITH A HYPHEN"
+
+That would read as a typo rather than as a sentence, and would look worse than the dash did.
+`tools/nodash.js` does what a person editing the line would do, which depends on the job the
+dash was doing: a **pair** inside one sentence is an aside and becomes two commas; a **lone**
+dash joins a statement to its elaboration and becomes a full stop and a capital; a dash before
+a **list** becomes a colon; an **unspaced** dash is a range and becomes the word "to"; a
+**joining word** after it ("and", "which", "so") takes a comma, because those cannot open a
+sentence; a run that is **nothing but a dash** is a table's empty cell and becomes a hyphen.
+1,175 lines were rewritten this way and every one was spot-read or reviewed.
+
+### TWO THINGS IT NEARLY BROKE, BOTH CAUGHT BEFORE ANYTHING WAS WRITTEN
+
+- **IT WAS REFORMATTING SQL.** An innocent-looking "collapse runs of spaces" tidy at the end
+  of the rule rewrote every multi-line query in the file into one flat line, because a query
+  is a string like any other. Queries are now skipped outright — a dash inside one reaches
+  nobody — and the rule never touches a character that was not beside a dash.
+- **IT TURNED A RANGE INTO A COMMA.** "canvas chart (1D–ALL), inline cards — optional data"
+  read as one parenthetical pair spanning the bracket, giving "(1D, ALL)". An aside's middle
+  contains no bracket, and an unspaced dash is never prose.
+
+### WHAT IS LEFT, HONESTLY
+
+**Seven runs, all of them SQL** — invisible to everybody, deliberately skipped. And the app's
+own **code comments keep theirs**: nobody reads them, and rewriting two thousand of them would
+be a large diff with no reader.
+
+**One thing the founder should know rather than discover.** The sweep fixes the CODE. Rows
+already in the DATABASE keep whatever they were written with — which is right for member posts
+(their words, their punctuation) and worth knowing for **demo mode**: any sample posts seeded
+before this build still carry the old copy. Switching demo mode off and on reseeds them with
+the corrected lines.
 
 ---
 
