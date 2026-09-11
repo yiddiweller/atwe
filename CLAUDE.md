@@ -10643,6 +10643,35 @@ health check with three real outcomes must not have two buttons' worth of UI.**
 
 ## Gotchas for AI assistants
 
+- **`fetch` DOES NOT REJECT WHEN A PHONE LOSES SIGNAL MID-REQUEST — it stays PENDING, so
+  every shared request needs a deadline or every `catch` and `finally` behind it is
+  unreachable.** A lift, a tunnel, a 5G-to-LTE handover produces no error and no event; the
+  promise simply never settles. `API.req` — the one function every write in the app passes
+  through — had no `AbortController`, so any action could hang for ever: the button stayed
+  disabled, no toast, no error, and the only way out was the back arrow. The founder reported
+  it as *"I am clicking post but it doesn't get sent, it's like frozen"*, and separately as
+  Atwe AI answering **"Fetch is aborted"** — one cause, two symptoms, because the AI chat has
+  its own abort (so it surfaced as a raw browser message) while everything else went through
+  the deadline-less `API.req` (so it surfaced as a freeze). Every request now carries a
+  deadline **sized to its payload** (`API.TIMEOUT_BASE_MS` 40s + `TIMEOUT_MS_PER_KB` 40,
+  capped at `TIMEOUT_MAX_MS` 4min) — a flat deadline tight enough for a tap would cancel a
+  legitimate photo upload on a weak signal, and one loose enough for the photo is no deadline
+  at all. A stalled write that is safe to repeat goes to the **outbox** and leaves with the
+  next good connection; nothing is lost. Three lessons worth keeping: **a button that says
+  "Posting…" must be restored in a `finally`, never only in `catch`** (a throw on the way TO
+  the request leaves it dead); **check `.queued` wherever you report success** — nothing in
+  the app did, so the first fixed build cheerfully said "Posted!" about a post that had only
+  been saved; and **`AbortError` carries no status**, so it must be mapped BEFORE the
+  network branch or our own timeout gets reported as the member's connection failing.
+  Guarded by `scratchpad/nohang.js`, which stalls a real route
+  (`p.route(pattern, () => {})` — never respond, never abort) and drives a real Post. **A
+  probe that only tests a request that FAILS proves nothing**: an instant failure was always
+  handled correctly, and the stall was the broken case.
+- **Atwe AI's own deadline is `AI_REPLY_TIMEOUT_MS` (120s), and 30s was cutting off its own
+  design.** `/api/chat` is not one call to a model: it runs a tool loop of up to three passes
+  (`while (chatSteps++ < 3)`) so the assistant can look things up before replying, and a
+  broad question ("what does this app do") is precisely the one that uses all three. Both
+  abort sites (`sendMessage`, `sendMessageFromHistory`) read the constant; do not re-type it.
 - **A refund is a TRANSFER, not a credit — never "make the payee whole" with a bare
   `walletCreditStandalone`.** `walletTransfer` is all-or-nothing: a payer one cent
   short moves NOTHING. Three refund doors (return-approve, the admin refunds desk,
