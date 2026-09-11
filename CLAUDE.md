@@ -576,6 +576,18 @@ all four:**
 Explain plainly, never oversell, always volunteer the limitation or the bug
 before they find it. Honest small numbers beat flattering big ones.
 
+## 📄 THE COMPANY DOCUMENT — `docs/ATWE.md` → `docs/ATWE.pdf`
+
+**The one description of Atwe that goes to agencies and partners** lives in `docs/ATWE.md`
+and is rendered by `node tools/atwe-doc.js` into `docs/ATWE.html` and `docs/ATWE.pdf`. The
+founder commissioned it on 11 Sep 2026 for the marketing agency planning the 1 January 2028
+campaign; it is written from `features-data.js` (the built catalogue) and the app's own page
+index, not from memory, and every claim in it was checked against a built feature. **The
+Markdown is the source of truth; never hand-edit the PDF.** It follows the brand rules to the
+letter: no em dash, no emoji, no vendor named behind Atwe AI, the two dates kept apart, Atwe
+Card described as coming and the sales advance as switched on market by market. When the
+product moves, re-issue it (edit the `.md`, run the tool) rather than patching a paragraph.
+
 ## What this is
 
 **Atwe AI** — a single-page web chat application: an "intelligent assistant for
