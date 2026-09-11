@@ -10655,6 +10655,43 @@ health check with three real outcomes must not have two buttons' worth of UI.**
   "deployed". The workflow step exists and is written down ("cherry-pick to main, verify the
   divergence markers, push main") — it was simply skipped eight builds running, because
   every other signal (green tests, a clean push) said the work was done.
+- **A DEAD LIVE STREAM LOOKS EXACTLY LIKE A QUIET ONE, AND NOTHING WAS WATCHING — this is
+  what "calls don't work" actually was.** Everything realtime rides one SSE stream, and a
+  1:1 call rides it three times over: the ring out, the answer back, the hang-up. That
+  stream dies quietly — a phone locking for a moment, a network blip, a carrier dropping an
+  idle connection, and **on iOS a killed stream keeps reporting `readyState === OPEN`**. The
+  only reconnect triggers were a CLOSED readyState (which that case never reports),
+  `visibilitychange` and `online`, so **a phone sitting with Atwe ON SCREEN hit none of
+  them** and sat connected to nothing. The founder reported both halves without knowing
+  they were one fault: *"their phone never rings"* is the CALLEE's stream dead, and *"it
+  rings but answering does nothing"* is the CALLER's — the answer comes back over the
+  stream and lands nowhere. The server's 25s keep-alive was a **`:ping` COMMENT**, which
+  keeps the socket warm and **fires nothing in the browser**, so a page could not tell the
+  two apart even in principle. It is a named `ping` event every 15s now (`RT_PING_MS`), the
+  page stamps `_rtBeat`, and `rtHeartbeatCheck` (every 10s, skipped while the tab is
+  hidden) rebuilds the stream after three missed beats. `rtEnsureLive()` runs at the top of
+  `startCall` AND `callAccept` — it reconnects only, never `rtResync`, which would also
+  backfill the chat list and the open thread at the exact moment a call is starting.
+- **A RING THAT REACHED NOBODY NOW SAYS SO IMMEDIATELY.** `rtPush` into a user with no live
+  stream is a silent no-op, so the caller watched "Calling…" for the full 45 seconds
+  whether the other phone rang or never heard a thing. `POST /api/rt/call` returns
+  `delivered` on the **offer only**, and **only when `CLUSTER` is off** — with several
+  servers somebody connected elsewhere is reachable and the flag would be a lie.
+- **EVERY FAILED CALL FILES A REPORT.** Two rounds of call fixes shipped without the
+  founder's calls working, because nothing recorded WHERE a call died. `callTrail(stage)`
+  stamps each step and `callReportIfFailed()` sends the trail through `_reportError`, so it
+  lands in the dashboard's Site tab marked `call`. Stage names and timings only: no names,
+  no words anybody typed. The give-up message now distinguishes *they never answered* from
+  *they answered and the media could not get through* (`CALL.answeredAt`) — two completely
+  different problems that one wording used to hide.
+- **`twoperson.js` CONNECTS A REAL TWO-BROWSER CALL AND ALWAYS PASSED.** It runs over
+  localhost with both peers on one machine: no NAT, no relay, and **both streams freshly
+  opened**, so it can never see a stream that has been alive long enough to die.
+  `scratchpad/rtalive.js` (14 checks) covers what it cannot — a heartbeat really arrives, a
+  silent stream is rebuilt on its own, a healthy one is left alone, and both call entry
+  points check first. Self-tested by neutering the watchdog, which is the state that
+  shipped.
+
 - **THE POST BUTTON WAS NOT FROZEN, IT WAS UNREACHABLE — an invisible tap target had grown
   to the size of the whole header.** The founder: *"I cannot click the post button. It
   doesn't go anywhere."* They were describing it exactly. `.msg-back` (the ✕ on the composer

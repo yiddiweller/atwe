@@ -4478,6 +4478,7 @@ app.get('/api/rt/token', auth.requireAuth, (req, res) => {
 // The live event stream. EventSource can't send headers, so a *short-lived*
 // stream token comes as a query param (over HTTPS). Presence is derived from
 // active connections.
+const RT_PING_MS = 15000;   // the client times out at RT_PING_MS * 3
 app.get('/api/rt/stream', async (req, res) => {
   const payload = auth.verifyToken(req.query.token);
   if (!payload || !payload.stream) return res.status(401).end();
@@ -4499,7 +4500,13 @@ app.get('/api/rt/stream', async (req, res) => {
   db.query('UPDATE users SET last_seen = now() WHERE id = $1', [uid]).catch(() => {});
   presenceVisibleTo(uid, [...rtClients.keys()]).then((online) => rtSend(res, 'presence-init', { online })).catch(() => rtSend(res, 'presence-init', { online: [uid] }));
   if (wasOffline) broadcastPresence(uid, { userId: uid, online: true }).catch(() => {});
-  const ping = setInterval(() => { try { res.write(':ping\n\n'); } catch {} }, 25000);
+  /* A REAL EVENT, NOT A COMMENT, AND EVERY 15s. A `:ping` comment keeps the socket
+     warm but fires NOTHING in the browser, so a page cannot tell a dead stream from a
+     quiet one -- and on iOS a stream that has actually died still reports OPEN. That is
+     how a phone sitting with Atwe on screen stops ringing: nothing arrives, nothing
+     errors, and no reconnect is ever triggered. A named event gives the client a
+     heartbeat it can time out on. */
+  const ping = setInterval(() => rtSend(res, 'ping', { t: Date.now() }), RT_PING_MS);
   req.on('close', () => {
     clearInterval(ping);
     const set = rtClients.get(uid);
@@ -4798,6 +4805,12 @@ app.post('/api/rt/call', auth.requireAuth, rateLimit(300, 60000, 'rt-call'), asy
       notify(to, req.user.id, req.body.media === 'video' ? 'video_call' : 'call', null);
     }
   }
+  /* DID THE RING REACH A DEVICE AT ALL? rtPush into a user with no live stream is a
+     silent no-op, so the caller used to watch "Calling..." for the full 45 seconds
+     whether the other phone rang or never heard a thing. Say which it was. Only when
+     this is the one and only server: with several, somebody connected elsewhere is
+     reachable and this count would be a lie. */
+  const reachable = rtClients.has(to);
   rtPush(to, 'call', {
     kind,
     callId: req.body.callId || null,
@@ -4806,7 +4819,7 @@ app.post('/api/rt/call', auth.requireAuth, rateLimit(300, 60000, 'rt-call'), asy
     candidate: req.body.candidate || null,
     from: me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id },
   });
-  res.json({ ok: true });
+  res.json(kind === 'offer' && !CLUSTER ? { ok: true, delivered: reachable } : { ok: true });
 });
 
 /* ═══════════════════════════════════════════════

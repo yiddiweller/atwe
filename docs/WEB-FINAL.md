@@ -67,6 +67,7 @@ list stays the honest measure of what is left.
 
 | # | what | where | state |
 |---|---|---|---|
+| T5 | **Calls still did not work after two rounds of fixes.** *"Their phone never rings"* and *"it rings but answering does nothing"*, with the other person's Atwe open on screen | One fault, two sides: the live connection a call rides on dies quietly and iPhone still reports it alive, and nothing in the app was watching for that | **fixed**, build 1855, guarded by `rtalive.js` |
 | T4 | **Posting was impossible.** *"I still can't send posts... I cannot click the post button. It doesn't go anywhere."* | The ✕'s invisible 44pt tap target sat on a `position:static` host, so it resolved against the header instead of the button and rendered 370x68: a transparent slab over Post | **fixed**, build 1854, guarded by `tapown.js` |
 | T3 | **Calls and video calls did not work.** *"when I'm trying to call someone the other person doesn't even get a call, and if they do they can't pick up"* | One request every call waits on, with no time limit on either side, plus no error handling on the answer path | **fixed**, build 1852, guarded by `callpath.js` |
 | T2 | **Some Atwe AI questions were never answered, and pressing Post froze the button.** *"I wanted to post a message and I am clicking post but it doesn't get sent. It's like frozen... there is probably more stuff that doesn't work"* | One cause behind both: `API.req` had no deadline, so a stalled mobile connection left `fetch` pending for ever | **fixed**, build 1851, guarded by `nohang.js` |
@@ -187,6 +188,34 @@ the trap that shipped a visible bug on ~90 screens in build 1832.
 ---
 
 ## THE TEAM'S LIST
+
+### T5 — the connection a call rides on was dying, and nothing noticed
+
+Everything live in Atwe travels down one long-lived connection to the server. A 1:1 call
+uses it three times: the ring going out, the answer coming back, and the hang-up.
+
+That connection dies quietly. A phone locking for a moment, a network blip, a carrier
+timing out an idle connection. **On iPhone the connection is killed and the browser still
+reports it as alive**, so nothing errors and nothing on screen changes. And nothing in
+Atwe was watching: the only things that rebuilt it were the app coming back to the
+foreground and the network coming back, neither of which happens to a phone left sitting
+with Atwe open.
+
+The founder reported both halves of this without knowing they were the same thing.
+*"Their phone never rings"* is the other person's connection dead, so the ring arrives
+nowhere. *"It rings but answering does nothing"* is the caller's connection dead: the ring
+got through before it died, and the answer comes back to nobody.
+
+The server's keep-alive was the reason it could never be noticed. It nudged the connection
+every 25 seconds in a way that **fires nothing at all in the browser**, so a page had no
+way, even in principle, to tell a dead connection from a quiet one. It is a real heartbeat
+every 15 seconds now, and the app rebuilds the connection after three go missing. Every
+call checks before ringing and before answering.
+
+Two things were added so the next report is an answer rather than a guess. A call that
+reaches nobody **says so at once** instead of ringing at nothing for 45 seconds. And every
+failed call files a short report of the step it died on into the dashboard's Site tab:
+stage names and timings only, no names and nothing anybody typed.
 
 ### T4 — the Post button was not frozen, it was covered
 

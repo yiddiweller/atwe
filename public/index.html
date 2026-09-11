@@ -22856,7 +22856,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1854'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1855'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -58086,6 +58086,15 @@ async function acDeclineRequest() {
 
 /* ─── Realtime (SSE): live messages, presence, typing ─── */
 let rtSource = null, _rtConnecting = false;
+/* WHEN DID THIS STREAM LAST SAY ANYTHING? The server sends a named `ping` every 15s.
+   A stream with nothing arriving is a DEAD stream, and the browser will not tell us:
+   EventSource only reports CLOSED when the connection fails cleanly, and iOS routinely
+   leaves a killed stream reporting OPEN for ever. That is the whole mechanism behind
+   "their phone never rang even though Atwe was open on screen" -- and behind "it rang
+   but answering did nothing", which is the same fault on the CALLER's side, where the
+   answer comes back over the stream and lands nowhere. */
+let _rtBeat = 0;
+const RT_DEAD_MS = 45000;   // three missed pings
 const rtPresence = {}; // userId -> { online, last_seen }
 async function rtConnect() {
   if (rtSource || _rtConnecting || !isAccount() || !S.token || !S.user?.username) return;
@@ -58098,6 +58107,9 @@ async function rtConnect() {
   if (rtSource || !isAccount()) return; // a parallel connect won, or we logged out
   try { rtSource = new EventSource('/api/rt/stream?token=' + encodeURIComponent(streamToken)); }
   catch { return; }
+  _rtBeat = Date.now();
+  rtSource.onopen = () => { _rtBeat = Date.now(); };
+  rtSource.addEventListener('ping', () => { _rtBeat = Date.now(); });
   rtSource.addEventListener('msg', e => { try { rtOnMsg(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('read', e => { try { rtOnRead(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('read-self', e => { try { rtOnReadSelf(JSON.parse(e.data)); } catch {} });
@@ -58207,6 +58219,33 @@ async function rtConnect() {
   };
 }
 function rtDisconnect() { if (rtSource) { try { rtSource.close(); } catch {} rtSource = null; } }
+/* THE WATCHDOG. Nothing else in the app can notice a stream that died quietly: the only
+   reconnect triggers were a CLOSED readyState (which a half-dead iOS stream never
+   reports), coming back to the foreground, and the network coming back. A phone left on
+   screen hit none of them, so it sat there connected to nothing -- no messages, and no
+   incoming call. Checked every 10s, against a 15s server heartbeat. */
+function rtHeartbeatCheck() {
+  if (!isAccount() || !S.token || !S.user?.username) return;
+  if (document.hidden) return;                       // a backgrounded tab is meant to be quiet
+  const dead = !rtSource || rtSource.readyState === 2 || (Date.now() - _rtBeat > RT_DEAD_MS);
+  if (dead) { _rtBeat = Date.now(); rtResync(); }    // stamp first, or we retry every tick
+}
+setInterval(rtHeartbeatCheck, 10000);
+/* A CALL NEEDS THE STREAM ALIVE AT THAT EXACT MOMENT, on BOTH sides: the ring, the
+   answer and the hang-up all travel over it. iOS also fires a false `offline` the
+   instant a call starts, which tears the stream down mid-call. So every call checks
+   first and reconnects rather than finding out by never connecting. */
+function rtEnsureLive() {
+  if (!isAccount() || !S.token || !S.user?.username) return;
+  if (!rtSource || rtSource.readyState === 2 || (Date.now() - _rtBeat > RT_DEAD_MS)) {
+    /* Reconnect ONLY. rtResync also backfills the chat list and the open thread, which is
+       a burst of work at the exact moment a call is starting; the stream is the only
+       thing a call needs. */
+    _rtBeat = Date.now();
+    if (rtSource) { try { rtSource.close(); } catch (e) {} rtSource = null; }
+    rtConnect();
+  }
+}
 // ── Resync on resume ──
 // iOS freezes a backgrounded tab and silently kills the SSE stream — it can even
 // report OPEN while dead — so missed messages never arrive until a full reload.
@@ -59696,7 +59735,16 @@ function callSignal(kind, extra) {
   const vital = kind === 'offer' || kind === 'answer';
   const req = API.req('POST', '/api/rt/call', Object.assign({ to: CALL.peer.id, kind, callId: CALL.callId, media: CALL.media }, extra || {}), { noQueue: true });
   if (!vital) { req.catch(() => {}); return; }
-  req.catch((e) => {
+  req.then((r) => {
+    /* THE RING WENT NOWHERE. Ringing for 45 seconds at a phone that was never told is
+       the single most confusing thing a call can do, and it is what the founder kept
+       seeing. Say so at once, and record it. */
+    if (kind === 'offer' && r && r.delivered === false && CALL) {
+      callTrail('ring-undelivered');
+      showNotif('They are not connected right now, so their phone will not ring. Ask them to open Atwe and try again.');
+      callCleanup();
+    }
+  }).catch((e) => {
     if (!CALL) return;
     showNotif((e && e.message) || 'Could not reach them. Please try again.');
     callCleanup();
@@ -60149,6 +60197,22 @@ function paReportPost() {
   acOpenReport('post', id, 'this post');
 }
 
+/* WHAT ACTUALLY HAPPENED ON THIS CALL. Two rounds of call fixes shipped without the
+   founder's calls working, because nothing anywhere recorded WHERE a call died. Every
+   stage is stamped here, and a call that never connected reports the trail through the
+   same channel client errors use, so it lands in the dashboard's Site tab. It carries no
+   words anybody typed and no names -- only stage names and timings. */
+function callTrail(stage) {
+  if (!CALL) return;
+  (CALL._trail || (CALL._trail = [])).push(stage + '@' + (Date.now() - (CALL._t0 || (CALL._t0 = Date.now()))));
+}
+function callReportIfFailed() {
+  if (!CALL || CALL.connectedAt || CALL._reported) return;
+  CALL._reported = true;
+  const t = (CALL._trail || []).join(' > ');
+  if (!t) return;
+  try { _reportError('call did not connect: ' + t, 'call'); } catch (e) {}
+}
 async function startCall(media, peerOverride) {
   if (CALL || GROUPCALL) { showNotif('You’re already in a call.'); return; }
   const peer = peerOverride || AC.peer;
@@ -60156,6 +60220,7 @@ async function startCall(media, peerOverride) {
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Calling isn’t supported in this browser.'); return; }
   playCallStart(); // soft pop as the call begins
   callPrimeRemote(); // iOS: unlock the remote element within this tap so its audio can play later
+  rtEnsureLive();    // the ring, the answer and the hang-up all travel over the live stream
   CALL = { peer: { ...peer }, media, callId: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), caller: true, state: 'outgoing', pendingIce: [] };
   callShowUI('calling');
   /* THE GIVE-UP TIMER IS ARMED HERE, BEFORE ANYTHING CAN GO WRONG. It used to be
@@ -60180,6 +60245,7 @@ async function startCall(media, peerOverride) {
     await CALL.pc.setLocalDescription(offer);
     await callWaitIceGathering(CALL.pc); // bundle ICE into the SDP so an SSE drop can't lose it
     if (!CALL || !CALL.pc) return;      // hung up while gathering
+    callTrail('offer-sent');
     callSignal('offer', { sdp: JSON.stringify(CALL.pc.localDescription), media });
     CALL.signaled = true; // reached the ringing stage — worth logging
   } catch (e) {
@@ -60193,7 +60259,15 @@ async function startCall(media, peerOverride) {
 function callArmGiveUp() {
   if (!CALL || CALL._connTimeout) return;
   CALL._connTimeout = setTimeout(() => {
-    if (CALL && CALL.state !== 'connected') { showNotif('No answer.'); callCleanup(); }
+    if (!CALL || CALL.state === 'connected') return;
+    /* SAY WHICH OF THE TWO THINGS WENT WRONG. "No answer" is only honest when the ring
+       was delivered and ignored; when their side never answered the stream at all, or
+       when they answered and the media could not get through, that wording sends the
+       founder hunting for the wrong problem. */
+    showNotif(CALL.answeredAt
+      ? 'They answered, but the connection could not be made. This is usually the phone network blocking it.'
+      : 'No answer. If their Atwe was open, tell me and I will look at the call report.');
+    callCleanup();
   }, 45000);
 }
 /* A refused microphone and a missing one are different problems with different fixes,
@@ -60218,17 +60292,20 @@ function callOnSignal(d) {
       API.req('POST', '/api/rt/call', { to: d.from.id, kind: 'decline', callId: d.callId }).catch(() => {});
       return;
     }
-    CALL = { peer: d.from, media: d.media, callId: d.callId, caller: false, state: 'incoming', offer: d.sdp, pendingIce: [] };
+    CALL = { peer: d.from, media: d.media, callId: d.callId, caller: false, state: 'incoming', offer: d.sdp, pendingIce: [], _t0: Date.now() };
+    callTrail('ring-shown');
     callShowUI('incoming');
     announce(`Incoming ${d.media === 'video' ? 'video ' : ''}call from ${d.from.name || 'someone'}`, true);
     return;
   }
   if (!CALL || (d.callId && CALL.callId && d.callId !== CALL.callId)) return;
   if (d.kind === 'answer') {
+    callTrail('answer-received');
     if (!CALL.pc) return; // hung up before the answer landed
     CALL.pc.setRemoteDescription(JSON.parse(d.sdp)).then(callFlushIce).catch(() => {});
     // Don't reset the connected state/timer when this answer is just completing
     // an ICE restart on an already-connected call.
+    CALL.answeredAt = CALL.answeredAt || Date.now();
     if (CALL.state !== 'connected') { CALL.state = 'connected'; CALL.connectedAt = Date.now(); callShowUI('connected'); }
   } else if (d.kind === 'ice') {
     const c = JSON.parse(d.candidate);
@@ -60259,6 +60336,8 @@ async function callAccept() {
   if (!CALL || CALL.caller) return;
   if (CALL._accepting) return;        // a second tap on Answer must not run this twice
   CALL._accepting = true;
+  callTrail('accept-tapped');
+  rtEnsureLive();    // answering is useless if our own stream has quietly died
   callPrimeRemote(); // iOS: unlock the remote element within the answer tap
   try {
     CALL.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: CALL.media === 'video' });
@@ -60363,6 +60442,7 @@ function playEndTone() {
   } catch { /* audio not available */ }
 }
 function callCleanup() {
+  callReportIfFailed();
   callStopTimer();
   stopRing();
   callMoreClose();
