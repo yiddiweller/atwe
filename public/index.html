@@ -2915,7 +2915,7 @@ body.reduce-motion .tb-brand-mark{transition:none !important;}
 body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand.rolling .tb-brand-word-txt,body.reduce-motion .tb-brand.rolling .tb-brand-word{animation:none;}
 /* Exact spacing (founder's mock): the tabs align to the feed gutter (same x as the
    brand logo + the post avatars), and the tab strip runs to the true screen edge. */
-.topbar.tb-solo .tb-tabrow{padding:2px 0 8px var(--feed-gutter,16px);}
+.topbar.tb-solo .tb-tabrow{padding:2px 0 var(--tabpill-below) var(--feed-gutter,16px);}
 .topbar.tb-solo .tb-feedtabs{padding-inline-end:18px;}
 /* The topbar's own home/chat inline padding would shift the row — the solo row
    owns its geometry (tabs scroll to the TRUE screen edge, per the mock). */
@@ -2928,10 +2928,13 @@ body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand
    the old tabs reserved extra bottom padding for the underline (7px top / 12px
    bottom), which floated the text above the icon centers — symmetric now.
    (Doubled-class selectors outrank the later per-world mobile rules.) */
-.topbar.tb-solo.tb-home .tb-feedtab:not(.tb-feedtab-add),.topbar.tb-solo.tb-chat .tb-feedtab:not(.tb-feedtab-add){
+.topbar.tb-solo.tb-home .tb-feedtab:not(.tb-feedtab-add),.topbar.tb-solo.tb-chat .tb-feedtab:not(.tb-feedtab-add),.topbar.tb-solo.tb-engine .tb-feedtab:not(.tb-feedtab-add){
   /* Home + Beam tabs must be IDENTICAL across worlds — same size/weight/colour
-     so switching worlds never feels "off" (founder). */
-  padding:7px 15px;font-size:15px;font-weight:600;color:var(--tab-ink);background:var(--tab-fill);}
+     so switching worlds never feels "off" (founder). ENGINE was missing from this
+     list and only matched a (0,3,0) rule inside the phone media query, so it was one
+     stray edit away from being the odd world out; the geometry itself now comes from
+     the --tabpill-* tokens, which all four worlds share. */
+  padding:var(--tabpill-py) var(--tabpill-px);font-size:15px;font-weight:600;color:var(--tab-ink);background:var(--tab-fill);}
 /* A PILL'S HEIGHT IS ITS LINE-HEIGHT, NEVER WHATEVER HAPPENS TO BE INSIDE IT.
    Beam's Chats and Groups tabs carry an unread count — an 18px inline-flex badge in a
    line box that `line-height:normal` makes about 17.25 at 15px Inter. An inline child
@@ -2943,7 +2946,38 @@ body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand
    badge, a dot, an icon. Same reasoning as --post-av, where a header row's height is the
    picture's and never the text's. All four worlds are declared together here so they
    cannot drift apart again. */
-.topbar .tb-feedtab,.ntf-tab{line-height:18px;}
+/* THE TAB PILL'S GEOMETRY, MEASURED OFF APPLE FITNESS+ — one place, all four worlds.
+   The founder's design team sent that app's own top row as the reference and asked for
+   "the exact sizes of the menu buttons as well of the spaces". Both screenshots are a
+   375pt iPhone at 3x, so every number below is a direct pixel measurement divided by 3,
+   not an estimate:
+
+       |                  | Apple Fitness+ | Atwe before |
+       | pill height      | 132px = 44.0pt | 96px = 32.0pt |
+       | padding each side|  50px = 16.7pt | 48px = 16.0pt |
+       | gap between      |  30px = 10.0pt | 24px =  8.0pt |
+
+   HEIGHT IS THE ONE THAT WAS ACTUALLY WRONG. The side padding was already within a
+   third of a point, so "too close to each other" was never the horizontal spacing —
+   it was 32pt pills with only 8pt between them, which reads as a crowded strip rather
+   than a row of buttons. Apple's 44pt is also exactly the touch minimum, so at this
+   height the target is REAL rather than simulated by the invisible ::after overlay the
+   44pt block still draws around it (that overlay is width/height:100% with a 44 floor,
+   so at 44 it lands on the control itself and steals nothing).
+   The height is expressed as padding because the line box is pinned at 18px just below
+   — 18 + 13 + 13 = 44 — so a badge or an icon inside a tab can never change it. */
+:root{--tabpill-py:13px;--tabpill-px:17px;--tabpill-gap:10px;--tabpill-below:13px;}
+.topbar .tb-feedtab,.ntf-tab{line-height:18px;
+  /* …AND THE PILL IS A FLEX BOX, which is what actually makes that pin hold. A pinned
+     line-height still loses to an inline child that sits OUTSIDE the line box: the Beam
+     unread badge is an 18px inline-flex carrying `vertical-align:middle`, which lifts it
+     by half an x-height, so "Chats 78" measured 45.03 against every other tab's 44 and
+     the row twitched by a pixel as messages arrived and cleared. As flex items the text
+     and the badge are centred against each other and the pill's height is padding plus
+     the taller of the two, full stop. The markup has NO whitespace between them
+     (`Chats<span…>`), so nothing is lost by dropping out of inline layout; the badge's
+     own margin still supplies the gap. */
+  display:inline-flex;align-items:center;justify-content:center;}
 .topbar.tb-solo.tb-home .tb-feedtab.active:not(.tb-feedtab-add),.topbar.tb-solo.tb-chat .tb-feedtab.active:not(.tb-feedtab-add),.topbar.tb-solo.tb-engine .tb-feedtab.active:not(.tb-feedtab-add){
   font-weight:700;background:var(--tab-fill-on);color:var(--tab-ink-on);}
 .topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{align-self:center;align-items:center;}
@@ -2962,7 +2996,7 @@ body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand
 @media(min-width:769px) and (min-height:501px){.tb-ico.tb-ico-menu{display:none;}} /* desktop has the sidebar */
 /* Beam tabs match the home row's scrollable rhythm in solo mode (they were
    space-between across the full width, which fights the icon cluster). */
-.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{justify-content:flex-start;gap:8px;margin-inline-start:0;/* pills sit close; the gap between WORDS used to be 36 */}
+.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{justify-content:flex-start;gap:var(--tabpill-gap);margin-inline-start:0;/* pills sit close; the gap between WORDS used to be 36 */}
 /* Unified Home + Beam tab-row geometry (founder polish, single source of truth —
    (0,4,0) so it beats the per-world mobile rules):
    • text sits CLOSE to the ≡/＋ icons (small start padding + tiny icoset gap above);
@@ -3055,15 +3089,15 @@ body.light .tb-home-dot{border-color:#fff;}
    centered within it (centered with the post avatars). */
 .topbar.tb-home .tb-homeava{width:42px;}
 .topbar.tb-home .tb-left{flex:0 0 auto;gap:7px;}
-.topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:8px;margin-inline-start:0;padding-inline-end:8px;}
+.topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:var(--tabpill-gap);margin-inline-start:0;padding-inline-end:8px;}
 .topbar.tb-home .topbar-actions{flex:0 0 auto;}
-.topbar.tb-home .tb-feedtab:not(.tb-feedtab-add){padding:7px 15px;}
+.topbar.tb-home .tb-feedtab:not(.tb-feedtab-add){padding:var(--tabpill-py) var(--tabpill-px);}
 /* Chat tab: All/Chats/Calls/Contacts sit in the topbar like home, but keep the
    hamburger (no avatar swap). */
 .topbar.tb-chat .tb-left{flex:0 0 auto;gap:7px;}
 .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-inline-start:0;}
 .topbar.tb-chat .topbar-actions{flex:0 0 auto;}
-.topbar.tb-chat .tb-feedtab:not(.tb-feedtab-add){padding:7px 15px;}
+.topbar.tb-chat .tb-feedtab:not(.tb-feedtab-add){padding:var(--tabpill-py) var(--tabpill-px);}
 @media(min-width:769px) and (min-height:501px){
   .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:center;gap:6px;}
   .topbar.tb-chat .tb-feedtab:not(.tb-feedtab-add){padding:9px 20px;font-size:15.5px;border-radius:var(--r-pill);
@@ -3104,7 +3138,7 @@ body.light .tb-home-dot{border-color:#fff;}
    of the row, not one of the choices, and must stay a bare quiet word. */
 .tb-feedtab:not(.tb-feedtab-add){position:relative;background:var(--tab-fill);border:none;cursor:pointer;
   color:var(--tab-ink);font-size:15px;font-weight:600;border-radius:var(--r-pill);
-  padding:7px 15px;white-space:nowrap;-webkit-tap-highlight-color:transparent;
+  padding:var(--tabpill-py) var(--tabpill-px);white-space:nowrap;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 @media(hover:hover){.tb-feedtab:not(.tb-feedtab-add):hover{background:var(--tab-fill-hv);color:var(--t1);}}
 .tb-feedtab:not(.tb-feedtab-add):active{transform:scale(1.04);}
@@ -3196,7 +3230,7 @@ body.light .tb-home-dot{border-color:#fff;}
   /* Search + AI: put the ≡ at the exact same gutter position as Home/Chat. */
   .topbar.tb-plain{padding-inline-start:var(--feed-gutter);}
   .topbar.tb-plain .sb-toggle{justify-content:flex-start;width:auto;}
-  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:8px;margin-inline-start:8px;padding-inline-start:16px;padding-inline-end:0;}
+  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:var(--tabpill-gap);margin-inline-start:8px;padding-inline-start:16px;padding-inline-end:0;}
     /* (Left-edge fade is a static overlay on .tb-solo .tb-icoset — no mask on the
        scrolling row, so the Beam tab scroll stays 60fps too.) */
   /* Beam tabs bottom-align to the hairline so the active tab carries a short BLUE
@@ -3204,7 +3238,7 @@ body.light .tb-home-dot{border-color:#fff;}
   /* Pills sit CENTRED in the strip, not bottom-aligned: there is no underline to
      rest on the hairline any more — the fill is what says which tab you are on. */
   .topbar.tb-chat .tb-feedtabs,.topbar.tb-engine .tb-feedtabs{align-self:stretch;align-items:center;}
-  .topbar.tb-chat .tb-feedtab:not(.tb-feedtab-add),.topbar.tb-engine .tb-feedtab:not(.tb-feedtab-add){padding:7px 15px;font-size:15px;font-weight:600;color:var(--tab-ink);background:var(--tab-fill);}
+  .topbar.tb-chat .tb-feedtab:not(.tb-feedtab-add),.topbar.tb-engine .tb-feedtab:not(.tb-feedtab-add){padding:var(--tabpill-py) var(--tabpill-px);font-size:15px;font-weight:600;color:var(--tab-ink);background:var(--tab-fill);}
   .topbar.tb-chat .tb-feedtab.active:not(.tb-feedtab-add),.topbar.tb-engine .tb-feedtab.active:not(.tb-feedtab-add){font-weight:700;background:var(--tab-fill-on);color:var(--tab-ink-on);}
 
   /* ── Phase 5: two-row Home top bar (blueprint §Home) ──
@@ -3220,8 +3254,8 @@ body.light .tb-home-dot{border-color:#fff;}
   .topbar.tb-home .tb-pagelabel{display:block;font-size:21px;font-weight:800;letter-spacing:-.02em;}
   /* Feed tabs are their own full-width row. No mask at rest — the .fade-l /
      .fade-r classes add one only on a side that really has more to show. */
-  .topbar.tb-home .tb-feedtabs{grid-area:tabs;flex:0 0 auto;margin:0;gap:8px;padding:0;/* pills sit close; the gap between WORDS used to be 36 */}
-  .topbar.tb-home .tb-feedtab:not(.tb-feedtab-add){padding:7px 15px;font-size:15px;}
+  .topbar.tb-home .tb-feedtabs{grid-area:tabs;flex:0 0 auto;margin:0;gap:var(--tabpill-gap);padding:0;/* pills sit close; the gap between WORDS used to be 36 */}
+  .topbar.tb-home .tb-feedtab:not(.tb-feedtab-add){padding:var(--tabpill-py) var(--tabpill-px);font-size:15px;}
   /* The brand-row redesign replaces the old grid lockup: with a brand row + a tab
      row, Home stacks them like Beam (flex column). Overrides the tb-home grid above
      (same specificity, later in source) so the two rows don't land side-by-side. */
@@ -8707,9 +8741,9 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
    `.topbar.tb-solo.tb-home .tb-feedtab` (padding 7px 15px / 15px / 600, active 700) and
    the row's 2px lifts the chips onto the worlds' own line; the colours already came from
    the shared --tab-* tokens, which is why only the geometry was adrift. */
-.ntf-tabs{display:flex;gap:8px;padding:2px var(--feed-gutter) 10px;overflow-x:auto;scrollbar-width:none;}
+.ntf-tabs{display:flex;gap:var(--tabpill-gap);padding:2px var(--feed-gutter) var(--tabpill-below);overflow-x:auto;scrollbar-width:none;}
 .ntf-tabs::-webkit-scrollbar{display:none;}
-.ntf-tab{flex:0 0 auto;background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:15px;font-weight:600;padding:7px 15px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.ntf-tab{flex:0 0 auto;background:var(--tab-fill);border:none;border-radius:var(--r-pill);color:var(--tab-ink);font-size:15px;font-weight:600;padding:var(--tabpill-py) var(--tabpill-px);cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 .ntf-tab.on{background:var(--tab-fill-on);color:var(--tab-ink-on);font-weight:700;}
 /* Wallet history filter chips */
 .wf-chips{display:flex;gap:8px;margin:2px 0 10px;overflow-x:auto;scrollbar-width:none;}
@@ -22865,7 +22899,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1856'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1857'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -36143,14 +36177,25 @@ function openNotifications() {
        up would read as a twitch. */
     const _nov = document.getElementById('notifOverlay');
     const _arriving = !(_nov && !_nov.classList.contains('hidden') && !_nov.classList.contains('closing'));
+    AC._notifTab = 'all';               // set BEFORE the first paint, so the pills below open on All
     showOverlay('notifOverlay');
     try { acNotifHeadSync(_arriving); } catch (e) {}
     const el = document.getElementById('notifList');
-    el.innerHTML = acSkelRows(5);
+    /* THE TAB ROW PAINTS ON THE SAME FRAME AS THE HEADER, like every other world.
+       It used to be built INSIDE acRenderNotifList, i.e. inside the element that this
+       line replaces with a skeleton — so it did not exist until the fetch came back, and
+       the founder saw the pills arrive two or three seconds late while Home, Beam and
+       Engine showed theirs instantly. Those three draw their row from STATIC markup in
+       the top bar (#tbFeedTabs / #tbChatTabs), which is the whole difference.
+       It also used to DERIVE which tabs to show from the loaded notifications ("only
+       offer a tab that would show something"), so there was nothing to draw before the
+       data arrived even in principle. That rule is gone: all four render always, the way
+       Home shows Circles whether or not you are in one. A tab with nothing behind it
+       says so when you tap it. */
+    el.innerHTML = acNotifTabsHtml() + acSkelRows(5);
     try {
       const { notifications } = await API.req('GET', '/api/notifications');
       AC._notifs = notifications;       // detail page looks rows up here by their stable id
-      AC._notifTab = 'all';
       acRenderNotifList();
       API.req('POST', '/api/notifications/read').catch(() => {});
       setNotifBadge(0);
@@ -36165,16 +36210,22 @@ const _NOTIF_TABS = [
   ['jobs', 'Jobs', ['job_application', 'job_match', 'app_reviewed', 'app_shortlisted', 'app_hired', 'app_rejected', 'referral_request', 'connection_request', 'connection_accepted', 'endorsement']],
   ['money', 'Money', ['money_received', 'money_request', 'money_request_paid', 'money_request_declined', 'order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'order_refunded', 'invoice', 'invoice_paid', 'invoice_reminder', 'tip', 'payment', 'escrow_released', 'escrow_refunded', 'refund_approved', 'refund_declined', 'split_request', 'split_paid', 'split_reminder', 'pool_contribution', 'community_boost', 'gift_received', 'affiliate', 'referral']],
 ];
+/* The four filter pills, drawn from the table alone so they never wait on a fetch.
+   Called twice on every open — once beside the skeleton, once with the real rows — and
+   the html is identical both times, so nothing moves when the list lands. */
+function acNotifTabsHtml() {
+  const tab = AC._notifTab || 'all';
+  return `<div class="ntf-tabs" id="notifTabs">${_NOTIF_TABS.map(([k, l]) =>
+    `<button class="ntf-tab ${tab === k ? 'on' : ''}" onclick="acNotifTab('${k}')">${l}</button>`).join('')}</div>`;
+}
 function acRenderNotifList() {
   const el = document.getElementById('notifList'); if (!el) return;
   const all = AC._notifs || [];
-  if (!all.length) { el.innerHTML = acEmpty('bell', 'Nothing yet', 'Likes, replies, follows, messages and money all land here. You will see each one the moment it happens.'); return; }
+  const bar = acNotifTabsHtml();
+  if (!all.length) { el.innerHTML = bar + acEmpty('bell', 'Nothing yet', 'Likes, replies, follows, messages and money all land here. You will see each one the moment it happens.'); return; }
   const tab = AC._notifTab || 'all';
   const def = _NOTIF_TABS.find(([k]) => k === tab) || _NOTIF_TABS[0];
   const list = def[2] ? all.filter((n) => def[2].includes(n.type)) : all;
-  // Only offer tabs that would show something (All always).
-  const tabs = _NOTIF_TABS.filter(([k, , types]) => k === 'all' || all.some((n) => types.includes(n.type)));
-  const bar = tabs.length > 1 ? `<div class="ntf-tabs">${tabs.map(([k, l]) => `<button class="ntf-tab ${tab === k ? 'on' : ''}" onclick="acNotifTab('${k}')">${l}</button>`).join('')}</div>` : '';
   const grouped = acGroupNotifs(list);
   el.innerHTML = bar + (grouped.length
     ? '<div class="notif-group">'
