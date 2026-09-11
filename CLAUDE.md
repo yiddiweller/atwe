@@ -10655,6 +10655,58 @@ health check with three real outcomes must not have two buttons' worth of UI.**
   "deployed". The workflow step exists and is written down ("cherry-pick to main, verify the
   divergence markers, push main") — it was simply skipped eight builds running, because
   every other signal (green tests, a clean push) said the work was done.
+- **THE POST BUTTON WAS NOT FROZEN, IT WAS UNREACHABLE — an invisible tap target had grown
+  to the size of the whole header.** The founder: *"I cannot click the post button. It
+  doesn't go anywhere."* They were describing it exactly. `.msg-back` (the ✕ on the composer
+  and on ~30 sheets) carries the 44pt touch overlay as an `::after` with `inset:-6px`, and
+  `.msg-back` is `position:static` — so **an inset overlay resolves against the nearest
+  POSITIONED ancestor**, which here is the sticky `.msg-top`. It rendered **370x68** instead
+  of 44x44: a transparent slab across the entire header, and `elementFromPoint` at the Post
+  button's own centre returned `msg-back`. **A static host does not merely put an overlay in
+  the wrong place; it makes it the size of the header.** Four more classes were static the
+  same way and are fixed with it: `.mkt-cart`, `.feed-im-btn`, `.frail-btn`, `.pf-top-x`.
+  The block's own comment already warned *"check a class before adding it: grep its rules
+  for `position:` first"* — five were added without that check.
+- **AND THE POST BUTTON ITSELF WAS 30pt TALL**, i.e. under the touch floor on the control
+  the whole app funnels into. It has its own `::after` now (`inset:-7px`, 30 → 44) and, like
+  every other host in that block, `position:relative` so the overlay cannot escape in turn.
+- **WHY TWO TOUCH GUARDS BOTH PASSED.** `touchsize.js` measures the overlay's used size and
+  asks whether it CLEARS 44 — an escaped overlay is enormous, so it sails through. And
+  `touchwide.js`, which does hit-test neighbours, ran nine surfaces, **none of them the
+  composer or any sheet header**, so it had never once looked at the most-pressed button in
+  the app. Fifth route in this repo to *a check that never sees a control reports a clean
+  result*. The composer is in `touchwide.js` now (with `{noNav:true}`, since a full-screen
+  sheet legitimately hides the bar), and **`scratchpad/tapown.js`** (31 checks, 14 surfaces,
+  both themes) asks the question neither of them did: **does a control's own centre belong
+  to it?** It also reads the stylesheet and requires every class carrying that overlay to be
+  positioned, which covers screens no probe opens.
+- **FOUR PROBE TRAPS CAME OUT OF THIS, and every one made a check pass on the broken code:**
+  **(1) AN EMPTY COMPOSER HIDES IT.** With no text the Post button is `disabled`, and a
+  disabled button hit-tests differently — measured empty, this exact bug reported a clean
+  result. Type something first; measure the state a person is actually in.
+  **(2) DELETING A SELECTOR'S TAIL SWALLOWS THE NEXT RULE.** The `position:relative` rule
+  spans three lines, so removing the last line leaves a dangling selector list that takes
+  the FOLLOWING rule's block as its own — the page then behaves in a third way that is
+  neither fixed nor broken. Remove one class by name.
+  **(3) UN-POSITIONING ONE HOST IS NOT THE SHIPPED STATE.** Leaving the Post button
+  positioned (or giving it an overlay of its own) is enough by itself to keep it above the
+  escaped one, so a self-test that only un-positions the ✕ passes. Restore the whole
+  original state.
+  **(4) A RULE EDITED AT RUNTIME IS NOT A RULE THAT WAS NEVER THERE.** Overriding with
+  `!important`, or rewriting `selectorText` in the CSSOM, computes the same values and still
+  did not reproduce it. Rewrite the document as it is SERVED (`p.route`), in its own browser
+  context — a page in a context that already loaded the shell can be served from cache, and
+  a cached navigation never reaches the route.
+- **A RESTART THAT DOES NOT RESTART COSTS AN HOUR.** The server pre-compresses `index.html`
+  at boot and serves that buffer to any client asking for brotli (every real browser), so a
+  stale process serves stale CSS while `curl` — which asks for no encoding and falls through
+  to `sendFile` — shows the new file. Two restart scripts silently did nothing (`ss` was not
+  installed; `setsid`'s `$!` is setsid's pid, not node's), and the measurements taken in
+  between said the fix was not the cause. **Confirm a restart by fetching with
+  `Accept-Encoding: br` and grepping for a marker you just added**, never by `curl` alone.
+  And **never `pkill -f` a pattern that appears in your own command line** — the shell
+  running it matches too, and kills itself (exit 144).
+
 - **A CALL WAITS ON ONE REQUEST BEFORE IT RINGS ANYBODY, AND THAT REQUEST HAD NO TIME
   LIMIT ON EITHER SIDE.** Every call — 1:1, group, a call link, Go Live — calls
   `callIceServers()` inside `callCreatePc()` before a byte of the invitation is sent;
