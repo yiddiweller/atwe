@@ -3255,9 +3255,15 @@ body.light .tb-home-dot{border-color:#fff;}
    rides the content's top edge up to the TOP of the menu and pins there.
    Everything is driven by ONE scroll-linked variable --cov (0..1) set in
    _applyBars, so it reverses exactly on the way back up. */
+/* A SECOND PARAGRAPH THAT HAD LOST ITS OPENING SLASH-STAR, and it was quietly eating the
+   rule below it. A star-slash is not a valid way to begin a CSS selector, so the browser
+   read all of this as the prelude of the next style rule, found it invalid, and DROPPED
+   `.tb-hairline{display:none;}` entirely. Nothing showed, because #tbHairline has no other
+   styling and an empty div is invisible anyway, which is exactly why it survived so long:
+   the only real cost was that the next person to add a rule here would lose that one too.
    FULLY NATIVE (no JS reads the scroll): the content covers the fixed menu as it
    rises, and the hairline is a sticky pseudo-element WELDED to the content's top
-   edge. The browser moves both — so there is ZERO lag (the hairline never "jumps"
+   edge. The browser moves both, so there is ZERO lag (the hairline never "jumps"
    apart from the content) and it reverses PERFECTLY even during an iOS momentum
    flick (JS could never keep up with that). */
 .tb-hairline{display:none;}
@@ -22839,7 +22845,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1849'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1850'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -31565,7 +31571,7 @@ function acErr(el, retry) {
     const box = document.getElementById(id); if (!box) return;
     const t = box.querySelector('.ac-err-title'), sub = box.querySelector('.ac-err-sub');
     if (t) t.textContent = 'You\u2019re offline';
-    if (sub) sub.textContent = 'Check your connection \u2014 we\u2019ll pick up right where you left off.';
+    if (sub) sub.textContent = 'Check your connection. We\u2019ll pick up right where you left off.';
   })();
 }
 // A designed "this doesn't exist" state — used when the server says 404/410/403,
@@ -45153,7 +45159,7 @@ function acStrangerGuard(e, label, resume) {
       <div class="spg-name"><span>${escHtml(u.name || 'Unknown')}</span>${vbadge(!!u.verified)}</div>
       <div class="spg-sub">@${escHtml(u.username || '')}${u.joinedAt ? ' · joined ' + new Date(u.joinedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : ''}</div>
     </div>`;
-  document.getElementById('spgNote').textContent = 'You\u2019ve never chatted, connected or sent money with them before. Scammers often ask strangers for money \u2014 and money sent on Atwe usually can\u2019t be brought back. Only continue if you know who this is.';
+  document.getElementById('spgNote').textContent = 'You\u2019ve never chatted, connected or sent money with them before. Scammers often ask strangers for money, and money sent on Atwe usually can\u2019t be brought back. Only continue if you know who this is.';
   document.getElementById('spgGo').textContent = label || 'I know them';
   showOverlay('strangerPayView');
   return true;
@@ -45187,7 +45193,7 @@ async function acSendMoney(knownOk) {
     const wv = document.getElementById('walletView'); if (wv && !wv.classList.contains('hidden')) acLoadWallet();
     acRefreshBalance && acRefreshBalance();
   } catch (e) {
-    if (!acStrangerGuard(e, 'I know them \u2014 send ' + acMoneyFmt(Math.round(amount * 100)), () => acSendMoney(true))) {
+    if (!acStrangerGuard(e, 'I know them, send ' + acMoneyFmt(Math.round(amount * 100)), () => acSendMoney(true))) {
       showNotif(e.message || 'Could not send the money.');
     }
   } finally { if (btn) { btn.disabled = false; btn.textContent = 'Send'; } }
@@ -45287,7 +45293,7 @@ async function acPayMoneyRequest(id, knownOk) {
     else if (r.ok) { showNotif('Paid ' + acMoneyFmt(r.paidCents || 0) + '.'); acRefreshBalance && acRefreshBalance(); }
     acLoadMoneyRequests(AC._mrTab || 'incoming');
   } catch (e) {
-    if (!acStrangerGuard(e, 'I know them \u2014 pay it', () => acPayMoneyRequest(id, true))) {
+    if (!acStrangerGuard(e, 'I know them, pay it', () => acPayMoneyRequest(id, true))) {
       showNotif(e.message || 'Could not pay the request.');
     }
   }
@@ -50011,7 +50017,7 @@ async function acGiftBuy(knownOk) {
     if (!to && r.card) appConfirm({ title: 'Gift card created', message: 'Code: ' + r.card.code + '\n\nShare it with anyone. They redeem it for $' + (amt / 100) + ' of credit.', confirmText: 'Copy code', cancelText: 'Done' }).then(ok => { if (ok) acCopyText(r.card.code); });
     acLoadGiftCards();
   } catch (e) {
-    if (acStrangerGuard(e, 'I know them \u2014 send the gift card', () => acGiftBuy(true))) { if (btn) btn.disabled = false; return; }
+    if (acStrangerGuard(e, 'I know them, send the gift card', () => acGiftBuy(true))) { if (btn) btn.disabled = false; return; }
     acHandlePayErr ? acHandlePayErr(e) : showNotif(e.message || 'Could not buy.');
   }
   finally { if (btn) btn.disabled = false; }
@@ -50863,7 +50869,7 @@ async function acProspectSend(leadId) {
    How fast you reply and how much is coming in. "First reply" is measured per
    conversation per day, so one long thread isn't counted as one huge delay. */
 function _convDur(s) {
-  if (s == null) return '\u2014';
+  if (s == null) return '-';
   if (s < 60) return s + 's';
   if (s < 3600) return Math.round(s / 60) + 'm';
   if (s < 86400) return (s / 3600).toFixed(1) + 'h';
@@ -50889,7 +50895,7 @@ async function acOpenConvStats() {
       <div class="ci-card">
         <div class="ci-row">
           ${stat(_convDur(d.medianResponseSecs), 'usual first reply')}
-          ${stat(d.responseRate == null ? '\u2014' : d.responseRate + '%', 'you replied')}
+          ${stat(d.responseRate == null ? '-' : d.responseRate + '%', 'you replied')}
           ${stat(d.conversations, d.conversations === 1 ? 'conversation' : 'conversations')}
         </div>
         ${bars}
@@ -50963,7 +50969,7 @@ async function acLoadWaitlist() {
       ${w.description ? `<div class="ac-disc-sub" style="margin:0 0 12px;">${escHtml(w.description)}</div>` : '<div style="height:6px;"></div>'}
       ${w.joined ? `<div class="wl-card${w.invited ? ' wl-in' : ''}">
           <div class="wl-pos">${w.invited ? 'You\u2019re in' : '#' + w.position}</div>
-          <div class="wl-sub">${w.invited ? 'It\u2019s ready for you \u2014 check your messages from Atwe.' : 'Your place in line \u00b7 ' + people}</div>
+          <div class="wl-sub">${w.invited ? 'It\u2019s ready for you. Check your messages from Atwe.' : 'Your place in line \u00b7 ' + people}</div>
         </div>
         <button class="ac-pill-btn" style="width:100%;margin-top:12px;" onclick="acLeaveWaitlist()">Leave the list</button>`
         : `<div class="wl-card"><div class="wl-pos">${w.total}</div><div class="wl-sub">${people}</div></div>
@@ -52002,7 +52008,7 @@ async function acPaySplit(id, knownOk) {
     acRefreshBalance && acRefreshBalance();
     acOpenSplit(id);
   } catch (e) {
-    if (acStrangerGuard(e, 'I know them \u2014 pay my share', () => acPaySplit(id, true))) return;
+    if (acStrangerGuard(e, 'I know them, pay my share', () => acPaySplit(id, true))) return;
     acHandlePayErr ? acHandlePayErr(e, 'Could not pay.') : showNotif(e.message || 'Could not pay.');
   }
 }
@@ -58227,7 +58233,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) _upd
    app genuinely has nothing to show, which until now was a blank screen.
 ═══════════════════════════════════════════════ */
 const APP_STATES = {
-  offline: { title: 'You\u2019re offline', sub: 'Check your connection \u2014 we\u2019ll pick up right where you left off.', btn: 'Try again' },
+  offline: { title: 'You\u2019re offline', sub: 'Check your connection. We\u2019ll pick up right where you left off.', btn: 'Try again' },
   error:   { title: 'Something went wrong', sub: 'That one\u2019s on us, not you. Reloading usually sorts it.', btn: 'Reload' },
 };
 let _stateKind = null;

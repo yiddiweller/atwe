@@ -67,7 +67,7 @@ list stays the honest measure of what is left.
 
 | # | what | where | state |
 |---|---|---|---|
-| T1 | **The em dash.** The founder had asked once, it was half-done, and they still kept meeting them: *"all AI sites and stuff comes a lot with this line and I don't see it unprofessional apps"* | 1,175 lines of copy across 15 files, plus the AI itself | **done**, build 1849, guarded by `nodash.js` |
+| T1 | **The em dash.** The founder had asked once, it was half-done, and they still kept meeting them: *"all AI sites and stuff comes a lot with this line and I don't see it unprofessional apps"* | 1,175 lines of copy across 15 files, plus the AI itself, plus 20 more written as `\u2014` that the first sweep could not see | **done**, build 1850, guarded by `nodash.js` |
 | P3-1 | **Nothing.** Every long surface scrolls with its ordinary frame on time, nothing stalls, and the app's own code is ~1ms of the 16.7ms budget. One no-op tidy shipped with it (cached per-frame lookups) | `_onWinScroll` · `_onListScroll` | **measured clean**, build 1848, guarded by `motion.js` |
 | P2-2 | **Two touch controls under the 44pt floor** — the Recent-searches chips (93x29) and the Translate-post line (92x19). Both only render once the account HAS the data, so no sweep had ever seen them | `public/index.html` `pointer:coarse` block | **fixed**, build 1847, guarded by `touchwide.js` |
 | P2-1 | **A block only worked in one direction** — the blocker could keep messaging AND calling the person they had blocked, while that person could not answer | `server.js` `canContact` + `dmAllowed` | **fixed**, build 1846, guarded by `twoperson.js` |
@@ -207,6 +207,59 @@ Proofread hands a member their exact words back, so it is passed `atweOwnWords` 
 alone completely, instruction and net both. Every other writing task — improve, rephrase, a
 drafted reply — DOES follow the rule, because that is Atwe writing prose on somebody's behalf,
 and putting a machine tell into a member's own message is the worse version of this fault.
+
+### THE TWENTY THAT SURVIVED, AND WHY NO CHECK COULD SEE THEM
+
+The founder asked, after the first pass shipped, to *"confirm and make sure"* it was clean
+everywhere including an AI reply and a notification. It was not, and the reason is worth
+writing down: **a dash can be written without being a dash.** `'\u2014'` in a source file is
+six plain ASCII bytes, so a `/[—–]/` search reads straight past it, and the browser turns it
+back into a real em dash on screen. Twenty were hiding that way, with every check green:
+
+| where | what a member saw |
+|---|---|
+| the **offline screen** (both copies) | *"Check your connection — we'll pick up right where you left off"* |
+| the **stranger-guard** before sending money | *"Scammers often ask strangers for money — and money sent on Atwe usually can't be brought back"* |
+| four confirm buttons | *"I know them — send $20"*, *"— pay it"*, *"— pay my share"*, *"— send the gift card"* |
+| the gift-card waiting list | *"It's ready for you — check your messages from Atwe"* |
+| two empty table cells | a bare `—` |
+| two admin toasts | *"ready to spend — or to move into their wallet balance"* |
+| **six Atwe AI system prompts** | nothing, but the model was being SHOWN em dashes in the same breath as being told never to write one |
+
+The offline one is the worst of them: the app spoke in exactly the generated voice this whole
+rule exists to remove, at the one moment a member is already annoyed. All twenty are gone, and
+the guard now matches the character, both escape forms and the HTML entities, and **self-tests
+that detector on every run** — a sweep that cannot fail proves nothing, and this one was green
+on twenty of them.
+
+### NOTIFICATIONS ARE CLEAN BY CONSTRUCTION, NOT BY SWEEPING
+
+Worth knowing because it is a stronger guarantee than a sweep: a `notifications` row stores a
+TYPE and some ids and **no free text at all**. The in-app wording comes from the client's own
+`verbs` dictionary and the push wording from `PUSH_VERBS`, both swept and both guarded. The
+only free text in a notification is the actor's own name, which is a member's own words and so
+the founder's own exception. There is nowhere for a dash to hide.
+
+### CAN THE ONES LEFT IN THE CODE JUST BE TAKEN OFF? TRIED. NO.
+
+The honest answer to the founder's question. About 3,900 dashes live in code comments and the
+notes inside SQL queries. **None of them has to be there** and nobody can see one: a comment is
+not sent to the model, not rendered by the browser, not read by Postgres. So removing them was
+actually built — a comment-only rewrite, verified not to change a single byte of real code nor
+move a single line — and then thrown away, because **the output was worse than the input**. A
+dash standing in front of a class name or a selector is not punctuation a machine can replace:
+`as — .pf-top-save` became `as.pf-top-save`, `than — .overlay` became `than.overlay`, and
+`and — :root is a different element` became `and:root`, which reads as a selector. These
+comments are the only written record of why half this app is built the way it is, and about a
+twentieth came back damaged or misleading. The guard is what makes the rule stick; sweeping
+the margin notes was never what was protecting anybody.
+
+**A latent bug fell out of that attempt and was kept.** Two paragraphs of a comment about the
+Home scroll-cover were separated by a stray `*/`, leaving the second at CSS top level, where it
+cannot begin a selector — so the browser read it as the prelude of the next rule, found it
+invalid and **dropped `.tb-hairline{display:none;}` entirely**. Nothing showed, because that
+div has no other styling and an empty div is invisible, which is exactly why it survived; the
+only cost was that the next rule added there would have gone with it.
 
 ### THE COUNT, AND WHY THE FIRST ONE WAS WRONG
 

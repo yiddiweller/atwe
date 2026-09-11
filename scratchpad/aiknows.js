@@ -127,7 +127,7 @@ function loadRetrieval() {
   const a = src.indexOf('const CAP_SEND =');
   const b = src.indexOf('\n}\n', src.indexOf('function capabilityBlock')) + 3;
   if (a < 0 || b < 3) throw new Error('could not find capabilityBlock in server.js');
-  return new Function('FEATURES_DATA', src.slice(a, b) + '\nreturn { capabilityBlock, CAP_ROWS, CAP_SEND };')(FEATURES);
+  return new Function('FEATURES_DATA', src.slice(a, b) + '\nreturn { capabilityBlock, CAP_ROWS, CAP_SEND, CAP_SEP };')(FEATURES);
 }
 
 (async () => {
@@ -136,7 +136,10 @@ function loadRetrieval() {
   ok(R.CAP_ROWS.length > 400, 'the assistant is grounded on the real catalogue (' + R.CAP_ROWS.length + ' features)');
   for (const [q, want] of ASKS) {
     const out = R.capabilityBlock([{ role: 'user', content: q }], false);
-    const names = (out || '').split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).split(' — ')[0].replace(' [admin dashboard]', ''));
+    /* Split on the SHIPPED separator, never on a copy of it. This line used to hardcode an em
+       dash; the sweep that removed em dashes from the app changed the real one, and eight
+       checks went red on retrieval that was working perfectly. */
+    const names = (out || '').split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).split(R.CAP_SEP)[0].replace(' [admin dashboard]', ''));
     ok(names.includes(want), 'retrieval finds “' + want + '” for: ' + q + (names.includes(want) ? '' : ' → got ' + (names.slice(0, 3).join(', ') || 'nothing')));
     ok(names.length <= R.CAP_SEND, 'retrieval stays within its cap for: ' + q + ' (' + names.length + ')');
   }

@@ -36,6 +36,13 @@ const ok = (c, m, x) => { if (c) { pass++; console.log('  ok   ' + m); }
    sweep itself used, so the guard and the fix can never disagree about what counts. */
 const LOOKS_LIKE_CODE = /\b(SELECT|INSERT INTO|UPDATE|DELETE FROM|CREATE TABLE|ALTER TABLE|WITH)\b[\s\S]*\b(FROM|VALUES|SET|WHERE|AS)\b/;
 const DASH = /[—–]/;
+/* THE SOURCE SWEEP MUST LOOK FOR THE DISGUISES TOO. `'\u2014'` in a source file is six
+   plain ASCII bytes, so DASH cannot see it, and the browser turns it straight back into a
+   real em dash on screen. Twenty of them survived the first sweep that way, including the
+   offline screen's own "Check your connection — we'll pick up right where you left off",
+   with every check green. DASH_SRC (tools/nodash.js) matches the character AND the escape
+   forms AND the HTML entities; DASH alone is only safe on text already in memory. */
+const { DASH_SRC } = require(ROOT + '/tools/nodash.js');
 
 function sourceSweep() {
   const files = fs.readdirSync(ROOT).filter((f) => f.endsWith('.js'))
@@ -47,11 +54,25 @@ function sourceSweep() {
     for (const [a, b] of readableRanges(src, f.endsWith('.html'))) {
       const run = src.slice(a, b);
       runs++;
-      if (!DASH.test(run) || LOOKS_LIKE_CODE.test(run)) continue;
+      /* THE ONE STRING ALLOWED TO CONTAIN ONE: the rule Atwe AI is given has to name the
+         characters it forbids, or the model is being told about a mark it cannot see. It
+         is written as escapes and reaches only the model, never a member. */
+      if (!DASH_SRC.test(run) || LOOKS_LIKE_CODE.test(run) || /Never use an em dash/.test(run)) continue;
       hits.push(f + ':' + src.slice(0, a).split('\n').length + ' ' + JSON.stringify(run.replace(/\s+/g, ' ').trim().slice(0, 80)));
     }
   }
   return { hits, runs, files: files.length };
+}
+
+/* SELF-TEST: a sweep that cannot fail proves nothing. The first version of this guard was
+   green on a file containing twenty escaped dashes, so it now demonstrates on every run
+   that each disguise really is caught. If this ever passes something, the sweep above is
+   decorative. */
+function detectorSelfTest() {
+  const disguises = ['a — b', 'a \\u2014 b', 'a &mdash; b', 'a \\xE2\\x80\\x94 b', 'a – b'];
+  const missed = disguises.filter((d) => !DASH_SRC.test(d));
+  ok(!missed.length, 'every way of writing a dash is caught, not just the character', JSON.stringify(missed));
+  ok(!DASH_SRC.test('a plain hyphen - and a minus sign'), 'and an ordinary hyphen is not mistaken for one');
 }
 
 /* ── the scripted model: every answer carries a dash ─────────────────────────── */
@@ -87,6 +108,7 @@ const wait = (port, tries) => new Promise((resolve, reject) => {
 });
 
 (async () => {
+  detectorSelfTest();
   const s = sourceSweep();
   console.log(`  (scanned ${s.runs} readable runs across ${s.files} files)`);
   ok(s.hits.length === 0, 'nothing a person can read carries an em dash or an en dash',

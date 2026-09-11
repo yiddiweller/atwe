@@ -2918,18 +2918,80 @@ not a sentence, so the dash becomes another `·`.
   matched as one parenthetical pair spanning the bracket and produced "(1D, ALL)". An aside's
   middle contains no bracket, and an unspaced dash is never prose punctuation.
 
-**Guarded by `scratchpad/nodash.js`** (6 checks): every readable run in every source file —
-99,498 of them — carries none; and a **scripted model that answers with a dash EVERY time**
+**A DASH CAN BE WRITTEN WITHOUT BEING A DASH, and twenty survived the first sweep that way
+with every check green.** `'\u2014'` in a source file is six plain ASCII bytes, so a
+`/[—–]/` test cannot see it, and the browser turns it straight back into a real em dash on
+screen. Among them: the **offline screen** (*"Check your connection — we'll pick up right
+where you left off"*, i.e. the app speaking in exactly the generated voice at the one moment
+a member is already annoyed), the **stranger-guard warning** on sending money, four **"I know
+them — send $X"** buttons, a "your gift card is ready" line, two placeholder cells, two admin
+toasts, and **six Atwe AI system prompts** — which is the perverse one, because the model was
+being SHOWN em dashes in the same breath as being told never to write one. `DASH_SRC` matches
+the character, the `\u2014` and `\xE2\x80\x94` escape forms and the HTML entities;
+`DASH` alone is only safe on text already in memory. **A source sweep must look for the
+disguises, not just the mark.**
+
+**THE CODE COMMENTS ARE DELIBERATELY LEFT, and that is a decision taken after TRYING it.**
+About 3,900 dashes live in comments and SQL notes. Nobody can see one: a comment is not sent
+to the model, not rendered by the browser, not read by Postgres. Removing them anyway was
+built and run — a comment-only rewrite, proved not to change a single byte of real code nor
+move a single line — and then thrown away, because **the output was worse than the input**.
+A dash standing in front of a class name or a selector is not punctuation a machine can
+replace: `as — .pf-top-save` became `as.pf-top-save`, `than — .overlay` became `than.overlay`,
+and `and — :root is a different element` became `and:root`, which reads as a selector. These
+comments are the only written record of why half this app is built the way it is, and roughly
+a twentieth of them came back damaged or misleading. **The guard is what makes the rule stick;
+sweeping the margin notes was never what was protecting anybody.** If it is ever wanted, it is
+a by-hand job, not a script.
+
+**AND IT BROKE A PROBE BY MOVING A SEPARATOR — the sixth time in this repo.** `aiknows.js`
+read the capability block the assistant is given and split each line on `' — '` to tell a
+feature's NAME from its description. The sweep changed that separator in `server.js`, so the
+split stopped matching, every line came back as one long name, and **eight checks went red on
+retrieval that was working perfectly** (the right feature was first in the list every time).
+The separator is now **`CAP_SEP`**, a constant the probe reads out of the shipped code rather
+than a copy it keeps, so the two cannot drift again. **When you change a format, grep the
+scratchpad for the old one** — this file has now recorded that lesson for the notifications
+header, `lastseen`, `polish2`, `chathead`, `polish3` and this.
+
+**A LATENT BUG FELL OUT OF THE SWEEP: a comment that had lost its opening `/*`.** Two
+paragraphs about the Home scroll-cover were separated by a `*/`, leaving the second one at CSS
+top level. `*/` cannot begin a selector, so the browser read the whole paragraph as the prelude
+of the next rule, found it invalid, and **dropped `.tb-hairline{display:none;}` entirely**.
+Nothing showed, because `#tbHairline` has no other styling and an empty div is invisible, which
+is exactly why it survived: the only cost was that the next rule added there would have gone
+too.
+
+**Guarded by `scratchpad/nodash.js`** (8 checks): every readable run in every source file —
+99,498 of them — carries none, in every disguise; the detector **self-tests on every run**
+(a sweep that cannot fail proves nothing, and this one was green on twenty escaped dashes);
+and a **scripted model that answers with a dash EVERY time**
 stands in front of the real server to prove the instruction and the net, which is better than
 a live model for a rule test, because a real one might simply not use a dash that day and
 leave the hole untested. It asserts the reply arrives clean, that it was turned into real
 punctuation rather than deleted, that the system prompt carried the rule, and that proofread
 is exempt on both counts. Self-tested: one injected dash fails it with the file and line.
 
-**What is deliberately left: the app's own CODE COMMENTS**, which nobody reads, and seven SQL
-runs. **And the sweep fixes CODE, not the DATABASE** — rows written before it keep their
-punctuation, which is right for member posts and means demo mode needs a reseed to pick up
-the corrected sample copy.
+**And by `scratchpad/dashlive.js`**, which asks the different question the founder asked:
+what a member can actually SEE. It drives ten real surfaces (Home, Notifications, a
+notification opened, Beam, an open conversation, Atwe AI, Engine, Account, Settings, Wallet)
+and walks every visible text node, reporting anything Atwe wrote and **deliberately ignoring
+member content** (a post body, a message bubble, a person's own name), which is the founder's
+own exception. It self-tests by planting a dash in the tab row first, because a scan that
+finds nothing everywhere might not be scanning.
+
+**What is deliberately left: the app's own CODE COMMENTS** (see above — tried, measured,
+rejected) and the notes inside seven SQL queries. **The one string allowed to contain one is
+the rule itself**, which has to name the characters it forbids; the guard exempts it by its
+own text, not by a blanket skip. **And the sweep fixes CODE, not the DATABASE** — rows written
+before it keep their punctuation, which is right for member posts and means demo mode needs a
+reseed to pick up the corrected sample copy.
+
+**Notifications carry no free text at all**, which is worth knowing because it is what makes
+them safe by construction rather than by sweeping: a `notifications` row stores a TYPE and
+some ids, the in-app wording comes from the client's `verbs` dictionary and the push wording
+from `PUSH_VERBS`, both swept. The only free text in a notification is the actor's own name,
+which is a member's own words and therefore the founder's own exception.
 
 ### HOW IT FEELS TO SCROLL, MEASURED — `scratchpad/motion.js`
 
