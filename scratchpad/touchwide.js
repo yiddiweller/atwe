@@ -44,8 +44,14 @@ const ALLOWED = {
   'ac-badge':       'an unread count, not a control',
 };
 
+/* THE POST COMPOSER WAS NOT IN THIS LIST, and that is how a 370x68 invisible slab sat
+   across its header swallowing every tap on Post for builds on end. Nine surfaces, none
+   of them a sheet header. `tapown.js` now asks the "does a control get its own tap"
+   question over fourteen surfaces; this one keeps the composer too so the size checks
+   see it as well. */
 const SURFACES = [
   ['Home',        null],
+  ['Composer',    'acOpenPost()', { noNav: true }],   // a full-screen sheet: the bar is hidden on purpose
   ['Engine',      "appTab('search')"],
   ['Beam',        "appTab('chat')"],
   ['Account',     "appTab('profile')"],
@@ -187,7 +193,7 @@ const SCAN = (allowed) => {
     if (!inApp) { ok(false, wn + ': signed in'); await p.close(); continue; }
 
     let small = [], steal = [], spill = [], navs = [];
-    for (const [name, fn] of SURFACES) {
+    for (const [name, fn, opt] of SURFACES) {
       try { await p.evaluate(() => { document.querySelectorAll('.overlay:not(.hidden)')
         .forEach((o) => { try { closeOverlay(o.id, true); } catch (e) {} }); }); } catch (e) {}
       await p.waitForTimeout(250);
@@ -195,7 +201,7 @@ const SCAN = (allowed) => {
       await p.waitForTimeout(1100);
       let r; try { r = await p.evaluate(SCAN, ALLOWED); } catch (e) { continue; }
       if (r.spill > 1) spill.push(name + ':' + r.spill);
-      if (r.navs.length !== 1) navs.push(name + ':' + (r.navs.join('+') || 'none'));
+      if (r.navs.length !== 1 && !(opt && opt.noNav)) navs.push(name + ':' + (r.navs.join('+') || 'none'));
       if (touch) { small.push(...r.small.map((x) => name + ' ' + x)); steal.push(...r.steal.map((x) => name + ' ' + x)); }
       else if (r.small.length) small.push(...r.small.map((x) => name + ' ' + x));
     }

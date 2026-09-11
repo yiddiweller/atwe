@@ -67,6 +67,7 @@ list stays the honest measure of what is left.
 
 | # | what | where | state |
 |---|---|---|---|
+| T4 | **Posting was impossible.** *"I still can't send posts... I cannot click the post button. It doesn't go anywhere."* | The ✕'s invisible 44pt tap target sat on a `position:static` host, so it resolved against the header instead of the button and rendered 370x68: a transparent slab over Post | **fixed**, build 1854, guarded by `tapown.js` |
 | T3 | **Calls and video calls did not work.** *"when I'm trying to call someone the other person doesn't even get a call, and if they do they can't pick up"* | One request every call waits on, with no time limit on either side, plus no error handling on the answer path | **fixed**, build 1852, guarded by `callpath.js` |
 | T2 | **Some Atwe AI questions were never answered, and pressing Post froze the button.** *"I wanted to post a message and I am clicking post but it doesn't get sent. It's like frozen... there is probably more stuff that doesn't work"* | One cause behind both: `API.req` had no deadline, so a stalled mobile connection left `fetch` pending for ever | **fixed**, build 1851, guarded by `nohang.js` |
 | T1 | **The em dash.** The founder had asked once, it was half-done, and they still kept meeting them: *"all AI sites and stuff comes a lot with this line and I don't see it unprofessional apps"* | 1,175 lines of copy across 15 files, plus the AI itself, plus 20 more written as `\u2014` that the first sweep could not see | **done**, build 1850, guarded by `nodash.js` |
@@ -186,6 +187,26 @@ the trap that shipped a visible bug on ~90 screens in build 1832.
 ---
 
 ## THE TEAM'S LIST
+
+### T4 — the Post button was not frozen, it was covered
+
+The founder sent a screenshot of the composer with one word typed and said the Post button
+did nothing. It was not the request and not the handler: **the button could not be pressed at
+all.** `elementFromPoint` at its own centre returned the ✕ next to it.
+
+The ✕ carries the app's invisible 44pt touch target as an `::after` with `inset:-6px`. An
+inset overlay resolves against the nearest POSITIONED ancestor, and the ✕ is
+`position:static`, so it resolved against the sticky header and rendered **370 x 68** instead
+of 44 x 44: a transparent slab across the whole header, sitting over Post. Four more controls
+were built the same way and are fixed with it. The Post button was also only **30pt tall**,
+under the touch floor, and now has a full-size target of its own.
+
+**Two touch guards were green the whole time.** One measures whether a tap target CLEARS
+44pt, and an escaped overlay is enormous, so it passed. The other does check whether a
+control steals its neighbour's taps, but it ran nine screens and the composer was not among
+them, so it had never once looked at the button the whole app funnels into. `tapown.js` now
+asks the question neither asked, over fourteen screens in both themes: does a control's own
+centre belong to it? It fails by name when the old behaviour is put back.
 
 ### T2 — nothing in the app waits for ever
 

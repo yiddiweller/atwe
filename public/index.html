@@ -14728,13 +14728,23 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
    `.sheet-close` is `position:absolute; left:0` (line ~3979) and this list, being later
    at equal specificity, dropped it back into flow — the sheet back arrow moved from the
    14px margin to 28px on every sheet, and `gutters.js` reported exactly that.
-   These eight are the ones with no position of their own. Check a class before adding
-   it: `grep` its rules for `position:` first. */
+   These are the ones with no position of their own. Check a class before adding
+   it: `grep` its rules for `position:` first.
+
+   AND THE OTHER HALF OF THE SAME BUG SHIPPED, ON THE MOST-PRESSED BUTTON IN THE APP.
+   Five classes below carried the ::after and were left STATIC, so each overlay escaped
+   to the nearest positioned ancestor and sized itself against THAT. `.msg-back` -- the
+   x on every sheet and on the post composer -- came out 370x68 instead of 44x44: an
+   invisible slab across the whole header that swallowed every tap on Post. The founder
+   reported it as "I cannot click the post button, it doesn't go anywhere", and they
+   were exactly right. An inset overlay needs its HOST to be a containing block; without
+   one it does not merely sit in the wrong place, it grows to the size of the header. */
 .iset-back,.tb-brand-act,.notif-back,.ac-icon-btn,
-.me-hero-switch,.aab-x,.ac-post-more,.ac-wtf-x{position:relative;}
+.me-hero-switch,.aab-x,.ac-post-more,.ac-wtf-x,
+.msg-back,.mkt-cart,.feed-im-btn,.frail-btn,.pf-top-x,.ac-post-btn{position:relative;}
 .sheet-close::after,.iset-back::after,.tb-brand-act::after,.notif-back::after,
 .ac-icon-btn::after,.accent-sw::after,.me-hero-switch::after,.msg-back::after,
-.aab-x::after,.ac-post-more::after,.ac-wtf-x::after,.mkt-card-save::after,
+.aab-x::after,.ac-post-more::after,.ac-wtf-x::after,.mkt-card-save::after,.ac-post-btn::after,
 .mkt-cart::after,.feed-im-btn::after,.frail-btn::after,.pf-top-x::after,
 .pf-bcam::after,.pf-cam::after,.modal-x::after{content:'';position:absolute;z-index:0;}
 
@@ -14742,6 +14752,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
 .iset-back::after,.notif-back::after,.accent-sw::after{inset:-5px;}              /* 34 → 44 */
 .tb-brand-act::after,.ac-post-more::after{inset:-4px;}                            /* 36 → 44 */
 .msg-back::after,.ac-wtf-x::after,.modal-x::after{inset:-6px;}                   /* 32 → 44 */
+.ac-post-btn::after{inset:-7px;}                                                  /* 30 → 44 */
 .aab-x::after{inset:-9px;}                                                         /* 26 → 44 */
 .mkt-card-save::after,.pf-cam::after{inset:-7px;}                                 /* 30 → 44 */
 .mkt-cart::after,.pf-top-x::after,.pf-bcam::after{inset:-2px;}                    /* 40 → 44 */
@@ -22845,7 +22856,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1853'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1854'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
