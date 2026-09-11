@@ -22845,7 +22845,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1850'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1851'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -22946,6 +22946,14 @@ const S = {
 // Display only. `label` is the sole field read anywhere (see syncModelLabel);
 // the SERVER decides which model actually answers and ignores anything the
 // client sends, so no real model name belongs in this shipped, public file.
+/* HOW LONG ATWE AI IS GIVEN TO ANSWER. The route is not one call to a model: it runs a
+   tool loop of up to three passes so the assistant can look things up before replying, and
+   a broad question ("what does this app do") is precisely the one that uses all three. The
+   old 30s cut those answers off and reported it as the member's connection failing. Two
+   minutes is bounded but leaves room for the slowest honest answer; the failure text says
+   plainly that Atwe stopped waiting, not that they did something wrong. */
+const AI_REPLY_TIMEOUT_MS = 120000;
+
 const MODELS = [
   { label: 'Atwe Standard', id: 'atwe-standard' },
   { label: 'Atwe Advanced', id: 'atwe-advanced' },
@@ -23057,6 +23065,29 @@ const API = {
   // knows which country it is in, so it says so. Coarse (a country, not a
   // place), needs no permission, and costs one header.
   _tz: (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } })(),
+  /* HOW LONG IS TOO LONG DEPENDS ON WHAT IS BEING SENT. A tap that carries nothing should
+     give up in well under a minute; a photo on a weak signal legitimately needs minutes, and
+     a deadline tight enough for the tap would cancel real uploads halfway. So the allowance
+     is a floor plus time bought by the payload's own size, with a hard ceiling so nothing
+     can wait for ever. `opts.timeout` overrides it where a caller knows better. */
+  _timeoutFor(bytes) {
+    const ms = API.TIMEOUT_BASE_MS + Math.round((bytes || 0) / 1024) * API.TIMEOUT_MS_PER_KB;
+    return Math.min(ms, API.TIMEOUT_MAX_MS);
+  },
+  _deadline(opts, bodyStr) {
+    if (typeof AbortController === 'undefined') return undefined;   // ancient browser: as before
+    const ms = (opts && opts.timeout) || API._timeoutFor(bodyStr ? bodyStr.length : 0);
+    const c = new AbortController();
+    const t = setTimeout(() => { try { c.abort(); } catch (e) {} }, ms);
+    /* The timer must die with the request or a long session leaves hundreds of them armed. */
+    const done = () => clearTimeout(t);
+    c.signal.addEventListener('abort', done, { once: true });
+    setTimeout(done, ms + 1000);
+    return c.signal;
+  },
+  TIMEOUT_BASE_MS: 40000,      // a request carrying nothing
+  TIMEOUT_MS_PER_KB: 40,       // ~25KB a second, i.e. a genuinely poor connection
+  TIMEOUT_MAX_MS: 240000,      // four minutes, for a large photo on a bad signal
   async req(method, path, body, opts) {
     const headers = { 'Content-Type': 'application/json' };
     if (API._tz) headers['X-Atwe-TZ'] = API._tz;
@@ -23084,15 +23115,29 @@ const API = {
     if (_pre) { res = _pre; }
     else
     try {
-      res = await fetch(path, {
-        method, headers,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-      });
+      /* EVERY REQUEST GETS A DEADLINE, and this is the single most important line in the
+         file for how the app FEELS on a phone. `fetch` does not reject when a signal dies
+         mid-request: a lift, a tunnel, a 5G-to-LTE handover leaves it PENDING, for minutes,
+         with no error and no event. Without a deadline every screen that disables its button
+         and awaits this call simply stops for ever: the founder pressed Post, watched
+         "Posting..." sit there, and had to back out of the composer. That is not one screen's
+         bug, it is this one function, and it reaches every action in the app.
+         The abort is what turns an invisible hang into an ordinary, reportable failure. */
+      const body_s = body !== undefined ? JSON.stringify(body) : undefined;
+      res = await fetch(path, { method, headers, body: body_s, signal: API._deadline(opts, body_s) });
     } catch (netErr) {
-      // The request never reached the server — same treatment.
+      /* Either the request never reached the server, or it stalled past its deadline. The
+         treatment is the same and it is the one already designed for going offline: a write
+         we know is safe to repeat goes in the outbox and leaves with the next good
+         connection, so pressing Post in a tunnel loses nothing. */
       if (!(opts && opts.noQueue) && outboxCanQueue(method, path)) {
         outboxAdd(method, path, body);
         return { queued: true };
+      }
+      if (netErr && netErr.name === 'AbortError') {
+        const t = new Error('The connection stalled, so this did not go through. Nothing was lost, please try again.');
+        t.status = 0; t.timedOut = true;
+        throw t;
       }
       throw netErr;
     }
@@ -26981,8 +27026,14 @@ async function sendMessage() {
   scrollBottom();
 
   try {
+    /* THIRTY SECONDS WAS NOT ENOUGH, and the founder's screenshot is the proof: they asked
+       what the app is and what all of it does, and got "Fetch is aborted". That question is
+       the SLOWEST one the assistant has, because a broad ask is exactly what makes it look
+       things up: the route runs a tool loop of up to three passes, each a full round trip to
+       the model, on top of a system prompt carrying the app's places, hints and capabilities.
+       Thirty seconds cut it off mid-thought and blamed the member's connection. */
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), AI_REPLY_TIMEOUT_MS);
 
     const headers = { 'Content-Type': 'application/json' };
     if (API.token()) headers.Authorization = 'Bearer ' + API.token();
@@ -27023,7 +27074,12 @@ async function sendMessage() {
 
   } catch (err) {
     let errMsg = `Something went wrong: ${err.message}`;
-    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+    /* "Fetch is aborted" is the BROWSER's wording for our own deadline, and it reads as a
+       fault the member caused. It is first because an AbortError also carries no status and
+       would otherwise fall through to the network branch and blame their connection. */
+    if (err.name === 'AbortError' || /aborted|abort/i.test(err.message)) {
+      errMsg = 'That took longer than expected, so Atwe AI stopped waiting. Ask again and it will usually come straight back.';
+    } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
       errMsg = 'Unable to reach the Atwe server. Please check your internet connection and try again.';
     } else if (err.message.includes('401') || err.message.includes('403')) {
       errMsg = 'Authentication error. The API key on the server may need to be updated. Please contact the site admin.';
@@ -27289,7 +27345,7 @@ async function sendMessageFromHistory(chat) {
   const aiNode = appendBubble('ai', '', true);
   scrollBottom();
   const ctrl = new AbortController();
-  const timeout = setTimeout(() => ctrl.abort(), 30000);
+  const timeout = setTimeout(() => ctrl.abort(), AI_REPLY_TIMEOUT_MS);
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (API.token()) headers.Authorization = 'Bearer ' + API.token();
@@ -43073,7 +43129,10 @@ async function acSubmitPost() {
   /* The blurry stand-in for the first image, made here rather than on the server so no
      image library is needed anywhere. It rides along with the post; if it cannot be made
      the post is sent exactly as before. */
-  if (_acPostImgs.length) { const lq = await makeLqipAsync(_acPostImgs[0]); if (lq) payload.lqip = lq; }
+  /* This await is the only one that runs while the button already says "Posting...", so a
+     throw here would leave it disabled with nothing on screen to explain it. The stand-in is
+     a nicety; the post is the point. */
+  if (_acPostImgs.length) { try { const lq = await makeLqipAsync(_acPostImgs[0]); if (lq) payload.lqip = lq; } catch (e) {} }
   const altVal = (document.getElementById('acPostAlt')?.value || '').trim();
   if (_acPostImgs.length && altVal) payload.imageAlt = altVal;
   // A document attached to the post (a PDF, a deck, a price list).
@@ -43117,10 +43176,24 @@ async function acSubmitPost() {
           else acGoHome();
         } catch (e) { showNotif('Could not undo. The post may already be gone.'); }
       });
+    } else if (res && res.queued) {
+      /* The connection stalled, so this went to the outbox instead of the server. Saying
+         "Posted!" here would be a lie the member finds out about later; the outbox pill
+         already says how many are waiting, and this line says why one of them is theirs. */
+      showNotif('Saved. It will send as soon as your connection is back.');
     } else {
       showNotif('Posted!');
     }
-  } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; btn.textContent = btnLabel; }
+  } catch (e) {
+    showNotif(e.message || 'Could not post.');
+  } finally {
+    /* A BUTTON THAT SAYS "Posting..." MUST ALWAYS COME BACK. Restoring it only in the catch
+       leaves it dead for anything thrown on the way TO the request, and that is exactly what
+       a stalled connection used to do: the founder pressed Post, the fetch hung with no
+       deadline, and the only way out of the composer was the back arrow. The deadline in
+       API.req is the real fix; this is the belt that makes the screen honest whatever fails. */
+    btn.disabled = false; btn.textContent = btnLabel;
+  }
 }
 async function acSaveEditedPost() {
   const id = AC._postEditId;

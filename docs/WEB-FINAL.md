@@ -67,6 +67,7 @@ list stays the honest measure of what is left.
 
 | # | what | where | state |
 |---|---|---|---|
+| T2 | **Some Atwe AI questions were never answered, and pressing Post froze the button.** *"I wanted to post a message and I am clicking post but it doesn't get sent. It's like frozen... there is probably more stuff that doesn't work"* | One cause behind both: `API.req` had no deadline, so a stalled mobile connection left `fetch` pending for ever | **fixed**, build 1851, guarded by `nohang.js` |
 | T1 | **The em dash.** The founder had asked once, it was half-done, and they still kept meeting them: *"all AI sites and stuff comes a lot with this line and I don't see it unprofessional apps"* | 1,175 lines of copy across 15 files, plus the AI itself, plus 20 more written as `\u2014` that the first sweep could not see | **done**, build 1850, guarded by `nodash.js` |
 | P3-1 | **Nothing.** Every long surface scrolls with its ordinary frame on time, nothing stalls, and the app's own code is ~1ms of the 16.7ms budget. One no-op tidy shipped with it (cached per-frame lookups) | `_onWinScroll` · `_onListScroll` | **measured clean**, build 1848, guarded by `motion.js` |
 | P2-2 | **Two touch controls under the 44pt floor** — the Recent-searches chips (93x29) and the Translate-post line (92x19). Both only render once the account HAS the data, so no sweep had ever seen them | `public/index.html` `pointer:coarse` block | **fixed**, build 1847, guarded by `touchwide.js` |
@@ -184,6 +185,51 @@ the trap that shipped a visible bug on ~90 screens in build 1832.
 ---
 
 ## THE TEAM'S LIST
+
+### T2 — nothing in the app waits for ever
+
+> *"some questions doesn't get answered by the Atwe AI and some stuff doesn't even work. For
+> example I wanted to post a message and I am clicking post but it doesn't get sent. It's like
+> frozen. I can't stand that, I must go back and cancel it... there is probably more stuff that
+> doesn't work."*
+
+**Two reports, one cause, and the cause was in the one function every write in the app passes
+through.**
+
+**`fetch` DOES NOT REJECT WHEN A PHONE LOSES SIGNAL MID-REQUEST. It stays PENDING.** A lift, a
+tunnel, a 5G-to-LTE handover: no error, no event, nothing settles, for minutes. `API.req` had no
+`AbortController` and no timeout, so every `await API.req(...)` in the app could simply stop —
+and with it every `catch` and every `finally` written behind it, because a promise that never
+settles never reaches them. The button stays disabled, no toast appears, and the only way out is
+the back arrow. That is exactly what the founder described.
+
+**It was found by reproduction, not by reading.** Three attempts to reproduce a frozen Post on
+this machine all succeeded normally — the local server answers instantly, so the missing deadline
+never mattered. What unlocked it was that the founder is on a real phone on a real network, and
+that the AI error was a *timeout*. Stalling the route in a real browser reproduced it exactly:
+`{"label":"Posting…","disabled":true,"open":true,"toast":""}` at 3s, 10s, 20s, 30s and 45s.
+
+**A static sweep of button-restore patterns produced a false picture and is recorded here so
+nobody repeats it.** It reported 67 "at risk" buttons and four "never re-enabled"; inspected with
+a wide enough window, all four were fine. The restore patterns were mostly correct all along —
+they were simply unreachable.
+
+| what was wrong | what happens now |
+|---|---|
+| `API.req` had no deadline at all | every request carries one, **sized to the payload**: a floor of 40s plus 40ms per KB, capped at four minutes. A tap gives up quickly; a photo on a weak signal is not cancelled halfway |
+| a stalled write was lost | a write that is safe to repeat goes to the **outbox** and leaves with the next good connection |
+| a queued write said "Posted!" | it says *"Saved. It will send as soon as your connection is back."* Nothing in the app had ever checked `.queued` |
+| Atwe AI gave up at **30s** | `AI_REPLY_TIMEOUT_MS` is **120s**. `/api/chat` runs a tool loop of up to three model passes so the assistant can look things up, and a broad question is precisely the one that uses all three — 30s was cutting off its own design |
+| an abort read as **"Fetch is aborted"** | *"That took longer than expected, so Atwe AI stopped waiting."* The browser's wording blamed the member for our own deadline, and an `AbortError` carries no status, so it fell through to the network branch and blamed their connection too |
+| the Post button was restored only in `catch` | a `finally`, so it always comes back |
+
+**Guarded by `scratchpad/nohang.js`** (10 checks). It asserts the deadline at source, that it
+still grows with the payload, and that the AI's 30s is gone — then **stalls a real route in a
+real browser** (`p.route(..., () => {})`: never respond, never abort) and drives a real Post. The
+button must say so while sending, be released after the stall, return to its label, and the post
+must be in the outbox with the pill on screen saying so. A stalled *read* must fail in plain
+words, never "aborted". **A probe that only tests a request that FAILS proves nothing** — an
+instant failure was always handled correctly; the stall was the broken case.
 
 ### T1 — the em dash, everywhere, and never again
 
