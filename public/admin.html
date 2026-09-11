@@ -1245,7 +1245,7 @@
     <div class="side-foot">
       <div class="side-role">Signed in as <b id="sideRole">Admin</b></div>
       <a class="back" id="backLink" href="/">← Back to app</a>
-      <button class="side-lock" onclick="openProductBook()">📘 Product Book</button>
+      <button class="side-lock" onclick="openProductBook()">Product Book</button>
       <button class="side-lock" onclick="openAdminLock()">Device lock</button>
       <button class="side-logout" onclick="doLogout()">Log out</button>
     </div>
@@ -1462,7 +1462,7 @@ function ago(d){
 // Messages store content as a string or an array of blocks (text + image).
 function msgText(content){
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.map(b => b.type === 'image' ? '🖼️ [image]' : (b.text || '')).join(' ').trim();
+  if (Array.isArray(content)) return content.map(b => b.type === 'image' ? '[image]' : (b.text || '')).join(' ').trim();
   return '';
 }
 
@@ -1676,7 +1676,7 @@ async function pinSubmit(code){
 }
 function pinCancel(){ if (_pin.mode === 'unlock') showGate(); else renderView(); }
 
-// The Complete Product Book (footer → "📘 Product Book"): the confidential
+// The Complete Product Book (footer → "Product Book"): the confidential
 // master PDF, served admin-only from /api/admin/product-book. Fetched with the
 // bearer token as a blob (a plain <a href> couldn't carry the Authorization
 // header), then opened in a new tab.
@@ -3463,7 +3463,7 @@ function renderRevenue(){
   const t = REV; if (!t) return;
   const mc = tfChange(t.totals.thisMonthCents, t.totals.prevMonthCents);
   const top = t.recent[0];
-  if (top && REV_LASTPAY != null && top.id !== REV_LASTPAY) notify('💰 New payment · ' + money(top.amountCents) + ' - ' + (top.label || ''));
+  if (top && REV_LASTPAY != null && top.id !== REV_LASTPAY) notify('New payment · ' + money(top.amountCents) + ' - ' + (top.label || ''));
   if (top) REV_LASTPAY = top.id;
   const max = Math.max(1, ...t.trend.map(x => x.cents));
   const bars = t.trend.map(x => { const h = Math.max(2, Math.round(x.cents / max * 100)); return `<div class="tf-bar" title="${revBucketLabel(x.bucket,t.range)}: ${money(x.cents)}"><div class="tf-barfill" style="height:${h}%"></div><span class="tf-barlbl">${revBucketLabel(x.bucket,t.range)}</span></div>`; }).join('');
@@ -3885,7 +3885,7 @@ async function loadDataReq(){
     if (!d.requests.length) { el.innerHTML = '<div class="empty">No ' + (DR_FILTER||'open') + ' requests.</div>'; return; }
     el.innerHTML = d.requests.map(r => {
       const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||r.email||'-');
-      const kind = r.kind === 'delete' ? '🗑️ Deletion' : '📦 Data export';
+      const kind = r.kind === 'delete' ? 'Deletion' : 'Data export';
       let due = '';
       if (r.state === 'open' && r.daysLeft != null) due = r.overdue ? `<span class="pill ban">${Math.abs(r.daysLeft)}d overdue</span>` : `<span class="pill ${r.daysLeft<=5?'susp':''}">${r.daysLeft}d left</span>`;
       const actions = r.state === 'open'
@@ -5474,7 +5474,7 @@ function aisFeedbackHtml(d){
       ? `<div class="ref-acts"><button class="act" onclick="resolveAiFeedback(${f.id})">Mark as handled</button></div>`
       : `<span class="pill">handled${f.reviewer_name?' by '+esc(f.reviewer_name):''}</span>`;
     return `<div class="ref-row"><div class="ref-main">
-      <div class="ref-top"><span class="pill ${good?'pro':'ban'}">${good?'👍 good':'👎 bad'}</span> <span class="ref-kind">${esc(f.feature)}</span></div>
+      <div class="ref-top"><span class="pill ${good?'pro':'ban'}">${good?'good':'bad'}</span> <span class="ref-kind">${esc(f.feature)}</span></div>
       <div class="ref-sub">${esc(f.user_username ? '@'+f.user_username : (f.user_name || 'a member'))} · ${new Date(f.created_at).toLocaleString()}</div>
       ${f.note?`<div class="ref-reason">“${esc(f.note)}”</div>`:''}
       ${f.question?`<div class="ref-note"><b>They asked:</b> ${esc(f.question.slice(0,300))}</div>`:''}
@@ -5492,7 +5492,7 @@ async function resolveAiFeedback(id){
 
 /* ─── Refunds queue ─── */
 let REF_T = null, REF_FILTER = '';
-const REF_KIND = { ad:'📣 Ad', boost:'💼 Job boost', promote:'📈 Promoted post', pro:'⭐ Pro', order:'🛍️ Order', tip:'🎁 Tip' };
+const REF_KIND = { ad:'Ad', boost:'Job boost', promote:'Promoted post', pro:'Pro', order:'Order', tip:'Tip' };
 function renderRefundsView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
@@ -6200,7 +6200,7 @@ function renderReportList(){
     <div class="sup-item${REP_SEL.has(r.id)?' sel':''}">
       <div class="sup-top">
         <label class="rep-check"><input type="checkbox" ${REP_SEL.has(r.id)?'checked':''} onchange="repToggle(${r.id},this.checked)"></label>
-        <span class="sup-from">${esc(r.target_type)} · ${esc(r.target_label || '(removed)')}${r.auto ? ' <span class="auto-flag">🤖 Auto-flagged</span>' : ''}</span>
+        <span class="sup-from">${esc(r.target_type)} · ${esc(r.target_label || '(removed)')}${r.auto ? ' <span class="auto-flag">Auto-flagged</span>' : ''}</span>
         <span class="sup-email">${r.target_username ? '@' + esc(r.target_username) + ' · ' : ''}reported by ${r.auto ? 'Atwe moderation' : (r.reporter_username ? '@' + esc(r.reporter_username) : 'a user')}</span>
         <span class="sup-date">${fmtDateTime(r.created_at)}</span>
       </div>

@@ -10641,6 +10641,91 @@ a **pass with a footnote**, which is how it stayed invisible. It is now a distin
 outcome, "Photos would be broken", badged as a failure with the fix written out. **A
 health check with three real outcomes must not have two buttons' worth of UI.**
 
+### NOTHING IN ATWE READS AS MACHINE-WRITTEN — `tools/aitells.js`
+
+The founder asked the question directly: *"is there some other AI marks or other stuff that
+is noticeable that you can see it's AI, or you can see AI built the app?"* The em-dash sweep
+had already answered one of these; `tools/aitells.js` answers the rest, and it is a SCANNER,
+not a one-off pass: `node tools/aitells.js` prints the count per category and
+`node tools/aitells.js <category>` prints every hit with its file and line. It reads only
+text a member can SEE, through `tools/jstext.js`'s real tokeniser, with a `looksLikeProse()`
+filter so a class list, a selector, a SQL fragment or an inline style is never counted.
+
+**Three of the nine categories were acted on in build 1856. The other six were deliberately
+left, and why is the useful half:**
+
+| category | verdict |
+|---|---|
+| **sparkle** (✦ ✨) | **FIXED.** The sparkle-for-AI is the visual cliche of the last two years, and Atwe already has a mark of its own. |
+| **emoji doing an icon's job** | **FIXED** in app chrome and the dashboard. |
+| **vague** ("Something went wrong") | **FIXED** by making it traceable, not by inventing a reason. |
+| exclaim | LEFT. Spread across genuine celebration moments ("Welcome to Atwe Pro!", "Order placed. Thank you!") which real products write. Toning them would cost warmth and buy nothing. |
+| semi | LEFT. A semicolon is not a tell; it is punctuation, and 133 of them are in ordinary sentences. |
+| weask | LEFT. "We'll send you a code" is a product speaking as a company, which every product does. |
+| emdash | already zero, guarded by `scratchpad/nodash.js`. |
+| buzz · oops | 4 and 0. Nothing to do. |
+
+**`.ai-mk` IS THE SPARKLE'S REPLACEMENT, and it is one class used 18 times.** The Atwe mark,
+painted through a CSS mask in `currentColor` (the same technique `.msg-act-logo`, `.mm-logo`
+and `.notif-brand-mark` already use), so it inherits its label's colour and both themes for
+free. Three numbers in it are measured rather than chosen:
+
+- **The artwork fills 0.8945 of its 512px file**, so a 1em box draws .89em of ink, which is
+  bigger than a capital letter. **.86em box gives .77em of ink**, which renders 1.068x cap
+  height: a logo reads right a hair larger than the letters beside it.
+- **`vertical-align:-.058em` was calibrated against real pixels**, not guessed — the mark's
+  ink centre now sits exactly on the capital's ink centre (measured at 80px type, where one
+  pixel is .0125em, so the error at a real 15px label is under a fifth of a pixel). Do not
+  "tidy" it to a round number; the same paragraph already exists for `.vbadge` one section up.
+- **The gap is the mark's own `margin-inline-end`, never a literal space.** Several of these
+  labels sit in flex containers, where a whitespace-only run between items is collapsed away
+  entirely and the gap simply vanishes.
+
+**A CHAT-LIST PREVIEW IS PLAIN TEXT, so an icon was never an option there.** `acMetaLabel`,
+`_starredPreview`, `_pinPreview` and `acMediaLabel` feed three consumers with different
+needs: an escaped chat row, a reply bar, and **the .txt transcript `acExportChat` writes**.
+So the fix is the word on its own ("Voice message", "Money request"), which is what Telegram
+does and what half these functions already did — `acMediaLabel` returned a plain `Video` and
+`Voice note` beside a `📎 File`, i.e. the codebase had already drifted into two standards.
+
+**A LATENT CRASH FELL OUT OF READING THAT LINE.** `_starredPreview` tested a bare `t`, which
+does not exist in that function, so starring a **money request** threw a ReferenceError and
+took the whole starred list down; the `'moneydrop'` branch was also written twice, so the
+second could never be reached. Both fixed. **A 500-character ternary chain is where a typo
+hides** — nothing had ever exercised the twentieth branch.
+
+**`fault(res)` REPLACED 185 IDENTICAL 500s, AND THE WORDING DID NOT CHANGE MUCH.** Every route
+ended in the same sentence, so a member saying *"it said something went wrong"* was
+untraceable: there was no way to tell which of 185 places they were standing in, and the only
+record was an unlabelled stack. `fault()` stamps a six-character reference, prints
+`FAULT <ref>` beside that stack, and hands the same reference to the member. **It does NOT
+invent a specific reason**, because at that point the server genuinely does not know what
+broke, and a specific-sounding lie is worse than an honest "we don't know, quote this".
+Written as `fault(res)` with no error argument on purpose: the 185 sites catch into `err`,
+`e` and `error` variously, and passing the wrong name would have thrown inside the error
+handler.
+
+**`scratchpad/aitell.js` IS THE GUARD, and writing it found seven more the scanner could
+not see.** `tools/aitells.js` filters to text with at least two alphabetic words, so
+**`🐞 Bug`, `💡 Idea`, `📝 Note`, `🔔 Remind`, `🗄 Archive`, `★ Saved` and `🤖 Auto-flagged`
+were all invisible to it** — a label is usually one word, which is exactly what a scanner
+built for prose throws away. The guard reads the same files with a looser filter and asserts
+the three fixed categories directly. **It also caught the one escaped sparkle**: an
+`ai-disclosed` chip written as `'\u2726 Atwe AI helped write this'`, six plain ASCII bytes
+the browser paints as a sparkle, which is the same disguise that hid twenty em dashes.
+
+**ITS OWN WORST BUG IS WORTH THE PARAGRAPH: `/[✨🤖🔮]/` WITHOUT THE `u` FLAG IS A SET OF
+UTF-16 CODE UNITS, NOT CHARACTERS.** The crystal ball is `D83D DD2E` and the ladybird is
+`D83D DC1E`; they share the high surrogate, so an unflagged class built from emoji matches
+**any** character in that whole block. The guard's first run reported a sparkle on every
+line of the feedback picker and on two rows of the emoji picker's own data. Put `u` on any
+regex that names an emoji.
+
+**What is deliberately left carrying emoji:** the **server console logs** (a boot banner is
+for the team, and every server in the world decorates one), `demo.js`'s sample posts (written
+in a member's voice), the emoji picker and sticker data (member content), and the four `✓`
+marks in confirmations (a tick is not an emoji tell).
+
 ## Gotchas for AI assistants
 
 - **PRODUCTION DEPLOYS FROM `main`, AND THE WORKING BRANCH IS NOT `main`. RUN

@@ -6120,6 +6120,7 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
 .mc-loc-pin svg{width:30px;height:30px;fill:currentColor;stroke:none;}
 .mc-loc-foot{padding:9px 6px 5px;}
 .mc-loc-label{font-size:13.5px;font-weight:700;letter-spacing:-.01em;}
+.dot-live{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-inline-end:6px;vertical-align:.06em;flex:0 0 auto;}
 .mc-loc-sub{font-size:11.5px;opacity:.6;margin-top:2px;}
 /* Live location card */
 .mc-livelive{cursor:default;}
@@ -6738,6 +6739,14 @@ body.light{--bar-glass:rgba(255,255,255,.62);
 .msg-act:active{color:#fff;background:none;} /* just lightens — no grey box */
 .msg-act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
 .msg-act-logo{width:12px;height:12px;background:currentColor;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
+/* THE INLINE ATWE MARK, WHEREVER A LABEL NAMES ATWE AI.
+   It replaces the sparkle (the visual cliche of AI for the last two years) with our own
+   identity. Sized in `em` so it tracks whatever label it sits in, painted in
+   `currentColor` through a mask so it inherits the text colour and both themes for free.
+   THE ARTWORK FILLS 0.8945 OF ITS 512px FILE, so a 1em box draws .89em of ink -- bigger
+   than a capital letter. .86em box -> .77em ink, which reads as cap height; the
+   vertical-align then centres that ink on the cap rather than on the baseline. */
+.ai-mk{display:inline-block;width:.86em;height:.86em;vertical-align:-.058em;margin-inline-end:.34em;background:currentColor;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;flex:0 0 auto;}
 .msg-act.spk-on{color:var(--accent);}
 .msg-acts-time{font-size:9.5px;color:var(--t3);margin-inline-end:0;letter-spacing:.02em;line-height:1;white-space:nowrap;}
 .msg-act svg.mm-dots{fill:currentColor;stroke:none;width:18px;height:18px;}
@@ -15860,10 +15869,10 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     </div>
     <div style="padding:14px 18px;">
       <div class="fb-cats" id="fbCats">
-        <button class="fb-cat on" data-cat="bug" onclick="acFbCat('bug')">🐞 Bug</button>
-        <button class="fb-cat" data-cat="idea" onclick="acFbCat('idea')">💡 Idea</button>
-        <button class="fb-cat" data-cat="question" onclick="acFbCat('question')">❓ Question</button>
-        <button class="fb-cat" data-cat="other" onclick="acFbCat('other')">💬 Other</button>
+        <button class="fb-cat on" data-cat="bug" onclick="acFbCat('bug')">Bug</button>
+        <button class="fb-cat" data-cat="idea" onclick="acFbCat('idea')">Idea</button>
+        <button class="fb-cat" data-cat="question" onclick="acFbCat('question')">Question</button>
+        <button class="fb-cat" data-cat="other" onclick="acFbCat('other')">Other</button>
       </div>
       <textarea class="jp-in" id="fbBody" maxlength="5000" rows="6" placeholder="What happened? The more detail, the better." style="margin-top:12px;resize:vertical;min-height:120px;"></textarea>
       <div class="fb-note">We may include your app version and device type to help us reproduce the issue.</div>
@@ -17846,7 +17855,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     <textarea class="jp-in jp-ta" id="rbEducation" rows="2" placeholder="Education, school, qualification, years (optional)" maxlength="2000"></textarea>
     <input class="jp-in" id="rbSkills" type="text" placeholder="Key skills (comma separated)" maxlength="1000"/>
     <textarea class="jp-in jp-ta" id="rbAbout" rows="2" placeholder="A line about you / your goal (optional)" maxlength="2000"></textarea>
-    <button class="ac-pill-btn accent jp-submit" id="rbBtn" onclick="acResumeBuild()">✨ Build my resume</button>
+    <button class="ac-pill-btn accent jp-submit" id="rbBtn" onclick="acResumeBuild()"><i class="ai-mk"></i>Build my resume</button>
   </div>
 </div>
 
@@ -18264,7 +18273,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Saved candidates">
     <button class="sheet-close" onclick="closeOverlay('savedCands')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Saved candidates</div>
-    <button class="ac-link-btn" style="margin:0 0 10px;" onclick="acOpenRecruitProjects()">📁 Recruiter projects. Organize people into shortlists</button>
+    <button class="ac-link-btn" style="margin:0 0 10px;" onclick="acOpenRecruitProjects()">Recruiter projects. Organize people into shortlists</button>
     <div id="savedCandsBody"></div>
   </div>
 </div>
@@ -19501,7 +19510,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     <div class="prod-img-pick" id="prodImgPick" onclick="document.getElementById('prodImgFile').click()"><span>＋ Add a photo</span></div>
     <input type="file" id="prodImgFile" accept="image/*" multiple class="hidden" onchange="acProdPickImg(event)"/>
     <div class="prod-thumbs" id="prodThumbs"></div>
-    <button class="ac-pill-btn" type="button" id="prodAiDraftBtn" onclick="acProdListingAi()" style="width:100%;margin-top:8px;">✦ Draft the listing from the photo</button>
+    <button class="ac-pill-btn" type="button" id="prodAiDraftBtn" onclick="acProdListingAi()" style="width:100%;margin-top:8px;"><i class="ai-mk"></i>Draft the listing from the photo</button>
     <button class="ac-pill-btn" type="button" id="prodVideoBtn" onclick="document.getElementById('prodVideoFile').click()" style="width:100%;margin-top:8px;"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;"><rect x="2" y="6" width="13" height="12" rx="2.5"/><path d="M15 10.5 22 7v10l-7-3.5"/></svg>Add a video (optional)</button>
     <input type="file" id="prodVideoFile" accept="video/*" class="hidden" onchange="acProdPickVideo(this)"/>
     <div id="prodVideoPrev"></div>
@@ -19548,7 +19557,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     <!-- Digital auto-delivery (digital kind only) -->
     <div id="prodDigitalSec" style="margin-top:8px;display:none;">
       <textarea class="jp-in" id="prodDigital" maxlength="4000" placeholder="Digital delivery, download link, license key or access instructions" style="min-height:54px;"></textarea>
-      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">⚡ Sent to the buyer instantly when they pay. In their chat and on the order. Only they can see it.</div>
+      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Sent to the buyer instantly when they pay. In their chat and on the order. Only they can see it.</div>
     </div>
     <!-- Variants / options (size, colour, …) -->
     <div id="prodVariantsSec" style="margin-top:10px;">
@@ -19994,7 +20003,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     </div>
     <div id="dcJoinedPane" class="hidden">
       <div class="dc-joined"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
-        <div><div class="dc-joined-t">You’re on the waiting list 🎉</div><div class="dc-joined-s">We’ll notify you at <b id="dcJoinedEmail"></b> the moment the Atwe Card is here.</div></div>
+        <div><div class="dc-joined-t">You’re on the waiting list</div><div class="dc-joined-s">We’ll notify you at <b id="dcJoinedEmail"></b> the moment the Atwe Card is here.</div></div>
       </div>
       <button class="ac-link-btn" style="display:block;margin:12px auto 0;" onclick="acLeaveCardWaitlist()">Leave the waiting list</button>
     </div>
@@ -20279,7 +20288,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
 <div class="overlay hidden" id="agentView" onclick="if(event.target===this)closeOverlay('agentView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Atwe AI assistant">
     <button class="sheet-close" onclick="closeOverlay('agentView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title">✦ Atwe AI. Do it for me</div>
+    <div class="jp-title"><i class="ai-mk"></i>Atwe AI. Do it for me</div>
     <div class="ac-disc-sub" style="margin:2px 0 10px;">Ask Atwe AI to create an event, send an invoice, schedule a post, or draft a reply. You’ll confirm before anything happens.</div>
     <textarea class="jp-in" id="agentInput" maxlength="2000" rows="3" placeholder="e.g. Schedule a post for tomorrow 9am saying we’re hiring"></textarea>
     <div id="agentChips" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
@@ -20299,7 +20308,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     <input class="jp-in" id="bvLegal" type="text" maxlength="160" placeholder="Registered legal name"/>
     <input class="jp-in" id="bvReg" type="text" maxlength="80" placeholder="Company / registration number (optional)" style="margin-top:8px;"/>
     <textarea class="jp-in" id="bvNote" maxlength="1000" rows="3" placeholder="Anything that helps us confirm you (optional)" style="margin-top:8px;"></textarea>
-    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="document.getElementById('bvDocFile').click()">📎 Attach a registration document (optional)</button>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="document.getElementById('bvDocFile').click()">Attach a registration document (optional)</button>
     <input type="file" id="bvDocFile" accept="image/*" hidden onchange="acBvPickDoc(this)"/>
     <div id="bvDocPrev"></div>
     <div class="ac-disc-sub" style="margin:10px 2px 0;font-size:12px;">Your document is used only for this review and is deleted as soon as a decision is made.</div>
@@ -20583,7 +20592,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     <div class="ac-section-row"><span class="jp-title" style="margin:0;">Selling</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acProductFormOpen()">＋ New listing</button></div>
     <div class="ac-disc-sub" style="margin:2px 0 10px;">Sell an item or a service. It shows up in the Marketplace and in search.</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin:0 2px 12px;">
-      <button class="ac-link-btn" style="margin:0;" onclick="acOpenBundles()">🎁 Manage bundles ›</button>
+      <button class="ac-link-btn" style="margin:0;" onclick="acOpenBundles()">Manage bundles ›</button>
       <button class="ac-link-btn" style="margin:0;" onclick="acExportListingsCsv()">Export CSV</button>
       <button class="ac-link-btn" style="margin:0;" onclick="document.getElementById('listingsCsvFile').click()">Import CSV</button>
       <input type="file" id="listingsCsvFile" accept=".csv,text/csv" style="display:none" onchange="acImportListingsCsv(this)"/>
@@ -20863,7 +20872,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
 <div class="overlay hidden" id="aiShopView" onclick="if(event.target===this)closeOverlay('aiShopView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Shop with Atwe AI">
     <button class="sheet-close" onclick="closeOverlay('aiShopView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title" style="margin:0 0 2px;">✦ Shop with Atwe AI</div>
+    <div class="jp-title" style="margin:0 0 2px;"><i class="ai-mk"></i>Shop with Atwe AI</div>
     <div class="ac-disc-sub" style="margin:0 0 12px;">Describe what you want in your own words. Atwe finds it for you.</div>
     <div style="display:flex;gap:8px;">
       <input class="jp-in" id="aiShopIn" type="text" maxlength="200" placeholder="e.g. a gift for a coffee lover under $30" style="margin:0;flex:1;" onkeydown="if(event.key==='Enter')acRunAiShop()"/>
@@ -20966,7 +20975,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Scan a QR code">
     <button class="sheet-close" onclick="acCloseQrScan()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="qrScanTitle" style="margin:0 0 10px;">Scan a code</div>
-    <div class="qr-warn hidden" id="qrScanWarn">⚠️ Only scan a QR from Atwe’s own login screen, on a device you own. Linking signs that device in to your account.</div>
+    <div class="qr-warn hidden" id="qrScanWarn">Only scan a QR from Atwe’s own login screen, on a device you own. Linking signs that device in to your account.</div>
     <div class="qr-scan-wrap"><video id="qrScanVideo" class="qr-scan-video" muted playsinline></video><div class="qr-scan-frame"></div></div>
     <div class="ac-disc-sub" id="qrScanStatus" style="text-align:center;margin-top:10px;">Starting camera…</div>
   </div>
@@ -21756,7 +21765,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
         <div class="pf-hint">A short note shown under your hours: holidays, seasonal changes, walk-ins.</div>
         <div class="pf-sec-label">Location (for “near me”)</div>
         <div class="pf-geo" id="pfGeoRow">
-          <button type="button" class="ac-pill-btn" id="pfGeoBtn" onclick="acPfUseLocation()">📍 Use my current location</button>
+          <button type="button" class="ac-pill-btn" id="pfGeoBtn" onclick="acPfUseLocation()">Use my current location</button>
           <span class="pf-geo-state" id="pfGeoState"></span>
         </div>
         <div class="pf-hint">Lets nearby customers find you in the directory. Only an approximate point is saved.</div>
@@ -21963,7 +21972,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
         <div id="acPostQuote"></div>
         <div id="acOccasionChip"></div>
         <div id="acPostProdChip"></div>
-        <button id="acAiDiscloseChip" class="ai-disclose-chip hidden" onclick="acToggleAiDisclose()" aria-label="Remove the Atwe AI label">✦ Atwe AI helped write this <span>×</span></button>
+        <button id="acAiDiscloseChip" class="ai-disclose-chip hidden" onclick="acToggleAiDisclose()" aria-label="Remove the Atwe AI label"><i class="ai-mk"></i>Atwe AI helped write this <span>×</span></button>
         <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
         <div class="ac-alt-row hidden" id="acPostAltRow" style="margin-top:8px;">
           <input class="jp-in" id="acPostAlt" type="text" maxlength="1000" placeholder="Describe the image (alt text, for accessibility)"/>
@@ -22856,7 +22865,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1855'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1856'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -23278,7 +23287,7 @@ async function maybeClaimReferral() {
   try { localStorage.removeItem('atwe_ref'); } catch {}
   try {
     const r = await API.req('POST', '/api/referrals/claim', { code });
-    if (r && r.ok) { showNotif('🎉 Referral bonus added. $' + (r.earnedCents / 100).toFixed(2) + ' in your wallet!'); acRefreshBalance && acRefreshBalance(); }
+    if (r && r.ok) { showNotif('Referral bonus added. $' + (r.earnedCents / 100).toFixed(2) + ' in your wallet!'); acRefreshBalance && acRefreshBalance(); }
   } catch (e) { /* already used / not eligible — silent */ }
 }
 
@@ -23938,7 +23947,7 @@ async function handleUrlParams() {
   else if (p.get('boost') === 'cancel') { showNotif('Boost canceled. No charge was made.'); stripParam(); }
   else if (p.get('promote') === 'success') { showNotif('Your post is promoted. It’ll reach more people.'); stripParam(); }
   else if (p.get('promote') === 'cancel') { showNotif('Promotion canceled. No charge was made.'); stripParam(); }
-  else if (p.get('ad') === 'success') { showNotif('Your ad is live 🎉'); stripParam(); }
+  else if (p.get('ad') === 'success') { showNotif('Your ad is live.'); stripParam(); }
   else if (p.get('ad') === 'cancel') { showNotif('Ad payment canceled. No charge was made.'); stripParam(); }
   else if (p.get('tip') === 'success') { showNotif('Tip sent. Thank you for supporting them!'); stripParam(); }
   else if (p.get('tip') === 'cancel') { showNotif('Tip canceled. No charge was made.'); stripParam(); }
@@ -27034,7 +27043,7 @@ async function sendMessage() {
   updateAttachState();
   onInput(); // revert the right button to the mic now the composer is empty
 
-  const storeText = text || (imageUrl ? '📷 Image' : docName ? ('📄 ' + docName) : '');
+  const storeText = text || (imageUrl ? 'Image' : docName ? (docName) : '');
   const chat = getOrCreateChat(storeText);
   chat.messages.push({ role: 'user', content: storeText });
   Store.save();
@@ -29841,7 +29850,7 @@ function acUnpin(id) {
     : API.req('POST', '/api/atchat/message/' + id + '/pin', { pin: false });
   p.then(() => acLoadPins()).catch((e) => showNotif(e.message || 'Could not unpin.'));
 }
-function _pinPreview(p) { return p.body ? p.body : (p.mediaKind === 'image' ? '📷 Photo' : p.mediaKind === 'video' ? '🎬 Video' : p.mediaKind === 'audio' ? '🎤 Voice message' : '📎 Attachment'); }
+function _pinPreview(p) { return p.body ? p.body : (p.mediaKind === 'image' ? 'Photo' : p.mediaKind === 'video' ? 'Video' : p.mediaKind === 'audio' ? 'Voice message' : 'Attachment'); }
 async function acLoadPins() {
   const bar = document.getElementById('acPinBar'); if (!bar) return;
   let pins = null;
@@ -29901,11 +29910,11 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'deal' ? '🏷️ Deal' : m.meta.t === 'callschedule' ? '📅 Call invite' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Daily reaction' : '↩ Daily reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : m.meta.t === 'moneydrop' ? '🧧 Money drop' : m.meta.t === 'moneydrop' ? '🧧 Money drop' : t === 'moneyrequest' ? '💰 Money request' : m.meta.t === 'cartrecovery' ? '🛍️ Your cart is waiting' : m.meta.t === 'shopcampaign' ? '📣 News from a shop' : 'Message';
-  if (m.image || m.mediaKind === 'image') return '📷 Photo';
-  if (m.mediaKind === 'video') return '🎬 Video';
-  if (m.mediaKind === 'audio') return '🎤 Voice message';
-  return '📎 Attachment';
+  if (m.meta) return m.meta.t === 'poll' ? 'Poll' : m.meta.t === 'event' ? 'Event' : m.meta.t === 'location' ? 'Location' : m.meta.t === 'contact' ? 'Contact' : m.meta.t === 'invoice' ? 'Invoice' : m.meta.t === 'quote' ? 'Quote' : m.meta.t === 'order' ? 'Order' : m.meta.t === 'product' ? 'Product' : m.meta.t === 'deal' ? 'Deal' : m.meta.t === 'callschedule' ? 'Call invite' : m.meta.t === 'split' ? 'Split request' : m.meta.t === 'pool' ? 'Money pool' : m.meta.t === 'offer' ? 'Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? 'Daily reaction' : 'Daily reply') : m.meta.t === 'gift' ? 'Gift card' : m.meta.t === 'digital' ? 'Download' : m.meta.t === 'money' ? 'Money' : m.meta.t === 'moneydrop' ? 'Money drop' : m.meta.t === 'moneyrequest' ? 'Money request' : m.meta.t === 'cartrecovery' ? 'Your cart is waiting' : m.meta.t === 'shopcampaign' ? 'News from a shop' : 'Message';
+  if (m.image || m.mediaKind === 'image') return 'Photo';
+  if (m.mediaKind === 'video') return 'Video';
+  if (m.mediaKind === 'audio') return 'Voice message';
+  return 'Attachment';
 }
 async function acOpenStarred() {
   showOverlay('starredView');
@@ -34535,7 +34544,7 @@ async function acOpenJob(id) {
         : job.applied
         ? `<button class="ac-pill-btn" style="flex:1;" onclick="acWithdrawJob(${job.id})">Withdraw</button>`
         : `<button class="ac-pill-btn accent" style="flex:1;" onclick="acApplyJob(${job.id})">Apply now</button>`;
-      const sb = `<button class="ac-pill-btn ac-job-savebtn ${job.saved ? 'on' : ''}" style="flex:0 0 auto;" onclick="acToggleSaveJobDetail(${job.id})">${job.saved ? '★ Saved' : '☆ Save'}</button>`;
+      const sb = `<button class="ac-pill-btn ac-job-savebtn ${job.saved ? 'on' : ''}" style="flex:0 0 auto;" onclick="acToggleSaveJobDetail(${job.id})">${job.saved ? 'Saved' : 'Save'}</button>`;
       const sh = `<button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acShareJob(${job.id})" aria-label="Share job">↗</button>`;
       actions = `<div style="display:flex;gap:9px;">${primary}${sb}${sh}</div>`;
     }
@@ -34784,12 +34793,12 @@ async function acRankApplicants(id) {
     (AC._applicants || []).forEach((a) => { const r = map[a.id]; a.aiScore = r ? r.score : null; a.aiReason = r ? r.reason : null; });
     AC._applRanked = true; acRenderApplicantList(id);
     showNotif('Ranked by Atwe AI. Best fit first.');
-  } catch (e) { if (btn) { btn.disabled = false; btn.textContent = '✨ Rank'; } showNotif(e.message || 'Could not rank.'); }
+  } catch (e) { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ai-mk"></i>Rank'; } showNotif(e.message || 'Could not rank.'); }
 }
 function acRenderApplicantList(id) {
   const filtered = acApplFiltered();
   const chips = acApplFilterDefs().map(([k, l, n]) => `<button class="ja-fchip ${AC._applFilter === k ? 'on' : ''}" onclick="acApplFilter('${k}')">${l}${n != null ? ' ' + n : ''}</button>`).join('');
-  const tools = `<div class="ja-tools"><div class="ja-filters">${chips}</div><button class="ja-select-btn ja-rank-btn" id="jaRankBtn" onclick="acRankApplicants(${id})">✨ Rank</button><button class="ja-select-btn" onclick="acApplExportMenu(${id})" aria-label="Export applicants">⬇ Export</button><button class="ja-select-btn ${AC._applSelMode ? 'on' : ''}" onclick="acApplToggleSelectMode()">${AC._applSelMode ? 'Done' : 'Select'}</button></div>`;
+  const tools = `<div class="ja-tools"><div class="ja-filters">${chips}</div><button class="ja-select-btn ja-rank-btn" id="jaRankBtn" onclick="acRankApplicants(${id})"><i class="ai-mk"></i>Rank</button><button class="ja-select-btn" onclick="acApplExportMenu(${id})" aria-label="Export applicants">⬇ Export</button><button class="ja-select-btn ${AC._applSelMode ? 'on' : ''}" onclick="acApplToggleSelectMode()">${AC._applSelMode ? 'Done' : 'Select'}</button></div>`;
   const list = filtered.length ? filtered.map((a) => acApplicantRow(id, a)).join('') : '<div class="ac-empty" style="padding:24px;">No applicants in this view.</div>';
   const bar = AC._applSelMode ? `<div class="ja-bulkbar"><span class="ja-bulk-n">${(AC._applSel || new Set()).size} selected</span><select id="jaBulkStatus" class="ac-jf-sel">${_APPLICANT_STATUSES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acApplBulkApply(${id})">Apply</button></div>` : '';
   document.getElementById('jaBody').innerHTML = tools + '<div id="jaList">' + list + '</div>' + bar;
@@ -34856,7 +34865,7 @@ function acApplicantRow(jobId, a) {
       </div>
       ${sel ? '' : star}
     </div>
-    ${a.aiReason ? `<div class="ac-appl-aireason">✨ ${escHtml(a.aiReason)}</div>` : ''}
+    ${a.aiReason ? `<div class="ac-appl-aireason"><i class="ai-mk"></i>${escHtml(a.aiReason)}</div>` : ''}
     ${a.meets === true ? '<div class="ac-appl-meets yes">✓ Meets requirements</div>' : a.meets === false ? '<div class="ac-appl-meets no">✗ Missing a requirement</div>' : ''}
     ${(a.answers && a.answers.length) ? `<div class="ac-appl-ans">${a.answers.map(x => `<div><b>${escHtml(x.text)}:</b> ${escHtml(x.value != null ? String(x.value) : '-')}</div>`).join('')}</div>` : ''}
     ${a.note ? `<div class="ac-appl-note">${escHtml(a.note)}</div>` : ''}
@@ -34865,7 +34874,7 @@ function acApplicantRow(jobId, a) {
       <select class="ac-appl-sel st-${a.status}" onchange="acSetApplicantStatus(${jobId},${a.id},this.value,this)">${opts}</select>
       <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="closeOverlay('jobApplicants');acOpenChat(${a.id})">Message</button>
       <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="acInterviewOpen(${a.id})">Interview</button>
-      <button class="ac-pill-btn apl-note-btn ${a.hiringNote ? 'has' : ''}" style="flex:0 0 auto;padding:7px 14px;" onclick="acToggleApplNote(${a.id})">${a.hiringNote ? '📝 Note ·' : '📝 Note'}</button>
+      <button class="ac-pill-btn apl-note-btn ${a.hiringNote ? 'has' : ''}" style="flex:0 0 auto;padding:7px 14px;" onclick="acToggleApplNote(${a.id})">${a.hiringNote ? 'Note ·' : 'Note'}</button>
     </div>
     <div class="apl-note-box hidden" id="aplNoteBox_${a.id}">
       <textarea class="apl-note-in" id="aplNoteIn_${a.id}" maxlength="2000" rows="3" placeholder="Private note. Only you and your team see this.">${escHtml(a.hiringNote || '')}</textarea>
@@ -34922,7 +34931,7 @@ async function acSaveApplNote(jobId, uid, btn) {
     document.getElementById('aplNoteBox_' + uid)?.classList.add('hidden');
     // Refresh the row's Note button state without a full re-render.
     const card = document.querySelector(`.ac-appl[data-uid="${uid}"] .apl-note-btn`);
-    if (card) { card.classList.toggle('has', !!note); card.textContent = note ? '📝 Note ·' : '📝 Note'; }
+    if (card) { card.classList.toggle('has', !!note); card.textContent = note ? 'Note ·' : 'Note'; }
     showNotif(note ? 'Note saved.' : 'Note removed.');
   } catch (e) { showNotif(e.message || 'Could not save the note.'); }
   finally { btn.disabled = false; btn.textContent = lbl; }
@@ -40314,7 +40323,7 @@ function acPostCard(p) {
     </div>
     <div class="ac-post-body">
       ${(!p.locked && p.occasion) ? acOccasionBanner(p.occasion) : ''}
-      ${(!p.locked && p.aiAssisted) ? '<div class="ai-disclosed">\u2726 Atwe AI helped write this</div>' : ''}
+      ${(!p.locked && p.aiAssisted) ? '<div class="ai-disclosed"><i class="ai-mk"></i>Atwe AI helped write this</div>' : ''}
       ${(p.circles && p.circles.length) ? `<div class="ac-post-circle" onclick="event.stopPropagation();acOpenCircle(${p.circles[0].id})">in circle@${escHtml(p.circles[0].username)}</div>` : ''}
       ${p.locked ? (p.ppvLocked || p.ppvCents
         ? `<div class="ac-post-locked" onclick="event.stopPropagation();acUnlockPost(${p.id})"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Unlock this post for $${((p.ppvCents || 0) / 100).toFixed(2)}</span></div>`
@@ -40736,7 +40745,7 @@ async function acLoadFeed() {
     (posts || []).forEach((p) => AC._feedSeen.add(p.id));
     if (posts.length) AC._feedLastCreated = posts[posts.length - 1].created_at;
     const bar = scope === 'bookmarks' ? acBmkFolderBar() : '';
-    // Stories live on the Feeds tab now; the AI cards moved to the ✦ button in the
+    // Stories live on the Feeds tab now; the AI cards moved to the Atwe AI button in the
     // home top bar — the For You / Following feed is just clean posts.
     if (posts.length) {
       // Inject an inline X-style "Who to follow" module a few posts down.
@@ -40881,7 +40890,7 @@ function acFollowedByLine(u) {
   if (!txt) return '';
   return `<div class="ac-followedby"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg><span>Followed by ${txt}</span></div>`;
 }
-// Atwe AI hub — opened from the ✦ button in the home top bar (the two feed AI
+// Atwe AI hub — opened from the Atwe AI button in the home top bar (the two feed AI
 // helpers used to sit on the feed; they live here now to keep the feed clean).
 function acOpenAiHub() { showOverlay('aiHub'); }
 // Shared positioner for the small Apple-style tab popovers (feed AI, chat tools):
@@ -44489,7 +44498,7 @@ function acQaItem(q) {
       <div class="sc-comment-main"><div class="sc-comment-top"><span class="sc-comment-name">${escHtml(q.asker.name)}</span><span class="sc-comment-time">${acTime(q.createdAt)}</span>${ownerCanDel ? `<button class="sc-comment-del" onclick="acDeleteQuestion(${q.id})" aria-label="Delete">×</button>` : ''}</div>
         <div class="qa-q-body">${escHtml(q.body)}</div></div></div>
     ${answers}
-    <div class="qa-answer-box"><input class="jp-in" id="qaAns${q.id}" data-q="${escHtml(q.body)}" maxlength="1000" placeholder="${AC._qaMine ? 'Answer this…' : 'Add an answer…'}" onkeydown="if(event.key==='Enter')acAnswerQuestion(${q.id})"/>${AC._qaMine ? `<button class="ac-link-btn qa-ai" onclick="acQaSuggest(${q.id})" title="Draft an answer with Atwe AI">✦ AI</button>` : ''}<button class="ac-link-btn" onclick="acAnswerQuestion(${q.id})">Answer</button></div>
+    <div class="qa-answer-box"><input class="jp-in" id="qaAns${q.id}" data-q="${escHtml(q.body)}" maxlength="1000" placeholder="${AC._qaMine ? 'Answer this…' : 'Add an answer…'}" onkeydown="if(event.key==='Enter')acAnswerQuestion(${q.id})"/>${AC._qaMine ? `<button class="ac-link-btn qa-ai" onclick="acQaSuggest(${q.id})" title="Draft an answer with Atwe AI"><i class="ai-mk"></i>AI</button>` : ''}<button class="ac-link-btn" onclick="acAnswerQuestion(${q.id})">Answer</button></div>
   </div>`;
 }
 // AI customer-service: draft an answer to a Q&A question from the business's info.
@@ -44501,7 +44510,7 @@ async function acQaSuggest(qid) {
     const r = await API.req('POST', '/api/ai/cs-answer', { businessId: AC._qaBiz, question });
     if (r.text) { inp.value = r.text; inp.focus(); }
   } catch (e) { showNotif(e.status === 503 ? 'Atwe AI isn’t set up here.' : (e.message || 'Couldn’t draft an answer.')); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = '✦ AI'; } }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ai-mk"></i>AI'; } }
 }
 async function acAskQuestion() {
   const inp = document.getElementById('qaAskIn'); const body = (inp.value || '').trim(); if (!body) return; inp.value = '';
@@ -45098,7 +45107,7 @@ async function acLoadPots() {
 const _POT_FREQ = { 1: 'daily', 7: 'weekly', 14: 'every 2 weeks', 30: 'monthly' };
 function acPotCard(p) {
   const pct = p.targetCents ? Math.min(100, Math.round(p.balanceCents / p.targetCents * 100)) : null;
-  const goal = p.targetCents ? `<span class="pot-goal">${acMoney(p.balanceCents)} / ${acMoney(p.targetCents)}${pct === 100 ? ' · reached 🎉' : ''}</span>` : `<span class="pot-goal">${acMoney(p.balanceCents)}</span>`;
+  const goal = p.targetCents ? `<span class="pot-goal">${acMoney(p.balanceCents)} / ${acMoney(p.targetCents)}${pct === 100 ? ' · reached' : ''}</span>` : `<span class="pot-goal">${acMoney(p.balanceCents)}</span>`;
   const bar = p.targetCents ? `<div class="pot-bar"><div class="pot-bar-fill" style="width:${pct}%"></div></div>` : '';
   const auto = p.autoAmountCents ? `<div class="pot-auto">Auto-save ${acMoney(p.autoAmountCents)} ${_POT_FREQ[p.autoIntervalDays] || ''}</div>` : '';
   return `<div class="pot-card">
@@ -45597,7 +45606,7 @@ async function acOpenInvoice(id) {
     else if (inv.mine && (inv.status === 'sent' || inv.status === 'overdue')) {
       // Nudge: one per 24h per invoice (the server enforces it; the button says so).
       const cooling = inv.lastRemindedAt && (Date.now() - new Date(inv.lastRemindedAt).getTime()) < 24 * 3600000;
-      const remindLbl = cooling ? 'Reminder sent · you can nudge again tomorrow' : '🔔 Send a payment reminder';
+      const remindLbl = cooling ? 'Reminder sent · you can nudge again tomorrow' : 'Send a payment reminder';
       action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="acInvoiceMarkPaid()">Mark as paid. Received outside Atwe</button>
         <button class="ac-pill-btn" style="width:100%;margin-top:8px;${cooling ? 'opacity:.55;' : ''}" ${cooling ? 'disabled' : ''} onclick="acInvoiceRemind()">${remindLbl}</button>
         <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acCancelInvoice()">Cancel invoice</button>`;
@@ -45976,7 +45985,7 @@ function acRenderListingBuy(l, own) {
     const pct = Math.round((1 - unitPrice / l.compareAtCents) * 100);
     priceLbl += ` <s class="mkt-was">$${(l.compareAtCents / 100).toFixed(2)}</s>${pct >= 5 ? ` <span class="mkt-off">${pct}% off</span>` : ''}`;
   }
-  const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}${!l.shipFree && l.freeShipOverCents ? ` · <b>free over $${(l.freeShipOverCents / 100).toFixed(0)}</b>` : ''}${l.processingDaysMax != null ? ` · ships in ${l.processingDaysMin === l.processingDaysMax ? l.processingDaysMax : l.processingDaysMin + '-' + l.processingDaysMax} day${l.processingDaysMax === 1 && l.processingDaysMin === l.processingDaysMax ? '' : 's'}` : ''}</div>`
+  const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? 'Free shipping' : '+ $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}${!l.shipFree && l.freeShipOverCents ? ` · <b>free over $${(l.freeShipOverCents / 100).toFixed(0)}</b>` : ''}${l.processingDaysMax != null ? ` · ships in ${l.processingDaysMin === l.processingDaysMax ? l.processingDaysMax : l.processingDaysMin + '-' + l.processingDaysMax} day${l.processingDaysMax === 1 && l.processingDaysMin === l.processingDaysMax ? '' : 's'}` : ''}</div>`
     : (l.instantDelivery ? `<div class="mkt-ship">⚡ Instant delivery after purchase</div>` : '');
   const maxQ = (stock !== null && stock !== undefined) ? stock : 99;
   const qtyRow = (!own && !soldOut && !needPick && l.needsShipping)
@@ -46030,7 +46039,7 @@ async function acRunAiAsk() {
   if (!q) return;
   const body = document.getElementById('aiAskBody'), btn = document.getElementById('aiAskBtn');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  body.innerHTML = '<div class="ai-shop-think">✦ Atwe is looking through your activity…</div>';
+  body.innerHTML = '<div class="ai-shop-think"><i class="ai-mk"></i>Atwe is looking through your activity…</div>';
   try {
     const r = await API.req('POST', '/api/ai/ask', { question: q });
     body.innerHTML = `<div class="grp-rules" style="margin-top:0;max-height:none;"><div class="grp-rules-body" style="color:var(--t1);">${escHtml(r.answer)}</div></div>`;
@@ -46684,7 +46693,7 @@ async function acDoOfferSavers() {
     const r = await API.req('POST', '/api/products/' + c.productId + '/offer-savers', { discountPct: c.pct, hours: c.hours });
     closeOverlay('offerSaversSheet');
     if (r.savers === 0) showNotif('No one has saved this listing yet. No deal sent.');
-    else showNotif('Deal sent to ' + r.savers + ' shopper' + (r.savers === 1 ? '' : 's') + ' who saved this! 🎉');
+    else showNotif('Deal sent to ' + r.savers + ' shopper' + (r.savers === 1 ? '' : 's') + ' who saved this.');
   } catch (e) { showNotif(e.message || 'Could not send the deal.'); btn.disabled = false; btn.textContent = lbl; }
 }
 
@@ -46893,7 +46902,7 @@ async function acBookingCancel(id) {
 async function acRentalPay(id, total) {
   if (typeof acCanPayBalance === 'function' && !acCanPayBalance(total)) { showNotif('Not enough balance. Top up your wallet first.'); if (typeof acOpenWallet === 'function') acOpenWallet(); return; }
   const cid = (typeof acPayCid === 'function') ? acPayCid() : ('rent' + id + '_' + Date.now());
-  try { await API.req('POST', '/api/rentals/bookings/' + id + '/pay', { clientId: cid }); showNotif('Booking paid. Enjoy your stay! 🎉'); if (typeof acRefreshBalance === 'function') acRefreshBalance(); acLoadBookings(); }
+  try { await API.req('POST', '/api/rentals/bookings/' + id + '/pay', { clientId: cid }); showNotif('Booking paid. Enjoy your stay.'); if (typeof acRefreshBalance === 'function') acRefreshBalance(); acLoadBookings(); }
   catch (e) { if (e && e.body && e.body.insufficientBalance) { showNotif('Not enough balance.'); return; } showNotif((e && e.message) || 'Could not pay.'); }
 }
 // Pick a variant on the open listing → highlight chip, reset qty, re-render the buy block.
@@ -47064,7 +47073,7 @@ async function acOpenListing(id) {
     const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
     // Shipping line + rating.
-    const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
+    const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? 'Free shipping' : '+ $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
     const ratingLine = l.reviewCount ? `<div class="mkt-rating" onclick="document.getElementById('prodReviews').scrollIntoView({behavior:'smooth'})">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount} review${l.reviewCount === 1 ? '' : 's'}</span></div>` : '';
     // Social proof: units sold (paid-state orders) — "N sold", eBay/Amazon-style.
     const condLbl = { new: 'New', like_new: 'Like new', good: 'Good', fair: 'Fair' }[l.condition];
@@ -47131,7 +47140,7 @@ async function acRunAiShop() {
   if (!q) return;
   const body = document.getElementById('aiShopBody'), btn = document.getElementById('aiShopBtn');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  body.innerHTML = '<div class="ai-shop-think">✦ Atwe is finding the best matches…</div>';
+  body.innerHTML = '<div class="ai-shop-think"><i class="ai-mk"></i>Atwe is finding the best matches…</div>';
   try {
     const r = await API.req('POST', '/api/ai/shop', { query: q });
     if (!r.items.length) { body.innerHTML = '<div class="ac-empty" style="padding:22px;">No matching products yet. Try different words.</div>'; return; }
@@ -47142,7 +47151,7 @@ async function acRunAiShop() {
         ${(l.image || (l.images && l.images[0])) ? `<div class="ai-shop-img" style="background-image:url('${l.image || l.images[0]}')"></div>` : `<div class="ai-shop-img noimg">${_MKT_BOX_SVG}</div>`}
         <div class="ai-shop-main"><div class="ai-shop-name">${escHtml(l.name)}</div>
           <div class="ai-shop-price">${l.hasVariants ? 'from ' : ''}$${((l.priceFromCents || l.priceCents) / 100).toFixed(2)} · ${escHtml(l.seller.name)}</div>
-          ${it.reason ? `<div class="ai-shop-reason">✦ ${escHtml(it.reason)}</div>` : ''}</div></div>`;
+          ${it.reason ? `<div class="ai-shop-reason"><i class="ai-mk"></i>${escHtml(it.reason)}</div>` : ''}</div></div>`;
     }).join('');
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:22px;">' + escHtml(e.message || 'Couldn’t run the search.') + '</div>'; }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Search'; } }
@@ -49720,7 +49729,7 @@ async function acProdListingAi() {
   const img = (AC._prodImgs || [])[0];
   if (!img) { showNotif('Add a product photo first.'); return; }
   const btn = document.getElementById('prodAiDraftBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '✦ Reading the photo…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ai-mk"></i>Reading the photo…'; }
   try {
     const d = await API.req('POST', '/api/ai/listing-from-photo', { image: img });
     const setIfEmpty = (id, v) => { const el = document.getElementById(id); if (el && v != null && !String(el.value || '').trim()) { el.value = v; return true; } return false; };
@@ -49732,7 +49741,7 @@ async function acProdListingAi() {
     if (d.priceCents != null) { if (setIfEmpty('prodPrice', (d.priceCents / 100).toFixed(2))) filled.push('price suggestion'); }
     showNotif(filled.length ? ('Drafted from the photo. Check the ' + filled.join(', ') + ' before saving.') : 'Everything was already filled in.');
   } catch (e) { showNotif(e.status === 503 ? (e.message || 'Atwe AI isn’t available right now.') : (e.message || 'Couldn’t draft from that photo.')); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = '✦ Draft the listing from the photo'; } }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ai-mk"></i>Draft the listing from the photo'; } }
 }
 // AI business assistant: write/improve a product description from its name + details.
 async function acProdDescAi() {
@@ -49988,7 +49997,7 @@ async function acOpenOrder(id) {
       if (other && other.id) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('ordersView');closeOverlay('orderView');appTab('chat');acOpenChat(${other.id})">💬 Message ${o.mine ? 'the buyer' : 'the seller'}${other.name ? ' · ' + escHtml(other.name) : ''}</button>`; }
     // Archive is a personal tidy-up: only once the order is finished either way.
     if (['fulfilled', 'delivered', 'released', 'cancelled', 'refunded'].includes(o.status)) {
-      action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acArchiveOrder(${o.id}, ${o.archived ? 'false' : 'true'})">${o.archived ? '↩ Restore to orders' : '🗄 Archive'}</button>`;
+      action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acArchiveOrder(${o.id}, ${o.archived ? 'false' : 'true'})">${o.archived ? 'Restore to orders' : 'Archive'}</button>`;
     }
     body.innerHTML = `
       <div class="inv-head"><span class="mc-inv-ic">${o.escrow ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
@@ -50257,7 +50266,7 @@ async function acLoadGiftCards() {
 }
 // Claim a received gift card → it becomes one of your cards (its own balance).
 async function acClaimGift(id) {
-  try { await API.req('POST', '/api/gift-cards/' + id + '/claim'); showNotif('Added to your cards 🎁'); acLoadGiftCards(); }
+  try { await API.req('POST', '/api/gift-cards/' + id + '/claim'); showNotif('Added to your cards.'); acLoadGiftCards(); }
   catch (e) { showNotif(e.message || 'Could not add the card.'); }
 }
 // Move some/all of a gift card's balance into the wallet balance.
@@ -50342,7 +50351,7 @@ async function acJoinCardWaitlist() {
   try {
     const r = await API.req('POST', '/api/debit-card/waitlist', { email });
     acShowCardJoined(r.email);
-    showNotif('You’re on the waiting list 🎉');
+    showNotif('You’re on the waiting list.');
   } catch (e) { showNotif(e.message || 'Could not join the waiting list.'); }
   finally { if (btn) btn.disabled = false; }
 }
@@ -50889,7 +50898,7 @@ async function acOpenLeadList(id) {
         ${bits.length ? `<div class="lead-activity">${bits.slice(0, 2).map(escHtml).join(' \u00b7 ')}</div>` : ''}
         ${l.note ? `<div class="lead-note">${escHtml(l.note)}</div>` : ''}
         <div class="lead-acts">
-          <button class="ac-pill-btn" onclick="acProspect(${l.id})">✦ Write a message</button>
+          <button class="ac-pill-btn" onclick="acProspect(${l.id})"><i class="ai-mk"></i>Write a message</button>
           <button class="ac-pill-btn danger" onclick="acRemoveLead(${l.id})">Remove</button>
         </div></div>`;
     }).join('') : '<div class="ac-empty" style="padding:16px;">Nobody on this list yet. Open someone\u2019s profile and add them from the ⋯ menu.</div>';
@@ -50945,7 +50954,7 @@ async function acOpenIntent() {
             <div class="ac-item-name">${escHtml(l.name)}${vbadge(l.verified)}${hot ? `<span class="intent-dot ${hot}"></span>` : ''}</div>
             <div class="ti-sub">${escHtml(kinds.slice(0, 2).join(' \u00b7 '))}${l.signals > 2 ? ` \u00b7 ${l.signals} signals` : ''}</div>
           </div>
-          <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();acProspect(${l.id})">✦ Write</button>
+          <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();acProspect(${l.id})"><i class="ai-mk"></i>Write</button>
         </div></div>`;
     }).join('') : acEmpty('people', 'Nobody has looked yet', 'Once people open your profile, you can see who they are and when they came by.');
   } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
@@ -51784,7 +51793,7 @@ async function acSubmitAd() {
   if (!url) return showNotif('Add a destination link.');
   if (!AC._adDraft.media) return showNotif('Add an image or video for your ad.');
   const payload = { sponsorName: sponsor, title: g('adf-title').value.trim(), body: g('adf-body').value.trim(), ctaLabel: g('adf-cta').value.trim(), destUrl: url, media: AC._adDraft.media, mediaKind: AC._adDraft.mediaKind, days: AC._adDraft.days };
-  try { await API.req('POST', '/api/ads/request', payload); closeOverlay('adCreateView'); showNotif('Ad submitted for review 🎉 You’ll pay to publish once it’s approved.'); acOpenAds(); }
+  try { await API.req('POST', '/api/ads/request', payload); closeOverlay('adCreateView'); showNotif('Ad submitted for review. You’ll pay to publish once it’s approved.'); acOpenAds(); }
   catch (e) { showNotif((e && e.message) || 'Could not submit your ad.'); }
 }
 const _CAMP_LABEL = { requested: 'In review', approved: 'Approved', active: 'Active', paused: 'Paused', rejected: 'Rejected', completed: 'Ended' };
@@ -51804,7 +51813,7 @@ async function acPayCampaign(id, amountCents) {
   try {
     const r = await API.req('POST', '/api/ads/campaigns/' + id + '/pay', { clientId: cid, payWith: useBal ? 'balance' : undefined });
     if (r && r.url) { location.href = r.url; return; }
-    showNotif('Your ad is live 🎉'); if (typeof acRefreshBalance === 'function') acRefreshBalance(); acOpenAds();
+    showNotif('Your ad is live.'); if (typeof acRefreshBalance === 'function') acRefreshBalance(); acOpenAds();
   } catch (e) {
     if (e && e.body && e.body.insufficientBalance) return showNotif('Not enough balance. Top up your wallet or set up card billing.');
     showNotif((e && e.message) || 'Could not process the payment.');
@@ -51888,7 +51897,7 @@ async function acAffInvite() {
   catch (e) { showNotif((e && e.message) || 'Could not send the invite.'); }
 }
 async function acAffRespond(id, accept) {
-  try { await API.req('POST', '/api/affiliations/' + id + '/respond', { accept }); await acAffSyncMe(); showNotif(accept ? 'Affiliation added. Badge is live 🎉' : 'Invite declined.'); acOpenAffiliation(); }
+  try { await API.req('POST', '/api/affiliations/' + id + '/respond', { accept }); await acAffSyncMe(); showNotif(accept ? 'Affiliation added. Badge is live.' : 'Invite declined.'); acOpenAffiliation(); }
   catch (e) { showNotif((e && e.message) || 'Could not respond.'); }
 }
 async function acAffLeave(id) {
@@ -51925,7 +51934,7 @@ async function acAffSubmitUpload() {
   if (!AC._affBadge) return showNotif('Choose a logo image first.');
   const label = (document.getElementById('afff-label').value || '').trim();
   const link = (document.getElementById('afff-link').value || '').trim();
-  try { await API.req('POST', '/api/affiliation/upload', { badge: AC._affBadge, label, link }); closeOverlay('affUploadView'); showNotif('Badge submitted for review ✨'); acOpenAffiliation(); }
+  try { await API.req('POST', '/api/affiliation/upload', { badge: AC._affBadge, label, link }); closeOverlay('affUploadView'); showNotif('Badge submitted for review.'); acOpenAffiliation(); }
   catch (e) { showNotif((e && e.message) || 'Could not submit your badge.'); }
 }
 
@@ -52024,7 +52033,7 @@ async function acOpenSplit(id) {
     const unpaidN = s.shares.filter(sh => !sh.paid).length;
     const cooling = s.lastRemindedAt && (Date.now() - new Date(s.lastRemindedAt).getTime()) < 24 * 3600000;
     const remindBtn = (s.iAmCreator && unpaidN > 0)
-      ? `<button class="ac-pill-btn" style="width:100%;margin-top:12px;${cooling ? 'opacity:.55;' : ''}" ${cooling ? 'disabled' : ''} onclick="acSplitRemind(${s.id})">${cooling ? 'Reminded · you can nudge again tomorrow' : `🔔 Remind ${unpaidN === 1 ? 'the last person' : unpaidN + ' people'} to pay`}</button>` : '';
+      ? `<button class="ac-pill-btn" style="width:100%;margin-top:12px;${cooling ? 'opacity:.55;' : ''}" ${cooling ? 'disabled' : ''} onclick="acSplitRemind(${s.id})">${cooling ? 'Reminded · you can nudge again tomorrow' : `Remind ${unpaidN === 1 ? 'the last person' : unpaidN + ' people'} to pay`}</button>` : '';
     b.innerHTML = `<div class="jp-title" style="margin:0 0 2px;">${escHtml(s.title)}</div>
       <div class="ac-disc-sub" style="margin:0 0 10px;">${s.iAmCreator ? 'You requested this split' : 'From ' + escHtml(s.creator.name)}</div>
       <div class="split-prog"><div class="split-prog-amt">$${(s.paidCents / 100).toFixed(2)} <span>of $${(s.totalCents / 100).toFixed(2)} collected</span></div><span class="split-bar lg"><span style="width:${pct}%"></span></span></div>
@@ -54556,7 +54565,7 @@ function acShowcaseCard(s) {
   return `<div class="sc-card" onclick="acOpenShowcase(${s.id})">
     ${cover}
     <div class="sc-card-body"><div class="sc-card-title">${escHtml(s.title)}</div>
-      <div class="sc-card-meta">${s.productId ? '🛍️ Product · ' : ''}♥ ${s.likes} · 💬 ${s.comments}</div></div>
+      <div class="sc-card-meta">${s.productId ? 'Product · ' : ''}${s.likes} likes · ${s.comments} comments</div></div>
   </div>`;
 }
 async function acOpenShowcase(id) {
@@ -58168,11 +58177,11 @@ async function rtConnect() {
     try {
       const d = JSON.parse(e.data);
       if (d.type === 'cashout_status') {
-        if (d.payoutsEnabled) showNotif('🏦 Your bank is ready. You can cash out now.');
+        if (d.payoutsEnabled) showNotif('Your bank is ready. You can cash out now.');
         const cv = document.getElementById('cashoutView'); if (cv && !cv.classList.contains('hidden')) acOpenCashout();
         return;
       }
-      if (d.type === 'receive') showNotif('💸 You received ' + acMoneyFmt(d.amountCents) + '.');
+      if (d.type === 'receive') showNotif('You received ' + acMoneyFmt(d.amountCents) + '.');
       const wv = document.getElementById('walletView');
       if (wv && !wv.classList.contains('hidden')) acLoadWallet(); else acRefreshBalance();
     } catch {}
@@ -61073,7 +61082,7 @@ async function acRunFeedTune() {
   if (!instr) return;
   const body = document.getElementById('ftBody'), btn = document.getElementById('ftBtn');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  body.innerHTML = '<div class="ai-shop-think">✦ Tuning your feed…</div>';
+  body.innerHTML = '<div class="ai-shop-think"><i class="ai-mk"></i>Tuning your feed…</div>';
   try {
     const r = await API.req('POST', '/api/ai/feed-tune', { instruction: instr });
     const bits = [];
@@ -62835,7 +62844,7 @@ async function acOpenViewOnce(id) {
 }
 // Short label for a conversation/group last-message preview.
 function acMediaLabel(kind) {
-  return kind === 'video' ? 'Video' : kind === 'audio' ? 'Voice note' : kind === 'file' ? '📎 File' : '';
+  return kind === 'video' ? 'Video' : kind === 'audio' ? 'Voice note' : kind === 'file' ? 'File' : '';
 }
 
 // Keep the thread padded by the frosted footer's height (+ the fade) so the last
@@ -64249,7 +64258,7 @@ function acRenderLiveLocCard(liveId) {
   el.innerHTML = `
     <div class="mc-loc-map"><span class="mc-loc-pin ${active ? 'pulse' : ''}"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span></div>
     <div class="mc-loc-foot">
-      <div class="mc-loc-label">${active ? '🟢 Live location' : 'Live location'}</div>
+      <div class="mc-loc-label">${active ? '<span class="dot-live"></span>Live location' : 'Live location'}</div>
       <div class="mc-loc-sub">${hasCoord ? (s.lat.toFixed(4) + ', ' + s.lng.toFixed(4) + ' · ') : ''}${sub}</div>
       <div class="mc-live-acts">
         ${url ? `<a class="mc-live-btn" href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Open in Maps</a>` : ''}
@@ -64600,7 +64609,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'form' ? '📋 Form' : t === 'formreply' ? '📋 Form answers' : t === 'buttons' ? '💬 Quick question' : t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Daily reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'moneydrop' ? '🧧 Money drop' : t === 'moneyrequest' ? '💰 Money request' : t === 'cartrecovery' ? '🛍️ Your cart is waiting' : t === 'shopcampaign' ? '📣 News from a shop' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
+  return t === 'form' ? 'Form' : t === 'formreply' ? 'Form answers' : t === 'buttons' ? 'Quick question' : t === 'poll' ? 'Poll' : t === 'event' ? 'Event' : t === 'location' ? 'Location' : t === 'livelocation' ? 'Live location' : t === 'sticker' ? 'Sticker' : t === 'contact' ? 'Contact' : t === 'invoice' ? 'Invoice' : t === 'quote' ? 'Quote' : t === 'order' ? 'Order' : t === 'product' ? 'Product' : t === 'split' ? 'Split request' : t === 'pool' ? 'Money pool' : t === 'offer' ? 'Offer' : t === 'storyreply' ? 'Daily reply' : t === 'gift' ? 'Gift card' : t === 'digital' ? 'Download' : t === 'money' ? 'Money' : t === 'moneydrop' ? 'Money drop' : t === 'moneyrequest' ? 'Money request' : t === 'cartrecovery' ? 'Your cart is waiting' : t === 'shopcampaign' ? 'News from a shop' : t === 'doc' ? 'Document' : t === 'call' ? 'Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -66299,8 +66308,8 @@ let _pfGeo = undefined;
 function acRenderPfGeo() {
   const st = document.getElementById('pfGeoState'); const btn = document.getElementById('pfGeoBtn'); if (!st) return;
   const has = (_pfGeo && _pfGeo.lat != null) || (_pfGeo === undefined && S.user?.lat != null);
-  if (has) { st.innerHTML = '✓ Location set <button type="button" class="ac-link-btn" onclick="acPfClearLocation()">Remove</button>'; if (btn) btn.textContent = '📍 Update location'; }
-  else { st.textContent = ''; if (btn) btn.textContent = '📍 Use my current location'; }
+  if (has) { st.innerHTML = '✓ Location set <button type="button" class="ac-link-btn" onclick="acPfClearLocation()">Remove</button>'; if (btn) btn.textContent = 'Update location'; }
+  else { st.textContent = ''; if (btn) btn.textContent = 'Use my current location'; }
 }
 function acPfUseLocation() {
   if (!navigator.geolocation) { showNotif('Location isn’t available on this device.'); return; }
@@ -70044,7 +70053,7 @@ async function acDecryptThread(peerId, messages) {
   if (!secret.length) return;
   for (const m of secret) {
     const text = await acE2eeOpen(peerId, m.cipher, m.iv);
-    m.body = text == null ? '🔒 This message cannot be opened on this device.' : text;
+    m.body = text == null ? 'This message cannot be opened on this device.' : text;
     m.secretChat = true;
   }
 }
