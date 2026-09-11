@@ -205,7 +205,8 @@ const MEAS = () => {
     addEventListener('DOMContentLoaded', () => {
       const st = document.createElement('style');
       st.textContent = 'body{--ctl-fill:radial-gradient(90% 130% at 50% 128%,rgba(var(--accent-rgb),.11),transparent 72%),rgba(18,18,21,.90)!important}'
-        + '.topbar.tb-solo .tb-brandrow,#notifHead.tb-brandrow{--tb-brand-circle:36px!important}';
+        + '.topbar.tb-solo .tb-brandrow,#notifHead.tb-brandrow{--tb-brand-circle:36px!important}'
+        + '.tb-brand-act.more,.tb-brand-act.plus,.tb-brand-act.prof{background:rgba(18,18,21,.90)!important;border-color:rgba(255,255,255,.05)!important}';
       document.head.appendChild(st);
     });
   });
@@ -270,6 +271,68 @@ const MEAS = () => {
   ok(blueCast(cast.bot) <= 6, 'a resting pill carries NO blue wash at its bottom edge',
     'rgb(' + cast.bot.join(',') + ')');
   ok(blueCast(cast.top) <= 6, '…nor at its top', 'rgb(' + cast.top.join(',') + ')');
+  /* ── 4. the round button IS the founder's reference, in real pixels ─────
+     He sent one close-crop of a dark round ✕ button and asked to match "this exact
+     color and hairline, outline, color and design style and size". Measured off that
+     image at 3x: the disc is 132px = 44.0pt, its fill is a FLAT neutral rgb(24,24,24)
+     and its rim rgb(57,57,57). Atwe's three top-right circles were the last round
+     buttons not on the --ctl-* recipe: fill rgb(16,16,19) and a rim at about 29, a
+     line you cannot see. --ctl-fill is rgba(27,27,27,.90), which over black composites
+     to 24.3 and renders 24; --ctl-edge is --divider #3A3A3C = rgb(58,58,60).
+     MEASURED, NEVER READ FROM THE TOKEN: the old fill was a gradient, so a rule
+     anywhere could paint one again and a computed-style check would still pass. */
+  const disc = await p3.evaluate(() => {
+    const root = document.querySelector('.topbar .tb-brandrow:not([hidden])');
+    const el = [...(root ? root.querySelectorAll('.tb-brand-act') : [])]
+      .filter((e) => e.getBoundingClientRect().width > 0 && !e.classList.contains('prof'))[0];
+    if (!el) return null;
+    const q = el.getBoundingClientRect();
+    return { cx: q.left + q.width / 2, cy: q.top + q.height / 2, left: q.left, w: q.width };
+  });
+  if (!disc) { ok(false, 'a top-right round button is on screen'); }
+  else {
+    const shot2 = await p3.screenshot();
+    const px = await p3.evaluate(async ({ d, data }) => {
+      const img = new Image(); img.src = 'data:image/png;base64,' + data; await img.decode();
+      const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+      const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0);
+      const dpr = img.width / window.innerWidth;
+      const at = (x, y) => { const v = ctx.getImageData(Math.round(x * dpr), Math.round(y * dpr), 1, 1).data;
+        return [v[0], v[1], v[2]]; };
+      /* the fill: inside the disc but off the glyph. The + is 0.52 of the diameter, so
+         its half-extent is 0.26w; a point 0.30w out on BOTH axes is past the glyph box
+         and still 0.42w from the centre, i.e. inside a 0.5w radius. */
+      const fill = at(d.cx + d.w * 0.30, d.cy + d.w * 0.30);
+      /* the rim: the left edge at the vertical midpoint, where the circle's tangent is
+         vertical and the hairline is at its cleanest. Take the BRIGHTEST pixel across a
+         few px either side — a 1px border at dpr 2 antialiases over 2-3 device pixels
+         and reading one fixed coordinate would sample the blend, not the line. */
+      let rim = [0, 0, 0];
+      for (let o = -2; o <= 3; o += 0.5) { const c = at(d.left + o, d.cy);
+        if (c[0] + c[1] + c[2] > rim[0] + rim[1] + rim[2]) rim = c; }
+      return { fill, rim };
+    }, { d: disc, data: shot2.toString('base64') });
+    const cast = (c) => Math.max(...c) - Math.min(...c);
+    ok(near(px.fill[0], 24, 3) && cast(px.fill) <= 3,
+      'the round button’s fill is the reference’s flat neutral 24', 'rgb(' + px.fill.join(',') + ')');
+    ok(near(px.rim[0], 58, 6) && px.rim[0] - px.fill[0] >= 18,
+      '…and its hairline is the app’s own --divider, a line you can see', 'rgb(' + px.rim.join(',') + ')');
+    /* THE HAIRLINE MUST BE A REAL BORDER, NOT THE RECIPE'S INSET SHADOW. `.prof` holds
+       an avatar at width:100%; an inset shadow paints on the padding box and the picture
+       covers it, so the profile circle alone would lose its rim. */
+    const prof = await p3.evaluate(() => {
+      const e = [...document.querySelectorAll('.topbar .tb-brandrow:not([hidden]) .tb-brand-act.prof')]
+        .filter((x) => x.getBoundingClientRect().width > 0)[0];
+      if (!e) return null;
+      const cs = getComputedStyle(e);
+      return { bw: parseFloat(cs.borderTopWidth), box: cs.boxSizing, w: e.getBoundingClientRect().width };
+    });
+    ok(prof && prof.bw >= 0.9 && prof.box === 'border-box',
+      'the profile circle keeps a REAL border, so its avatar cannot cover the rim',
+      prof ? prof.bw + 'px ' + prof.box : 'not found');
+    ok(prof && near(prof.w, 44, 1), '…and a border costs it no size', prof ? prof.w : '-');
+  }
+
   await p3.close();
 
   await b.close();

@@ -126,8 +126,21 @@ const ROWS = [
         `${T} it is see-through only as far as the nav bar is (${rest[0] ? rest[0].bg : '-'})`);
       chk(rest.every((t) => /blur/.test(t.bd || '')),
         `${T} and frosted, so what shows through is soft (${rest[0] ? rest[0].bd : '-'})`);
-      chk(rest.every((t) => /gradient/.test(t.img || '')),
-        `${T} with the login button's own wash lifting its lower edge`);
+      /* NO ACCENT WASH — AND THIS CHECK USED TO ASSERT THE OPPOSITE. The pill was built
+         from `.auth-btn`, whose lower edge is lifted by a soft accent radial. On a row of
+         grey pills the founder read that as a blue shadow on a grey button and asked for
+         it gone from every button in the app (build 1858). This probe went on demanding
+         the gradient and was RED on correct code, which is the sixth time in this repo a
+         probe has outlived a decision it did not know about. It now asserts what was
+         actually wanted, and it asserts the OUTCOME rather than the token: no background
+         image at all, and a fill whose three channels are neutral — so a grey gradient
+         re-added later would still pass the first check and fail nothing, while any
+         coloured one fails the second. */
+      const chan = (c) => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c || ''); return m ? [+m[1], +m[2], +m[3]] : null; };
+      chk(rest.every((t) => !t.img || t.img === 'none'),
+        `${T} no accent wash under a resting pill (${rest[0] ? rest[0].img : '-'})`);
+      chk(rest.every((t) => { const c = chan(t.bg); return c && Math.max(...c) - Math.min(...c) <= 3; }),
+        `${T} ...and its grey is neutral, with no blue in it (${rest[0] ? rest[0].bg : '-'})`);
       chk(rest.every((t) => t.fg === r.ink),
         `${T} a resting label is full strength, not dimmed (${rest[0] ? rest[0].fg : '-'} for ${r.ink})`);
       if (r.addBg !== null) chk(r.addBg === 'rgba(0, 0, 0, 0)', `${T} "Add" stays a bare word, not a pill (${r.addBg})`);
