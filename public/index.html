@@ -2826,7 +2826,7 @@ body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
    two right-side circles (decoupled so the circles can be a bit bigger than the logo).
    The top padding subtracts half the circle-vs-logo difference so the LOGO's top inset
    still equals the side gutter (18px) even though the taller circles set the row height. */
-.topbar.tb-solo .tb-brandrow{--tb-brand-h:22px;--tb-brand-icon:28px;--tb-brand-circle:36px;/* owner: logo lockup a touch bigger (h22, mark26); trio circles 36px; right edge pinned to --feed-gutter */display:flex;align-items:center;justify-content:space-between;padding:calc(var(--feed-gutter,16px) - (var(--tb-brand-circle) - var(--tb-brand-h)) / 2) var(--feed-gutter,16px) 12px;}
+.topbar.tb-solo .tb-brandrow{--tb-brand-h:22px;--tb-brand-icon:28px;--tb-brand-circle:44px;/* owner: logo lockup a touch bigger (h22, mark26); trio circles 36px; right edge pinned to --feed-gutter */display:flex;align-items:center;justify-content:space-between;padding:calc(var(--feed-gutter,16px) - (var(--tb-brand-circle) - var(--tb-brand-h)) / 2) var(--feed-gutter,16px) 12px;}
 .topbar.tb-solo .tb-icoset{display:none;}   /* the ≡ + ＋ moved into the brand row above */
 .tb-brand{display:flex;align-items:center;gap:calc(var(--tb-brand-h) * 0.48);background:none;border:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;flex-shrink:0;}
 .tb-brand img{display:block;width:auto;}
@@ -2966,7 +2966,11 @@ body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand
    so at 44 it lands on the control itself and steals nothing).
    The height is expressed as padding because the line box is pinned at 18px just below
    — 18 + 13 + 13 = 44 — so a badge or an icon inside a tab can never change it. */
-:root{--tabpill-py:13px;--tabpill-px:17px;--tabpill-gap:10px;--tabpill-below:13px;}
+:root{--tabpill-py:13px;--tabpill-px:16px;--tabpill-gap:10px;--tabpill-below:13px;}
+/* THE SIDE PADDING IS 16, NOT APPLE'S MEASURED 16.7 — the founder asked for the app's
+   own number back after seeing both. It was never the crowded half: 16 against 16.7 is
+   two thirds of a point, invisible, and it is the value every other inset in the app
+   already uses. The HEIGHT and the GAP are what carry the Apple reference. */
 .topbar .tb-feedtab,.ntf-tab{line-height:18px;
   /* …AND THE PILL IS A FLEX BOX, which is what actually makes that pin hold. A pinned
      line-height still loses to an inline child that sits OUTSIDE the line box: the Beam
@@ -5030,12 +5034,17 @@ body{
      DECLARED ON `body`, NEVER `:root`: a custom property whose value references another
      resolves where it is DECLARED, so on :root these would freeze at the Black theme's
      values and Light would never flip. Same trap the --tab-* set documents. */
-  --ctl-fill:    radial-gradient(90% 130% at 50% 128%,
-                   rgba(var(--accent-rgb),.11), transparent 72%),
-                 rgba(18,18,21,.90);
-  --ctl-fill-hv: radial-gradient(90% 130% at 50% 128%,
-                   rgba(var(--accent-rgb),.14), transparent 72%),
-                 rgba(34,34,38,.92);
+  /* NO BLUE WASH. The recipe used to carry a soft accent radial centred just below the
+     control, so every button in the app went faintly blue toward its lower edge — it was
+     copied from `.auth-btn`, where it reads as a lift on a page with nothing else on it.
+     On a row of tab pills over a photo the founder saw it for what it is: a coloured
+     shadow on a grey button. Measured off their own screenshot, a pill read [16,16,18] at
+     the top and [16,23,33] at the bottom, i.e. blue 33 against red 16. The fill is the
+     flat glass now; the rim, the top highlight and the BLACK drop shadow still give the
+     3-D, so nothing else about the button changes. --accent stays identity-only, which is
+     the colour law's own sentence. */
+  --ctl-fill:    rgba(18,18,21,.90);
+  --ctl-fill-hv: rgba(34,34,38,.92);
   --ctl-ink:     var(--t1);
   --ctl-edge:    var(--divider);
   --ctl-hi:      rgba(255,255,255,.09);
@@ -5074,12 +5083,8 @@ body.light{
   /* Mirrored, not copied: .06 WHITE over a white page is nothing at all, so Light takes
      the same idea from the other side — a whisper of black, again flattened to a solid
      for the same reason as Black. */
-  --ctl-fill:    radial-gradient(90% 130% at 50% 128%,
-                   rgba(var(--accent-rgb),.09), transparent 72%),
-                 rgba(242,242,245,.90);
-  --ctl-fill-hv: radial-gradient(90% 130% at 50% 128%,
-                   rgba(var(--accent-rgb),.12), transparent 72%),
-                 rgba(232,232,237,.92);
+  --ctl-fill:    rgba(242,242,245,.90);
+  --ctl-fill-hv: rgba(232,232,237,.92);
   --ctl-hi:      rgba(255,255,255,.7);
   --ctl-shade:   rgba(0,0,0,.10);
   --tab-fill:    var(--ctl-fill);
@@ -13028,7 +13033,7 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
    scrolling list inside an overflow:hidden card, so sticky does no work here anyway.
    (It used to also clamp the retract-on-scroll, which is gone — that reflow was the
    page's choppiness; see acNotifHeadSync for the frame measurements.) */
-#notifHead.tb-brandrow{--tb-brand-h:22px;--tb-brand-icon:28px;--tb-brand-circle:36px;
+#notifHead.tb-brandrow{--tb-brand-h:22px;--tb-brand-icon:28px;--tb-brand-circle:44px;
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px var(--feed-gutter) 12px;border-bottom:none;background:var(--bg);
   position:relative;z-index:3;
@@ -22899,7 +22904,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1857'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1858'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
