@@ -972,6 +972,94 @@ async function settleInvoiceToIssuer(invoiceId) {
       { ref: `inv${invoiceId}`, what: `invoice #${invoiceId}`, note: 'Invoice fee' });
   } catch (e) { console.error('settleInvoiceToIssuer', invoiceId, e); }
 }
+
+/* ── The other four card-paid flows ────────────────────────────────────────
+   The invoice gap above was not alone. The webhook has six money branches and
+   only two of them paid the member: an ORDER and (since build 1860) an INVOICE.
+   A card-paid TIP, EVENT TICKET, PAID NEWSLETTER and CREATOR SUBSCRIPTION each
+   charged the buyer, granted the entitlement, told the earner it had happened,
+   and moved no money at all. It sat in Atwe's own Stripe account.
+
+   WHY IT LOOKED FINE: each of these has a demo branch that credits nothing and
+   is CORRECT (with no card processor nobody was charged, so crediting would
+   mint money), and the tip additionally has a balance branch that is also
+   correct. Only the middle branch, the card one, was wrong — and it is the one
+   a member hits whenever their wallet is empty.
+
+   WHAT STOPS A DOUBLE PAYMENT. The webhook claims every Stripe event.id in
+   processed_stripe_events before doing anything, and Stripe delivers
+   at-least-once, so a REDELIVERY of one event can never reach here twice. On
+   top of that, the ticket and the newsletter carry their own natural guard: the
+   upsert only reports a row when it actually flipped an unpaid row to paid, so
+   even a DIFFERENT event pointing at an already-paid row pays nobody. A creator
+   subscription deliberately has no such guard, because each monthly renewal is
+   a genuinely new payment and must pay again; there the event claim is the
+   whole mechanism, which is correct.
+
+   THE AMOUNT COMES FROM STRIPE, NOT FROM OUR OWN PRICE. `amount_total` /
+   `amount_paid` is what the customer was actually charged, so it already
+   accounts for a discount, a currency or a proration that our stored price
+   knows nothing about. Our price is only the fallback.
+
+   WHO PAYS ATWE'S FEE, and why each way (these are business decisions, and the
+   founder can reverse any of them by editing one call):
+     * a TIP takes NO fee. Not a judgement call: the balance path four hundred
+       lines down moves a tip with walletTransfer and charges nothing, so a fee
+       here would mean the same $10 paid out differently depending on whether
+       the sender's wallet happened to be full. It is also what Venmo, Cash App
+       and Ko-fi do with a gift between two people.
+     * a TICKET, a NEWSLETTER and a SUBSCRIPTION all take the normal fee. Each
+       is a sale, and each is what an order already is. Atwe's 1% sits far under
+       Eventbrite, Substack's 10% and Patreon's 8-12%.
+
+   EVERY FEE REF IS UNIQUE TO ITS PAYMENT. refundPlatformFee hands a fee back by
+   SUMMING company_revenue rows matching (source 'fee', ref_id, payer_id), so two
+   buyers of the same event, or two months of one subscription, must never share
+   a ref or an unrelated refund would give back both. */
+
+// A tip: the whole amount, no fee. `tipId` is only for the ledger note.
+async function settleTipToRecipient(toId, amountCents, tipId) {
+  try {
+    if (!(amountCents > 0)) return;
+    await walletCreditStandalone(toId, amountCents, 'receive', tipId ? `Tip #${tipId}` : 'Tip');
+  } catch (e) { console.error('settleTipToRecipient', toId, e); }
+}
+
+// An event ticket: the host is paid, less Atwe's fee.
+async function settleEventTicketToHost(eventId, buyerId, amountCents) {
+  try {
+    if (!(amountCents > 0)) return;
+    const host = (await db.query('SELECT host_id FROM events WHERE id = $1', [eventId])).rows[0];
+    if (!host || !host.host_id || host.host_id === buyerId) return; // a host's own ticket is free
+    await walletCreditStandalone(host.host_id, amountCents, 'receive', `Ticket for event #${eventId}`);
+    await chargePlatformFee(host.host_id, eventId, amountCents,
+      { ref: `evt${eventId}-${buyerId}`, what: `a ticket for event #${eventId}`, note: 'Ticket fee' });
+  } catch (e) { console.error('settleEventTicketToHost', eventId, e); }
+}
+
+// A paid newsletter subscription: the author is paid, less Atwe's fee.
+async function settleNewsletterToAuthor(newsletterId, subscriberId, amountCents) {
+  try {
+    if (!(amountCents > 0)) return;
+    const n = (await db.query('SELECT owner_id FROM newsletters WHERE id = $1', [newsletterId])).rows[0];
+    if (!n || !n.owner_id || n.owner_id === subscriberId) return;
+    await walletCreditStandalone(n.owner_id, amountCents, 'receive', `Newsletter #${newsletterId}`);
+    await chargePlatformFee(n.owner_id, newsletterId, amountCents,
+      { ref: `nl${newsletterId}-${subscriberId}`, what: `newsletter #${newsletterId}`, note: 'Newsletter fee' });
+  } catch (e) { console.error('settleNewsletterToAuthor', newsletterId, e); }
+}
+
+// A creator subscription: the creator is paid, less Atwe's fee. Called on the
+// FIRST payment and again on every monthly renewal, so the ref carries the
+// Stripe event id — the one value that is unique to each individual charge.
+async function settleCreatorSubToCreator(creatorId, subscriberId, amountCents, payRef) {
+  try {
+    if (!(amountCents > 0) || !creatorId || creatorId === subscriberId) return;
+    await walletCreditStandalone(creatorId, amountCents, 'receive', `Subscription from #${subscriberId}`);
+    await chargePlatformFee(creatorId, creatorId, amountCents,
+      { ref: `csub${creatorId}-${subscriberId}-${payRef || 'x'}`, what: 'a subscription payment', note: 'Subscription fee' });
+  } catch (e) { console.error('settleCreatorSubToCreator', creatorId, e); }
+}
 const CONTROL_KEYS = FEATURE_CONTROLS.map((f) => f.key);
 let _featureControls = {}; // { key: false } = OFF
 function controlEnabled(key) { return _featureControls[key] !== false; }
@@ -1285,19 +1373,40 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'tip') {
       const s = event.data.object, m = s.metadata || {};
       const from = parseInt(m.user_id, 10), to = parseInt(m.to_id, 10), amt = parseInt(m.amount_cents, 10);
-      if (Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(amt)) { await recordTip(from, to, amt, m.tip_message || null); moneyMoved = true; }
+      if (Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(amt)) {
+        const tipId = await recordTip(from, to, amt, m.tip_message || null);
+        await settleTipToRecipient(to, Number(s.amount_total) || amt, tipId);
+        moneyMoved = true;
+      }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'event_ticket') {
       const s = event.data.object, m = s.metadata || {};
       const uid = parseInt(m.user_id, 10), eid = parseInt(m.event_id, 10);
       if (Number.isInteger(uid) && Number.isInteger(eid)) {
-        await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid, paid_cents) VALUES ($1,$2,'going',true,$3) ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', paid = true, paid_cents = $3`, [eid, uid, Number(s.amount_total) || null]);
+        const paidCents = Number(s.amount_total) || 0;
+        // The WHERE on the conflict is the guard: an RSVP that is already paid
+        // returns no row, so a second event pointing at it pays the host nothing.
+        const got = await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid, paid_cents) VALUES ($1,$2,'going',true,$3)
+          ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', paid = true, paid_cents = $3
+          WHERE event_rsvps.paid IS NOT TRUE RETURNING user_id`, [eid, uid, paidCents || null]);
+        if (got.rowCount) {
+          await settleEventTicketToHost(eid, uid, paidCents);
+          moneyMoved = true;
+        }
         notify((await db.query('SELECT host_id FROM events WHERE id = $1', [eid])).rows[0]?.host_id, uid, 'event_rsvp', null, null, null, null, eid);
       }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'newsletter_sub') {
       const s = event.data.object, m = s.metadata || {};
       const uid = parseInt(m.user_id, 10), nid = parseInt(m.newsletter_id, 10);
       const tid = parseInt(m.tier_id, 10);
-      if (Number.isInteger(uid) && Number.isInteger(nid)) await db.query(`INSERT INTO newsletter_subs (newsletter_id, user_id, paid, tier_id) VALUES ($1,$2,true,$3) ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true, tier_id = COALESCE($3, newsletter_subs.tier_id)`, [nid, uid, Number.isInteger(tid) ? tid : null]);
+      if (Number.isInteger(uid) && Number.isInteger(nid)) {
+        const got = await db.query(`INSERT INTO newsletter_subs (newsletter_id, user_id, paid, tier_id) VALUES ($1,$2,true,$3)
+          ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true, tier_id = COALESCE($3, newsletter_subs.tier_id)
+          WHERE newsletter_subs.paid IS NOT TRUE RETURNING user_id`, [nid, uid, Number.isInteger(tid) ? tid : null]);
+        if (got.rowCount) {
+          await settleNewsletterToAuthor(nid, uid, Number(s.amount_total) || 0);
+          moneyMoved = true;
+        }
+      }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'invoice') {
       const s = event.data.object, m = s.metadata || {};
       const invId = parseInt(m.invoice_id, 10);
@@ -1333,7 +1442,11 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const sub = parseInt(m.user_id, 10), creator = parseInt(m.creator_id, 10);
       const tier = parseInt(m.tier_id, 10);
       const stripeSubId = typeof s.subscription === 'string' ? s.subscription : (s.subscription && s.subscription.id) || null;
-      if (Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null, stripeSubId);
+      if (Number.isInteger(sub) && Number.isInteger(creator)) {
+        await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null, stripeSubId);
+        await settleCreatorSubToCreator(creator, sub, Number(s.amount_total) || 0, event.id);
+        moneyMoved = true;
+      }
     } else if (event.type && event.type.startsWith('charge.dispute.')) {
       // A cardholder disputed a charge with their bank. Record it and start the
       // clock — missing the response deadline is an automatic loss.
@@ -1345,7 +1458,11 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const sub = parseInt(m.user_id, 10), creator = parseInt(m.creator_id, 10);
       const tier = parseInt(m.tier_id, 10);
       const stripeSubId = typeof inv.subscription === 'string' ? inv.subscription : (inv.subscription && inv.subscription.id) || null;
-      if (m.type === 'creator_sub' && Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null, stripeSubId);
+      if (m.type === 'creator_sub' && Number.isInteger(sub) && Number.isInteger(creator)) {
+        await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null, stripeSubId);
+        await settleCreatorSubToCreator(creator, sub, Number(inv.amount_paid) || 0, event.id);
+        moneyMoved = true;
+      }
     } else if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
@@ -28472,8 +28589,9 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
    TIPS  —  support a creator / business
 ═══════════════════════════════════════════════ */
 async function recordTip(fromId, toId, amountCents, message) {
-  await db.query('INSERT INTO tips (from_id, to_id, amount_cents, message) VALUES ($1,$2,$3,$4)', [fromId, toId, amountCents, message || null]);
+  const r = await db.query('INSERT INTO tips (from_id, to_id, amount_cents, message) VALUES ($1,$2,$3,$4) RETURNING id', [fromId, toId, amountCents, message || null]);
   notify(toId, fromId, 'tip');
+  return r.rows[0] ? r.rows[0].id : null;
 }
 app.post('/api/tips/:userId', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'tip'), async (req, res) => {
   const to = routeId(req.params.userId);
