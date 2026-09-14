@@ -588,6 +588,37 @@ letter: no em dash, no emoji, no vendor named behind Atwe AI, the two dates kept
 Card described as coming and the sales advance as switched on market by market. When the
 product moves, re-issue it (edit the `.md`, run the tool) rather than patching a paragraph.
 
+**THE OFFICIAL SLOGAN IS `Atwe. Where you and your business live.`** (chosen 12 Sep 2026 from
+the founder's own direction, *"ATWE. A ALL IN ONE PLATFORM. WHERE YOU AND YOUR BUSINESS LIVES
+ONLINE. (It's like your second home...)"*, by a four-writer, three-judge panel). Two full
+stops; the one after Atwe is part of the line. The short form `Where you and your business
+live.` is allowed only where the name is already visible beside it, which is why the
+document's cover carries it under the wordmark. Never append "online" or "in one place";
+never an exclamation mark. Section 3 of the document is the rule book and carries three
+runners-up, each kept for a specific job (a sub-line under a photograph, a two-beat line for
+film, a welcome line). The founder can swap the line;
+nobody else may.
+
+**The final version (12 Sep 2026) is persuasion first, inventory second.** It opens with a
+flow the product really does (a quote in the chat becomes the invoice with a pay button; a
+PROTECTED order is what is held, an invoice never is), then where the company stands, the
+slogan, the positioning, the audiences, what to say in order and what never to say, the
+comparison table (for the agency's orientation only, never comparative advertising), how
+Atwe behaves and speaks, and only then the complete reference. Six independent critics
+(strategist, fact checker, editor, completeness, first-time reader, claims and legal) read
+v1; their 126 findings are what the final version answers, and three refuters read the
+final against the catalogue before it shipped. Lessons that must survive: **identity
+verification is staff-granted, with no automated document check**; **the wallet is not a
+bank account**; **the till is not a card reader**; **Atwe is not the courier**; **only a
+protected order, a booking deposit or a courier fee is held**; the assistant **"is not
+allowed to act on a stranger's words"**, never "cannot be hacked".
+
+`node tools/atwe-doc.js /tmp/draft.md` renders a DRAFT beside itself instead of into
+`docs/`, so a version can be checked before it replaces the real one; and the renderer
+REFUSES any source carrying a long dash, an emoji, a vendor name or "Atwe AI" spelled
+another way, printing the line, so the brand rules are enforced at build time rather than
+trusted.
+
 ## What this is
 
 **Atwe AI** — a single-page web chat application: an "intelligent assistant for
