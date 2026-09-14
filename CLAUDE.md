@@ -2898,6 +2898,69 @@ code already proved that address. So `signupflow.js` also reads `server.js` and 
 every one of the six routes to mention `mailCanDeliver`. That check does not depend on
 account state, and it is what stops the SEVENTH code route shipping with the same lie.
 
+### WHAT A SCREEN LOOKS LIKE WHEN IT FAILS — `scratchpad/errstate.js` · `scratchpad/loadstate.js`
+
+Every probe in this repo drove screens that WORK. `emptystates.js` covers 38 screens
+that are legitimately empty. Nobody had ever failed a surface's own request and looked
+at what a person is left with. Driven with a 500, six of eight main surfaces were
+wrong, and one of them was wrong in a way nothing could have caught by reading code.
+
+| surface | what a person got |
+|---|---|
+| Home, Notifications | the designed `acErr` state, with **Try again** |
+| Orders, Marketplace, Wallet, Saved | **the server's own error string, raw** — the marketplace printed the single word `boom` — and no retry |
+| Jobs | "Could not load jobs." and no retry |
+| **Beam** | **nothing at all, for ever** |
+
+**BEAM HAD TWO CAUSES AND BOTH ARE WORTH KNOWING.** `acLoadChats`'s error branch was
+gated on `firstLoad`, and **a boot restore into Beam is the ONLY call on that path and
+it passes `{silent:true}`** — so `firstLoad` was false and a failed cold load showed no
+rows, no message and nothing to press. `silent` means *"do not flash a skeleton over
+rows somebody is reading"*, never *"say nothing when it fails"*; the branch now asks the
+DOM whether there is anything to preserve, which keeps the warm-refresh behaviour byte
+for byte and fixes the blank one.
+
+**And even once that fired, the next render painted the shimmer straight back over it.**
+`acRenderChats`'s guard read `if (!el.querySelector('.ac-skel')) el.innerHTML =
+acSkelRows()` — and **`.ac-skel` HAS NEVER EXISTED IN THIS APP**; `acSkelRows` emits
+`.skel-row`. So the test was always true: the skeleton was rebuilt on every single
+render (restarting its shimmer each time) and it overwrote the error state, leaving Beam
+loading for ever with no way out. **A guard written against a class that does not exist
+is a guard that is always open** — grep the markup for a class before testing for it.
+
+**A RETRY YOU CANNOT SEE IS NOT A RECOVERABLE ERROR.** Proving the fix found one more:
+on the Wallet the Try again button landed at **y 879 on an 844px phone**, because
+`acErr` always drew a 168px satellite and the wallet's history panel starts low inside a
+sheet. It sizes the illustration to the room the container really has now (168 / 96 /
+none), measured BEFORE the innerHTML is written, while the box is still real.
+
+**A FAILED REFRESH MUST CHANGE NOTHING ON SCREEN, and the guard skips that case BY NAME
+rather than grading it.** Replacing a list somebody is reading with an error screen
+because a background fetch blipped is worse than saying nothing.
+
+**The probe's own worst bug is the recorded one all over again: it filtered by WORDING.**
+Looking for "could not" / "failed" / "went wrong", it reported *"no error state of any
+kind"* on six surfaces that were in fact rendering `boom` — the state was right there and
+the check could not see it because it only recognised the words it expected. Collect what
+is on screen, then grade it.
+
+**And the loading half — `loadstate.js`.** The page skeleton (`.skel`) sat on `--s2` and
+measured **1.14:1 on Black, 1.09:1 on Light**. The comment above it said `--s2` *"is
+already the step up and is correct"*, which was true on Black and **flatly wrong on
+Light, where `--s1` and `--s2` are BOTH `#F5F5F7`** — on a card there is no step at all.
+It has its own token now, **`--skel-fill`** (1.23 / 1.19), set against the founder's own
+`--post-skel` rather than to a number somebody liked: that one measures 1.24 / 1.17
+against its card, so a loading list now reads at the same strength as the loading post
+they approved. **`--s2` was deliberately not touched** — it is every input and half the
+cards in the app, and dragging it to tune a loading state would move all of them.
+
+**Both probes must STALL the route, not slow it.** A surface that answers in 10ms locally
+is never in its loading state long enough to photograph, and a check written without that
+passes on a screen nobody can see. And `loadstate` had to learn to ignore **layout
+containers painted the page colour** (`.skel-post`, `.skel-row` carry the page fill so the
+rising feed can cover the tab menu): measuring one reports a meaningless 1:1 on Black and
+21:1 on Light, which is exactly what its first run printed.
+
 ### THE JOURNEYS A PERSON HAS TO FINISH — `scratchpad/journeys.js`
 
 `signupflow.js` exists because nobody had ever asked "can a stranger join?". `journeys.js`

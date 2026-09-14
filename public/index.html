@@ -352,6 +352,15 @@ a{text-decoration:none;color:inherit;}
      pill the same colour, so loading -> loaded no longer changes tone. Literal per theme,
      for the same var() reason as --post-pill above. */
   --post-skel: #000000;
+  /* The PAGE skeleton (the chat list, the profile, notifications, orders) is a
+     different thing from --post-skel above and has its own token so --s2 — which is
+     every input and half the cards in the app — is never dragged around to tune a
+     loading state. It sat on --s2 and MEASURED 1.14:1 on black and 1.09:1 on white,
+     i.e. WEAKER than the post skeleton the founder settled on (1.24:1 / 1.17:1 against
+     its own card). The value is set so a loading list reads at the same strength as
+     the loading post the founder approved, rather than to a number somebody liked.
+     Literal per theme, for the same var() reason as --post-pill above. */
+  --skel-fill: #1C1C1E;
 
   /* Status — functional signals only, never theme decoration */
   --green: #88FF00; --green-edge: #A6FF4D; --green-tint: #F1FFDC; --on-green: #163300; --green-ink: var(--on-green);
@@ -4619,6 +4628,7 @@ body.light #loginOverlay, body.light #signupOverlay{
   color-scheme:dark;
   --t1:#FFFFFF; --t2:#8E8E93; --t3:#6E6E73; --t4:#48484A;
   --s1:#0B0B0D; --s2:#141416; --s3:#1C1C1E; --s4:#242426;
+  --skel-fill:#1C1C1E;
   --b1:rgba(255,255,255,0.05); --b2:rgba(255,255,255,0.08);
   --divider:#3A3A3C;
   --primary:#FFFFFF; --on-primary:#1D1D1F;
@@ -5142,6 +5152,7 @@ body.light{
      never changes tone — but taken DOWN from the card rather than up, for the reason
      above. */
   --post-skel:#DFE4EA;
+  --skel-fill:#e6ecf0;   /* 1.19:1 on the white page — the Light mirror of the above */
   --verify:#5b7083;   /* light theme: slate silver — the seal is never blue */
   --rose:#007AFF;--rose-bg:rgba(0,122,255,.1);--rose-bg-2:rgba(0,122,255,.18);--rose-line:rgba(0,122,255,.4);
   --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
@@ -12644,10 +12655,13 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 .ai-clarify-opts{display:flex;flex-wrap:wrap;gap:8px;}
 .ai-clarify-opt{font-size:14px;}
 /* Skeleton loaders (replace bare loading text) */
-.skel{position:relative;overflow:hidden;background:var(--s2);border-radius:8px;}
+.skel{position:relative;overflow:hidden;background:var(--skel-fill);border-radius:8px;}
 /* Inside a post card the placeholder needs its own grey — see --post-skel. Everywhere
-   else (the chat list, the profile, notifications) a skeleton lies on the PAGE, where
-   --s2 is already the step up and is correct. */
+   else (the chat list, the profile, notifications, orders) a skeleton lies on the PAGE
+   and uses --skel-fill. This comment used to say --s2 "is already the step up and is
+   correct", which was true on Black and simply WRONG on Light, where --s1 and --s2 are
+   BOTH #F5F5F7 — so on a card there was no step at all and the bar measured 1.00:1.
+   Measure a loading state on both themes before deciding it is fine. */
 .ac-post .skel,.ac-postfocus .skel{background:var(--post-skel);}
 .skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.05),transparent);animation:shimmer 1.25s infinite;}
@@ -22974,7 +22988,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1861'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1862'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -31750,8 +31764,18 @@ function acErr(el, retry) {
   // satellite immediately, then ASK the network (never trust navigator.onLine)
   // and switch to the offline wording if we genuinely cannot reach anything.
   const id = 'err' + Math.random().toString(36).slice(2, 9);
+  /* SIZE THE PICTURE TO THE ROOM, or the one control that matters ends up off the
+     bottom of the screen. Measured on the Wallet, whose history panel starts low in a
+     sheet: a fixed 168px satellite put "Try again" at y=879 on an 844px phone. A
+     retry you cannot see is not a recoverable error state. Measure BEFORE writing,
+     while the container still has its real box. */
+  let art = 168;
+  try {
+    const room = window.innerHeight - el.getBoundingClientRect().top;
+    art = room >= 420 ? 168 : room >= 280 ? 96 : 0;
+  } catch (e) {}
   el.innerHTML = `<div class="ac-err" id="${id}">
-    ${acSatelliteHtml(168) || '<div class="ac-err-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>'}
+    ${(art ? acSatelliteHtml(art) : '') || (art ? '<div class="ac-err-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>' : '')}
     <div class="ac-err-title">Something went wrong</div>
     <div class="ac-err-sub">We couldn\u2019t load this right now. Check your connection and try again.</div>
     ${retry ? `<button class="ac-err-btn" onclick="${retry}">Try again</button>` : ''}
@@ -34509,7 +34533,7 @@ async function acRefreshJobList() {
     cur.innerHTML = AC._jobs.length ? AC._jobs.map(acJobCard).join('')
       : (jq ? acAskAiEmpty(jq, 'No jobs match “' + escHtml(jq) + '”.')
             : (empties[view] || empties.all));
-  } catch { const cur = document.getElementById('acJobsList'); if (cur) cur.innerHTML = '<div class="ac-empty">Could not load jobs.</div>'; }
+  } catch { acErr(document.getElementById('acJobsList'), 'acRefreshJobList()'); }
 }
 const _JOB_BMK = '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
 // Pretty pay: "$60k–$80k/yr" (short, for cards) or "$60,000 – $80,000 / year".
@@ -45199,7 +45223,7 @@ async function acLoadWallet() {
     AC._walletTx = transactions || [];
     AC._walletFilter = 'all';
     acRenderWalletHistory();
-  } catch (e) { const h = document.getElementById('walletHistory'); if (h) h.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your wallet.') + '</div>'; }
+  } catch (e) { acErr(document.getElementById('walletHistory'), 'acLoadWallet()'); }
 }
 // History filter chips (Cash-App-style): All · Received · Sent · Top-ups. Pure
 // client-side over the loaded ledger — "Sent" = any outflow (sends, purchases,
@@ -47174,7 +47198,7 @@ async function acOpenSaved() {
     const { listings } = await API.req('GET', '/api/saved-products');
     b.innerHTML = (listings && listings.length) ? listings.map(acListingCard).join('')
       : acEmpty('heart', 'Nothing saved yet', 'Tap the heart on anything in the marketplace and it waits for you here, and you are told if the price drops.', 'Browse the marketplace', "closeOverlay('savedView');acOpenMarketplace()");
-  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+  } catch (e) { acErr(b, 'acOpenSaved()'); }
 }
 // Does the signed-in user have enough balance to cover an amount (in cents)?
 function acCanPayBalance(cents) { return !!(S.user && (S.user.balanceCents || 0) >= cents); }
@@ -47373,7 +47397,7 @@ async function acLoadMarketplace() {
       : (AC._mktQ ? acAskAiEmpty(AC._mktQ, 'No items match “' + escHtml(AC._mktQ) + '”.')
                   : '<div class="ac-empty" style="padding:26px;">No items match. Try clearing filters.</div>');
     acPadObserve(body); // start tracking impressions for any sponsored cards just rendered
-  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load the marketplace.') + '</div>'; }
+  } catch (e) { acErr(body, 'acLoadMarketplace()'); }
   // Offer to save the current query (≥2 chars) for new-listing alerts.
   const sb = document.getElementById('mktSaveSearch'); if (sb) sb.style.display = (AC._mktQ && AC._mktQ.length >= 2) ? '' : 'none';
   // Recently viewed only shows while browsing (no active search/kind filter).
@@ -49955,7 +49979,7 @@ async function acLoadOrders() {
     const { orders } = await API.req('GET', '/api/orders?scope=' + AC._ordScope + (arch ? '&archived=true' : '') + acOrdQ());
     AC._orders = orders || []; if (!arch) AC._ordFilter = 'all';
     acRenderOrders();
-  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+  } catch (e) { acErr(body, 'acLoadOrders()'); }
 }
 // Status filter chips over the loaded orders (client-side).
 const _ORD_FILTERS = [
@@ -57235,9 +57259,18 @@ async function acLoadChats(opts) {
     AC.groupsList = gRes.groups || [];
     if (callRes) AC.calls = callRes.calls || [];
     AC._chatsEverLoaded = true; // a real fetch has completed → the empty state is now truthful
+    AC._chatsLoadFailed = false;
     acRenderChats();
   } catch (e) {
-    if (firstLoad) acErr(el, 'acLoadChats()');
+    /* `silent` means "do not flash a skeleton over rows somebody is reading", NOT
+       "say nothing when the load fails". A boot restore into Beam is the ONLY call
+       on that path and it passes {silent:true}, so a failed cold load left the whole
+       world permanently blank: no rows, no message, nothing to press. Measured.
+       Asking the DOM what is on screen keeps the warm-refresh behaviour exactly as
+       it was - rows present, nothing happens - while a blank list gets the designed
+       error state with a Try again. */
+    AC._chatsLoadFailed = true;
+    if (!el.querySelector('.ac-item')) acErr(el, 'acLoadChats()');
   }
 }
 // Minimal DOM morph: make `oldN` match `newN` by patching only what differs, so
@@ -57624,7 +57657,19 @@ function acRenderChats() {
     // applies to the plain view (a filtered/searched/archived view can legitimately be
     // empty and should say so).
     const plainView = !q && !unreadOnly && !archivedView && !lockedView && !AC._labelFilter;
-    if (plainView && !AC._chatsEverLoaded) { if (!el.querySelector('.ac-skel')) el.innerHTML = acSkelRows(); return; }
+    if (plainView && !AC._chatsEverLoaded) {
+      /* A FAILED load must not be repainted as a loading one. acLoadChats puts the
+         designed error state here; without this guard the very next acRenderChats (a
+         presence event, a tab render) wrote the shimmer straight back over it and Beam
+         appeared to load for ever with no way to retry. Measured: acErr ran, and the
+         skeleton was on screen a moment later. */
+      if (AC._chatsLoadFailed && el.querySelector('.ac-err')) return;
+      /* .ac-skel HAS NEVER EXISTED - acSkelRows emits .skel-row - so this test was
+         always true and the skeleton was rebuilt on every single render, restarting
+         its shimmer each time. Ask for the class the markup actually uses. */
+      if (!el.querySelector('.skel-row')) el.innerHTML = acSkelRows();
+      return;
+    }
     const empty = lockedView ? acEmpty('block', 'No locked chats', 'A locked chat is hidden from your list until you enter your passcode. Lock one from its ⋯ menu.')
       : archivedView ? acEmpty('bag', 'Nothing archived', 'Archiving tidies a conversation out of your list without deleting anything. It comes back if they write again.')
       : q ? acAskAiEmpty(q, 'No chats match “' + escHtml(q) + '”.')
