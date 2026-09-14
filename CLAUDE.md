@@ -3153,6 +3153,64 @@ have too little on a test account to fling and skip BY NAME rather than silently
 time and animation shape, which have their own guards (`bootspeed`, `settle`, `engsettle`,
 `feedskel`, `smooth`, `notifscroll`).
 
+### THE COUNT WAS A RED HERRING: 242 BLURS COST NOTHING, FIVE COST HALF THE FRAME RATE
+
+The marketplace flung at **p50 33.3ms** where every other surface in the app runs a clean
+16.7 (see the motion pass above). The obvious culprit was there in plain sight: the
+`--ctl-*` control recipe puts a live `backdrop-filter` on every button, and the
+marketplace draws a save heart and a cart button on **every card** — about **242
+composited blur layers on one scrolling surface**, against the four-element allowlist the
+chat thread is held to.
+
+**That diagnosis was wrong, and removing all 242 changed the frame rate NOT AT ALL.**
+Measured twice each way at a 6x CPU throttle:
+
+| | p50 | frames over budget |
+|---|---|---|
+| the 242 per-card blurs removed | **33.3ms** | 27 of 39 |
+| the **FIVE** filter chips (`.ac-jv`) removed | **16.7ms** | 1-2 of 39 |
+
+Five elements were the whole difference, and 242 were free. **`backdrop-filter` cost is
+not proportional to count** — which is the opposite of what every rule-of-thumb about
+composited layers would predict, and the reason this file records the numbers rather than
+a story. The one structural difference is that those chips sit in a nested
+`overflow:auto` box INSIDE the scroller; whatever the mechanism, the measurement is
+reproducible and it is exactly half the frame rate. **Do not invent a third explanation
+to make it tidy.**
+
+**The fix is SCOPED (`#marketplaceView .ac-jv`), on purpose.** `.ac-jv` is one of the
+shared tab-pill families rule 9b governs, used on dozens of screens, and its glass is
+part of the tab design language `tabpills.js` guards — so taking the blur off it globally
+would be a design change nobody asked for. Same shape as the measured ban on live blur
+over a chat thread: allowed only where somebody measured it.
+
+**The 242 per-card blurs came off anyway**, because a composited layer per item is real
+memory on a phone and this one costs nothing to give up (it is what `.ac-vid-dur` and
+`.bundle-tag` already do per post). **It was worth ONE CHANNEL LEVEL OUT OF 255**:
+sampled over a deliberately brutal backdrop (45-degree black-and-white stripes, far
+harsher than any product photo), blur on reads `rgb(26,26,27)` and blur off at the same
+90% fill reads `rgb(27,27,27)`. At that opacity there is almost nothing of the backdrop
+left to blur. **When you add a control drawn once per row, add it to that block too — and
+measure before claiming it was the slow thing.**
+
+### NOBODY COULD UPLOAD A LONG VIDEO: THE 2GB PATH HAD NO CALLER
+
+`/api/uploads/sign`, its **2GB and three-hour ceiling**, and `acUploadFile` were all
+built, working and covered. Nothing in the app ever called them for a video, so every
+member was still refused at the **inline 16MB** limit whatever the server could take —
+the fourth shape of dead feature this repo has recorded (a CSS rule hiding the door, a
+route that lied, a function nothing called, and now a whole path with no caller).
+
+**`cleanMedia` was the second half of it, and fixing it there unlocked every write route
+at once.** It required `data:` and returned `undefined` for anything else, so even a
+route handed a stored bucket URL threw it away. It now falls through to `cleanMediaUrl`,
+which accepts **only an address our own storage issued**, so a member still cannot post a
+link to somewhere else.
+
+**Over the inline limit the trim/caption editor is deliberately SKIPPED.** It reads the
+whole clip into memory, which is exactly what cannot be done with a two-gigabyte file. An
+honest trade, and the reason a long video arrives untouched.
+
 ### NOBODY COULD CREATE AN ACCOUNT: THE WIZARD WAS BURIED UNDER THE LOGIN OVERLAY
 
 The founder's screenshot: **"What's your @username?"** → *"We couldn't find an Atwe
@@ -4672,9 +4730,15 @@ only, not the owner's.
   blocks, non-open feeds, and circle-only posts. Profile update uses a fixed column
   whitelist (no `is_admin`/`plan`/`verified` mass-assignment). `plan` is **not** a
   security boundary (only widens `max_tokens`).
-- **Chat privacy notice (honest — NOT E2EE).** Atwe is server-mediated, so it is
-  **not** end-to-end encrypted (messages are stored server-side so history syncs
-  across devices). Every thread renders a small centred `.msg-enc` chip at the top
+- **Chat privacy notice — and it says BOTH halves now (build 1861).** An ORDINARY
+  chat is server-mediated and **not** end-to-end encrypted (messages are stored
+  server-side so history syncs across devices); a **Secret chat IS** end-to-end
+  encrypted (`users.e2ee_public_key`, the `secret_chats` table, `at_messages.cipher`,
+  `crypto.subtle` in the client). The explainer used to state the first half flatly,
+  which went stale the day Secret chats shipped and left **the one screen built to be
+  honest about privacy understating the product**. Found by fact-checking
+  `docs/ATWE.md` against the code: the document had it right and the app did not.
+  Every thread renders a small centred `.msg-enc` chip at the top
   (`acChatPrivacyNotice`, prepended in `acRenderThread`) — *"Messages are encrypted
   in transit and private to this chat. Tap to learn more."* — that opens
   `#chatPrivacyView` (`acShowChatPrivacy`), a plain-English explainer which
@@ -4784,10 +4848,18 @@ functions, banner-comment sections); routes are in `server.js`.
   group + the profile's `#acProfViews` pill both open `acOpenProfileViewers()` →
   `#viewersList` (teaser count + `acViewerRow` list, a designed empty state with a WHITE
   "Share your profile" CTA, and a private-browsing reciprocity explainer with a "Change
-  privacy settings" button). The detailed list is **structured to gate behind Atwe Pro
-  later** (`PROF_VIEWERS_PRO_GATED`, false at launch — the server always returns the list;
-  flip the flag to show the teaser free + lock the identified list behind
-  `profilePlanAction`). Privacy toggle relabelled **"Private browsing"** on Privacy &
+  privacy settings" button). **The detailed list IS gated behind Atwe Pro as of build
+  1861** (`PROF_VIEWERS_PRO_GATED`, now true), and turning it on was an HONESTY fix rather
+  than a revenue one: `PRO_PERKS` in `server.js` has always advertised this as the FIRST
+  thing Pro buys you (*"Free shows the count. Pro shows who."*) while the flag sat false,
+  so every free account already saw the names and anybody who paid got nothing extra
+  there. Six of Pro's seven perks were genuinely enforced and this one was not. The free
+  experience is what the switch was always designed around and is LinkedIn's own shape:
+  the teaser count stays free, the FIRST viewer stays free, the rest sit blurred
+  (`.pv-lock`) behind one upgrade card → `profilePlanAction`. It is a PRODUCT gate, not a
+  security boundary — the server still returns the list, exactly as `plan` is documented
+  app-wide as a feature gate rather than an authorization one, and nothing private is
+  behind it: it is who opened a public profile. Privacy toggle relabelled **"Private browsing"** on Privacy &
   safety (`#ppvSwitch`/`togglePrivateViews`, `private_profile_views`) with a caption
   spelling out the reciprocity trade-off.
 - **Connection-gated messaging:** opt-in `users.dm_connections_only` (off by default)
@@ -6255,6 +6327,47 @@ headers) cannot express.
 **A stray comment was fixed in passing:** `settleCardOrderToSeller`'s own explanation
 had drifted to sit above `seedHelpArticles`, which had been inserted between the
 comment and its function. Both now sit with what they describe.
+
+**THE SAME GAP LIVED IN FOUR MORE FLOWS, AND BUILD 1861 CLOSED THEM** — a card-paid
+TIP, EVENT TICKET, PAID NEWSLETTER and CREATOR SUBSCRIPTION. Each charged the buyer,
+granted the entitlement, notified the earner and moved no money. The webhook had six
+money branches and only two paid anybody.
+
+**THE FEE DECISIONS ARE BUSINESS CALLS AND ARE WRITTEN DOWN SO THEY ARE NOT UNDONE BY
+ACCIDENT.** A **TIP TAKES NO FEE**, and that is not a judgement call: the balance path
+moves a tip with `walletTransfer` and charges nothing, so a fee on the card path would
+make the same $50 pay out differently depending on whether the sender's wallet was
+full. A **ticket, a newsletter and a subscription** all take the normal fee, because
+each is a sale and Atwe's 1% sits far under Eventbrite, Substack's 10% and Patreon's
+8-12%. A subscription settles on the first charge **and on every renewal**, which the
+`invoice.paid` branch had never done.
+
+**THE GUARD IS TWO-LAYERED, and the second layer differs per flow ON PURPOSE.** The
+webhook already claims every Stripe `event.id`, so a redelivery cannot settle twice.
+The ticket and the newsletter additionally guard their own upsert
+(`... WHERE event_rsvps.paid IS NOT TRUE RETURNING`), so even a different event
+pointing at an already-paid row pays nobody. A creator subscription has **no** such
+guard, because each renewal is a genuinely new payment and must pay again. Before
+adding those guards, both routes were checked to confirm they never send an
+already-paid member to Checkout — so the guard can only fire on a replay and no tier
+change or RSVP toggle is affected.
+
+**EVERY FEE REF IS UNIQUE TO ITS PAYMENT** (`evt<event>-<buyer>`,
+`nl<newsletter>-<subscriber>`, `csub<creator>-<subscriber>-<eventId>`), because
+`refundPlatformFee` sums by ref and two buyers of one event must never share one.
+
+**THE AMOUNT COMES FROM STRIPE**, never from our stored price: `amount_total` and
+`amount_paid` already account for a discount, a currency or a proration.
+
+**AND A GUESSED COLUMN NAME WAS CAUGHT BEFORE IT SHIPPED.** `settleNewsletterToAuthor`
+read `newsletters.user_id`; the column is **`owner_id`**. The helper's own try/catch
+would have swallowed it and paid nobody, silently, which is the same failure the bug
+itself was. Every table and column the four helpers touch was then checked against the
+real database. Third time this repo has recorded that lesson.
+
+Guarded by **`test/money-cardflows.test.js`** (7 checks), which drives the real webhook
+with a real minted signature. Self-tested: restoring the old branches fails 6 of the 7
+by name.
 
 ### Tips (creator support)
 

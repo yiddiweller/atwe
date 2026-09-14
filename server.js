@@ -3014,11 +3014,16 @@ function cleanMedia(media) {
   if (media == null || media === '') return null;
   if (typeof media !== 'string') return undefined;
   if (media.length > MAX_MEDIA_CHARS) return undefined;
+  // A stored bucket URL is the OTHER legal shape, and refusing it here is what
+  // kept the direct-upload path unreachable: /api/uploads/sign, its 2GB ceiling
+  // and acUploadFile were all built and working, and every write route then threw
+  // the resulting URL out again. cleanMediaUrl only accepts an address our own
+  // storage issued, so a member cannot post a link to somewhere else.
+  if (!media.startsWith('data:')) return cleanMediaUrl(media);
   // Split on the fixed `;base64,` marker rather than matching the whole media
   // type with a regex: the type can carry arbitrary parameters (MediaRecorder
   // emits `audio/webm;codecs=opus`, and iOS `audio/mp4; codecs="mp4a.40.2"`
   // with spaces and quotes). We only trust the bare type for the whitelist.
-  if (!media.startsWith('data:')) return undefined;
   const marker = ';base64,';
   const idx = media.indexOf(marker);
   if (idx === -1) return undefined;

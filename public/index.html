@@ -14576,6 +14576,47 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
              0 1px 2px var(--ctl-shade);
   -webkit-backdrop-filter:var(--ctl-blur);backdrop-filter:var(--ctl-blur);
 }
+/* A CONTROL THAT REPEATS PER ITEM IN A SCROLLER DOES NOT GET THE LIVE BLUR.
+   The marketplace draws a save heart and a cart button on every card, so the recipe
+   put about 242 composited blur layers on one scrolling surface.
+
+   BE HONEST ABOUT WHAT THIS BOUGHT: measured at a 6x CPU throttle, removing these
+   242 changed the frame rate NOT AT ALL. The thing that actually halved it was five
+   chips in the filter row, and the note below this one has those numbers. The first
+   reading of this bug blamed the count, which was wrong, and the count is the
+   obvious thing to blame.
+
+   It is kept because it is free and it is what .ac-vid-dur and .bundle-tag already
+   do per post: a composited layer per item is real memory on a phone, and this one
+   costs nothing to give up. THE BLUR WAS WORTH ONE CHANNEL LEVEL OUT OF 255 --
+   sampled on the button over a deliberately brutal backdrop (a 45 degree
+   black-and-white stripe, far harsher than any product photo), blur on reads
+   rgb(26,26,27) and blur off at the SAME 90% fill reads rgb(27,27,27). At that
+   opacity there is almost nothing of the backdrop left to blur, so the fill is
+   unchanged and nothing else about the button moves.
+
+   When you add a control that is drawn once per row, add it here too -- and measure
+   before claiming it was the slow thing. */
+.mkt-card-save:not(.on):not(.active):not(.accent):not(.danger):not(.selected),.mkt-cart:not(.on):not(.active):not(.accent):not(.danger):not(.selected){
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+}
+/* AND THE ONE THAT ACTUALLY COST THE FRAME RATE WAS THE FILTER ROW, NOT THE CARDS.
+   Measured twice each way at a 6x CPU throttle, flinging the marketplace:
+
+     the 242 per-card blurs removed   p50 33.3ms, 27 of 39 frames over budget
+     the FIVE filter chips removed    p50 16.7ms, 1-2 of 39
+
+   So the count was a red herring and the first reading of this was wrong. Whatever
+   the mechanism (these chips sit in a nested overflow:auto box inside the scroller,
+   which is the only structural difference), the number is reproducible and it is
+   exactly half the frame rate.
+
+   It is SCOPED to this surface on purpose. .ac-jv is a shared tab pill used on
+   dozens of screens and its glass is part of the tab design language that
+   tabpills.js guards, so taking the blur off it globally would be a design change
+   nobody asked for. This is the same shape as the ban on live blur over a chat
+   thread: allowed only where somebody measured it. */
+#marketplaceView .ac-jv{ -webkit-backdrop-filter:none; backdrop-filter:none; }
 @media (hover:hover){
 .ac-cat-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
 .ac-chip:not(.on):not(.active):not(.accent):not(.danger):not(.selected):hover,
@@ -17838,7 +17879,10 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
   </div>
 </div>
 
-<!-- Chat privacy / security explainer (honest — Atwe is not end-to-end encrypted) -->
+<!-- Chat privacy / security explainer. Honest about BOTH halves: an ordinary chat is
+     not end-to-end encrypted, a Secret chat is. It used to say only the first, which
+     went stale the day Secret chats shipped and left the one screen built to be honest
+     about privacy understating the product. Never word the ordinary case as E2EE. -->
 <div class="overlay hidden" id="chatPrivacyView" onclick="if(event.target===this)closeOverlay('chatPrivacyView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Chat privacy">
     <button class="sheet-close" onclick="closeOverlay('chatPrivacyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -17848,7 +17892,8 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     </div>
     <div class="cp-body">
       <p><b>Encrypted in transit.</b> Messages are sent over an encrypted (HTTPS) connection between your device and Atwe, and are only shown to you and the people in this chat.</p>
-      <p><b>Not end-to-end encrypted.</b> Unlike some apps, Atwe stores your messages on its servers so your chat history syncs across your devices and you never lose it. We never sell your messages or use them to target ads.</p>
+      <p><b>Ordinary chats are not end-to-end encrypted.</b> Atwe stores them on its servers so your history syncs across your devices and you never lose it. We never sell your messages or use them to target ads.</p>
+      <p><b>A Secret chat is end-to-end encrypted.</b> Your device makes a key it will not hand over, your words are scrambled before they leave, and what reaches Atwe is something it cannot read. Because that key never leaves the device, a Secret chat does not sync to your other devices and cannot be recovered if you lose it.</p>
       <p><b>You're in control.</b> Extra protection is built in: block &amp; report, disappearing messages, view-once media, locked chats, and your privacy settings.</p>
     </div>
     <button class="ac-pill-btn accent" style="width:100%;margin-top:6px;" onclick="closeOverlay('chatPrivacyView')">Got it</button>
@@ -22929,7 +22974,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1860'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1861'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -42865,7 +42910,7 @@ function acChatMentionClose() { const box = document.getElementById('acChatMenti
 const POST_IMG_MAX = 4;
 let _acPostGif = null; // a GIF URL attached to the post (mutually exclusive with images/video)
 function _acHasMedia() { return _acPostImgs.length > 0 || !!_acPostAtt || !!_acPostGif || !!_acPostDoc; }
-function acOnPostFile(e, kind) {
+async function acOnPostFile(e, kind) {
   _acPostGif = null;
   const files = [...(e.target.files || [])]; e.target.value = '';
   if (!files.length) return;
@@ -42893,7 +42938,32 @@ function acOnPostFile(e, kind) {
   } else {
     const file = files[0];
     if (!file.type.startsWith('video/')) { showNotif('Please choose a video file.'); return; }
-    if (file.size > AC_MEDIA_MAX) { showNotif('That video is too large (max 16 MB).'); return; }
+    // A BIG clip goes straight to the bucket rather than being refused. The
+    // server has supported this the whole time (/api/uploads/sign, a 2GB and
+    // three hour ceiling) and acUploadFile was written for it, but nothing in
+    // the app ever called it for a video, so every member was still held to the
+    // inline 16MB no matter what the server could take.
+    //
+    // Over the inline limit we deliberately SKIP the trim/caption editor: it
+    // reads the whole clip into memory, which is the very thing that cannot be
+    // done with a two gigabyte file. An honest trade, and the reason a long
+    // video arrives untouched.
+    if (file.size > AC_MEDIA_MAX) {
+      await acLoadUploadLimits();
+      const capMb = acUploadCapMb('video');
+      if (!UPLOADS.direct || file.size > capMb * 1024 * 1024) {
+        showNotif(`That video is too large (max ${UPLOADS.direct ? capMb : 16} MB).`);
+        return;
+      }
+      showNotif('Uploading your video...');
+      try {
+        const url = await acUploadFile(file, 'video');
+        _acPostImgs = [];
+        _acPostAtt = { data: url, kind: 'video' };
+        acRenderPostPrev(); acPostInput();
+      } catch (e) { showNotif((e && e.message) || 'Could not upload that video.'); }
+      return;
+    }
     _acPostImgs = [];
     // The editor (trim · caption · green-screen) opens first; "Use as is"
     // falls straight through to the untouched clip.
@@ -43732,10 +43802,22 @@ async function acLoadProfileViewCount() {
     if (el) { el.querySelector('b').textContent = String(weekCount || 0); el.classList.toggle('hidden', false); }
   } catch { /* ignore */ }
 }
-// Whether the detailed viewer LIST is gated behind Atwe Pro. The teaser count is
-// always free; flip this to true later to gate the identified list to Pro (the
-// server already returns the list — this is the only switch the client needs).
-const PROF_VIEWERS_PRO_GATED = false;
+// Whether the detailed viewer LIST is gated behind Atwe Pro. ON since build 1861,
+// and the reason is honesty rather than revenue: PRO_PERKS in server.js has always
+// advertised this as the FIRST thing Atwe Pro buys you ("Free shows the count. Pro
+// shows who."), while this flag sat false, so every free account already saw the
+// names and anybody who paid got nothing extra there. Six of Pro's seven perks were
+// genuinely enforced and this one was not.
+//
+// Turning it on is what the switch was built for and what the free experience below
+// was designed around: the teaser count stays free, the FIRST viewer stays free, and
+// the rest sit blurred behind one upgrade card. That is LinkedIn's own shape, and it
+// is the perk people actually buy a Premium tier for.
+//
+// It is a PRODUCT gate, not a security boundary — the server still returns the list,
+// exactly as `plan` is documented app-wide as a feature gate rather than an
+// authorization one. Nothing private is behind it: it is who opened a public profile.
+const PROF_VIEWERS_PRO_GATED = true;
 function acViewerRow(v) {
   return `<div class="ac-item ac-conn-item" onclick="closeOverlay('viewersList');acGoProfile(${jsAttr(v.username)})">
       ${acAvatarHtml(v.name, v.avatar, 'user-avatar', acIsBiz(v))}
@@ -43774,7 +43856,7 @@ async function acOpenProfileViewers() {
       return;
     }
     let list = viewers.map(acViewerRow).join('');
-    // Pro gate (off at launch): show the first viewer, lock the rest behind an upgrade.
+    // Pro gate (ON since 1861): show the first viewer, lock the rest behind an upgrade.
     if (PROF_VIEWERS_PRO_GATED && S.plan !== 'pro' && viewers.length > 1) {
       list = acViewerRow(viewers[0]) + `<div class="pv-lock">
         <div class="pv-lock-blur">${viewers.slice(1, 4).map(acViewerRow).join('')}</div>
