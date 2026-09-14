@@ -2,6 +2,8 @@
 
 ## Where you and your business live.
 
+### Everything you need. One app.
+
 *One account for your work, your money and the people you deal with. This is the complete description of Atwe for the agency, for partners, and for anyone who needs to understand the whole product. It is written from what is built and live today, not from a plan, and every claim in it was checked against the product before it was written down.*
 
 Atwe Inc · atwe.com · September 2026
@@ -18,7 +20,8 @@ That is Atwe: one app for the whole of a working life. You run a business, work 
 
 **The approved descriptions.** These four are the only wording to use when Atwe has to be described at a fixed length. Cut nothing else down; pick the one that fits.
 
-- **The line (seven words):** Atwe. Where you and your business live.
+- **The lockup (three lines, one under the next):** Atwe. / Where you and your business live. / Everything you need. One app. The slashes are only how it is written in this sentence; set it stacked, never run on. Section 3 is the rule book.
+- **The line (seven words), for running text and anywhere a stack will not fit:** Atwe. Where you and your business live.
 - **A sentence (for a social bio or a store subtitle):** Atwe is one account for a person and a business alike: your feed, your messages and calls, your shop, your wallet, your jobs and your reputation, connected.
 - **A short paragraph (for an app store or a partner deck):** Atwe is one app for the whole of a working life. Message and call the people you deal with, sell from your own shop, get paid into a real wallet, hire and be hired, and be seen, all under one name. A customer is also a contact, a follower, a payer and a reviewer, so a quote sent in a conversation becomes the invoice, the payment and the review without anyone typing anything twice. Atwe AI knows the whole product, can look things up in your own account, and acts only after you confirm.
 - **The full paragraph (for a press boilerplate):** the two paragraphs at the top of this section, used together and unchanged.
@@ -36,27 +39,41 @@ The two dates are two different things and must never be merged. The product goe
 
 ## 3. The slogan
 
-The official Atwe slogan is:
+The official Atwe lockup, locked by the founder and not to be altered, is three lines, one under the next:
 
-**Atwe. Where you and your business live.**
+**Atwe.**
 
-It is the founder's own idea with nothing added and nothing to trim. "You and your business" names the two lives one Atwe account holds. "Live" says it is a home, not a tool you visit. The name in front makes it a slogan rather than a strap: read alone on a poster, a bus side or an app store page, it still says who is speaking. It is literally true today, on the web app people already use, and it will still be true after the 2027 release and the 2028 launch. It does not say "online", because a home does not need to explain where it is, and a word like that dates a line within a few years. The "one place" half of the idea is carried by the word "where": there is one place, and this is it.
+**Where you and your business live.**
 
-**Where it came from.** The founder's direction, verbatim: "ATWE. A ALL IN ONE PLATFORM. WHERE YOU AND YOUR BUSINESS LIVES ONLINE. (It's like your second home...)". Three ideas live in that sentence: one place, you and your business living online, and a second home. The slogan keeps all three. "All in one platform" is what every large app says about itself and cannot be owned, so it may appear in body copy and never as the line itself. "A second home" is the feeling behind the line: the place you keep coming back to, where your things and your people already are. It is the campaign's emotional territory, and a campaign idea can be built on it, but it is not the slogan.
+**Everything you need. One app.**
 
-**How to write it.**
+The first two lines are the slogan. The third is its sub-line: it is locked to the slogan and travels with it wherever there is room to stack, and it is never folded into the line itself. Where a stack will not fit, the slogan stands alone as one sentence pair, **Atwe. Where you and your business live.**, and that is the form for running text, a spoken read and any single-line space.
+
+The slogan is the founder's own idea with nothing added and nothing to trim. "You and your business" names the two lives one Atwe account holds. "Live" says it is a home, not a tool you visit. The name in front makes it a slogan rather than a strap: read alone on a poster, a bus side or an app store page, it still says who is speaking. It is literally true today, on the web app people already use, and it will still be true after the 2027 release and the 2028 launch. It does not say "online", because a home does not need to explain where it is, and a word like that dates a line within a few years. The "one place" half of the idea is carried by the word "where": there is one place, and this is it.
+
+**Where it came from.** The founder's direction, verbatim: "ATWE. A ALL IN ONE PLATFORM. WHERE YOU AND YOUR BUSINESS LIVES ONLINE. (It's like your second home...)". Three ideas live in that sentence: one place, you and your business living online, and a second home. The slogan keeps all three. "All in one platform" is what every large app says about itself and cannot be owned, so it never appears as the line itself; the third line of the lockup is where that idea is kept, in Atwe's own words. "A second home" is the feeling behind the line: the place you keep coming back to, where your things and your people already are. It is the campaign's emotional territory, and a campaign idea can be built on it, but it is not the slogan.
+
+**How to set the slogan.**
 
 - Always exactly: Atwe. Where you and your business live.
 - Two sentences, two full stops. The full stop after Atwe is part of the line; never replace it with a colon, a dash or a line break alone.
 - Capitalise Atwe and the first letter of Where. Every other word is lower case. Never set it in all capitals except where a typeface system demands it for every heading on the page.
 - The short form, for a space where the name is already visible right beside it (an app store subtitle, a social bio, the cover of this document): Where you and your business live. If the name is not on the page, use the full line.
 - Never add an exclamation mark, a question mark, a trademark symbol or an emoji.
-- Never append "online", "in one place" or any other qualifier to the line. If the idea needs more words, put them in a sub-line beneath it, not inside it.
+- Never append "online", "in one place" or any other qualifier to the line. If the idea needs more words, put them in a sub-line beneath it, not inside it. The one approved sub-line is the third line of the lockup, and it goes beneath, never inside.
 - Never translate it loosely. In another language, keep the shape: the name, a full stop, then "where you and your business live".
+
+**How to set the third line.**
+
+- Always exactly: Everything you need. One app. Two sentences, two full stops, no comma in place of either.
+- It is always a line of its own, set beneath the slogan. It never runs on after "live." on the same line, and it never appears without the slogan above it.
+- It is set quieter than the slogan: smaller, lighter, and a step down in contrast. It supports the line, it does not compete with it. On the cover of this document it is a third of the slogan's size and a shade off white.
+- Drop it, rather than shrink the slogan, wherever there is not room for all three lines: a one-line app store subtitle, a social bio, a favicon-sized space, a spoken read of under three seconds. The slogan alone is always correct; the sub-line alone never is.
+- It carries the "all in one" idea the founder asked for, which is why that idea does not belong inside the slogan. "Everything you need" is the breadth, "One app" is the place, and together they say what "all in one platform" says without using a phrase every large app claims.
 
 **Lines for specific jobs.** Three runners-up, each kept for a place the slogan itself does not fit.
 
-- *One home for you and your business.* A sub-line under a photograph, where the name is already on the page and the warmth of "home" carries the frame.
+- *One home for you and your business.* A caption under a photograph, where the name is already on the page and the warmth of "home" carries the frame. It replaces the whole lockup in that frame; it is never stacked with it.
 - *Your business lives here. So do you.* A two-beat line for film and audio, where the turn in the second sentence can land as a spoken beat; also right for a business-owner audience being shown the personal side.
 - *Make yourself at home. Bring your business.* A welcome line for a new member, and a natural opening for a printed piece or a launch invitation.
 
@@ -503,3 +520,5 @@ This is the definitive list of names and public addresses, so that a landing pag
 *This document describes the product as built and live in September 2026. It is maintained alongside the product and is re-issued rather than edited by hand when the product moves.*
 
 **Atwe. Where you and your business live.**
+
+**Everything you need. One app.**

@@ -86,7 +86,10 @@ const css = `
   body { margin: 0; font-family: Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111114; font-size: 10.6pt; line-height: 1.55; }
   section.cover { background: #000; color: #fff; min-height: 250mm; padding: 34mm 18mm 20mm; page-break-after: always; display: flex; flex-direction: column; justify-content: flex-end; }
   section.cover h1 { font-size: 64pt; font-weight: 800; letter-spacing: -.03em; margin: 0 0 6mm; line-height: 1; }
-  section.cover h2 { font-size: 20pt; font-weight: 600; margin: 0 0 14mm; color: #fff; border: 0; padding: 0; line-height: 1.25; }
+  section.cover h2 { font-size: 20pt; font-weight: 600; margin: 0 0 3mm; color: #fff; border: 0; padding: 0; line-height: 1.25; }
+  /* The lockup's third line. Quieter than the slogan above it and brighter than the
+     description below, so the cover reads as four clear tiers rather than two pairs. */
+  section.cover h3 { font-size: 13.5pt; font-weight: 400; margin: 0 0 14mm; color: #c8c8cc; letter-spacing: 0; line-height: 1.3; }
   section.cover p { color: #9a9a9e; font-size: 10.5pt; max-width: 120mm; }
   section.cover p em { font-style: normal; }
   /* THE REAL ATWE MARK, painted the way the app paints it: the PNG is a mask and the colour
