@@ -28,9 +28,16 @@ const CASES = [
   ['Saved',          '**/api/saved-products**',       `acOpenSaved&&acOpenSaved()`, 2000],
 ];
 
+/* TWO WIDTHS. acErr sizes its illustration from the room the container has, so a
+   desktop column is a genuinely different code path from a phone sheet - and the
+   whole point of the fix was that a Try again nobody can see is not a recovery. */
+const WIDTHS = [[390, 844, 'phone', true], [1280, 900, 'desktop', false]];
+
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
-  const p = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+ for (const [W, H, LABEL, TOUCH] of WIDTHS) {
+  console.log('\n== ' + LABEL + '  ' + W + 'x' + H + ' ==');
+  const p = await b.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 2, hasTouch: TOUCH, isMobile: TOUCH });
   await p.goto('http://localhost:3262', { waitUntil: 'domcontentloaded' });
   await p.evaluate((t) => { localStorage.clear(); localStorage.setItem('atwe_token', t);
     localStorage.setItem('atwe_intro_seen', JSON.stringify(['beam', 'circles', 'ai', 'wallet'])); }, TOK);
@@ -78,25 +85,27 @@ const CASES = [
     });
 
     if (!r.designed && !r.bare.length && r.kept) {
-      console.log('  --   skipped ' + name + ' (the failed refresh kept ' + r.kept + ' rows on screen, which is the right answer)');
+      console.log('  --   skipped ' + name + ' ' + LABEL + ' (the failed refresh kept ' + r.kept + ' rows on screen, which is the right answer)');
     } else if (r.designed) {
-      ok(r.retry, name + ' — the designed error state, with a way to try again',
+      ok(r.retry, name + ' (' + LABEL + ') — the designed error state, with a way to try again',
          'designed state shown but no Try again control: "' + r.designedText + '"');
       console.log('         "' + r.designedText + '"');
     } else if (r.bare.length) {
-      ok(false, name + ' — a failed load explains itself and offers a way back',
+      ok(false, name + ' (' + LABEL + ') — a failed load explains itself and offers a way back',
          'bare line, no retry: "' + r.bare[0].replace(/\s+/g, ' ').slice(0, 90) + '"');
     } else {
       /* NOTHING AT ALL is the worst outcome and must not read as a pass: a surface
          that swallows a 500 leaves a blank panel with no explanation. */
-      ok(false, name + ' — a failed load says something',
+      ok(false, name + ' (' + LABEL + ') — a failed load says something',
          'no error state of any kind on screen after a 500');
     }
     await p.unroute(route);
     await p.waitForTimeout(300);
   }
 
-  await p.close(); await b.close();
+  await p.close();
+ }
+  await b.close();
   console.log('\n═══ ' + pass + ' passed, ' + fail + ' failed ═══');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('CRASH', e); process.exit(2); });
