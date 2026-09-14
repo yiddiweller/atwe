@@ -641,15 +641,20 @@ question none of them ask: is this claim TRUE?** A probe drives a screen and rep
 happened; nobody had ever read a sentence about the product and then gone to the code to
 check it. Three of the findings outlived the document and are recorded where the work is:
 
-- **A card-paid invoice never credits the issuer's wallet** — see "KNOWN AND NOT YET
-  FIXED" in the Invoices section. The biggest of the three, and a real money gap.
-- **The app's own search index still uses two pre-brand labels.** `PLACES_EXTRA` and the
-  Engine Discover tile say **"Add to your story"** (the feature is **Dailies**) and
-  **"Shop with AI"** (the assistant is **Atwe AI**, always two words) — four sites,
-  `public/index.html` around lines 32822, 35533, 35547 and 35811. The appendix of the
-  document uses the brand names, so it is one step ahead of the app; renaming them is a
-  small separate edit, and the `kw` synonym strings mean nobody loses the ability to find
-  them by the old words.
+- **A card-paid invoice never credited the issuer's wallet.** The biggest of the three,
+  and a real money gap. **FIXED in build 1860** — see `settleInvoiceToIssuer` in the
+  Invoices section for the fix and the five checks that hold it.
+- **The app's own search index used two pre-brand labels.** **FIXED in build 1860.**
+  `PLACES_EXTRA` and the Engine Discover tile said **"Add to your story"** (the feature
+  is **Dailies**) and **"Shop with AI"** (the assistant is **Atwe AI**, always two
+  words). Two things are worth keeping from the fix. The app had ALREADY said "Add to
+  your Daily" in **nine** other places — the post menu, the composer sheet, the story
+  tray's own ＋ — so the index was the last holdout rather than the standard, which is a
+  stronger reason to change it than brand tidiness. And it was a **COUPLED rename**:
+  `_CAP_WHERE` maps a capability category to a place by its exact NAME, which is then
+  looked up in the index, so renaming the index entry alone would have left that chip
+  silently yielding nothing. Both moved together; the old words stay in each `kw` string,
+  so anybody who still types "story" or "shop with ai" lands in exactly the same place.
 - **The renderer's refusal list is the durable half.** Every one of those brand rules is
   now enforced at build time rather than remembered, which is why the final version could
   be re-rendered and re-checked in seconds rather than re-read.
@@ -6186,29 +6191,70 @@ pushes a live `invoice` SSE. Client: an Invoices surface (To-pay / Sent tabs,
 branch), and `?invoice=success|cancel` on return. This closes the marketplace loop
 (find work → chat → **get paid**).
 
-**KNOWN AND NOT YET FIXED: a card-paid invoice never reaches the issuer's Atwe
-balance.** Found on 14 Sep 2026 while fact-checking every money claim in
-`docs/ATWE.md` against the code, and written down here rather than fixed in the same
-breath because it is a money change and deserves its own pass. The customer really is
-charged (Stripe Checkout, `metadata.type=invoice`), the invoice really is marked paid
-and the issuer really is notified — and that is ALL `recordInvoicePaid` does: flip the
-status, `notify`, `rtPush`. There is no wallet credit anywhere on the path.
-
-**The asymmetry is the proof, because the order path does the very thing this one
-omits.** The webhook's order branch runs `recordOrderPaid(orderId)` and then
-**`settleCardOrderToSeller(orderId)`**, which `walletCreditStandalone`s the seller the
-total and takes Atwe's fee; the invoice branch, ten lines above it, runs
-`recordInvoicePaid(invId)` and stops. So the money is collected into the platform's
-own Stripe account and the member who did the work sees "Paid" with a balance that has
+**A CARD-PAID INVOICE NOW REACHES THE ISSUER'S WALLET — `settleInvoiceToIssuer`
+(build 1860). For a long time it did not, and that is the interesting half.** The
+customer really was charged (Stripe Checkout, `metadata.type=invoice`), the invoice
+really was marked paid and the issuer really was notified, and that was ALL
+`recordInvoicePaid` did: flip the status, `notify`, `rtPush`. No wallet credit
+anywhere on the path. So the money was collected into the platform's own Stripe
+account and the member who had done the work saw "Paid" against a balance that had
 not moved.
 
-**The document says only what is true today** — *"paid by card through the card
-processor and marked paid … it does not land in the wallet balance"* — so nothing has
-to change there when this is fixed; the sentence simply gets better. **The fix is a
-`settleInvoiceToIssuer` shaped exactly like `settleCardOrderToSeller`**, called from
-both the webhook branch and the demo path, and it must be idempotent the way the order
-one is (the webhook is at-least-once, and `recordInvoicePaid`'s own status guard is
-what makes a replay a no-op — a credit added outside that guard would double-pay).
+**THE ASYMMETRY IS WHAT GAVE IT AWAY, and it is a reusable way to look.** The
+webhook's ORDER branch runs `recordOrderPaid(orderId)` and then
+`settleCardOrderToSeller(orderId)`; the INVOICE branch, ten lines above it in the same
+switch, ran `recordInvoicePaid(invId)` and stopped. Two branches of one webhook doing
+the same kind of job, one of them two calls shorter. **When two paths ought to be
+twins, diff them.**
+
+**It was found by writing the company document, not by any probe**, which is the
+lesson recorded above: a probe drives a screen and reports what happened; nobody had
+ever read a sentence about the product and gone to the code to check it.
+
+**THE DEMO PATH DELIBERATELY DOES NOT SETTLE, and that is not an oversight.** With no
+card processor nobody was charged, so crediting the issuer would invent money — the
+exact sin `refundToPayee` and `refundPlatformFee` exist to prevent. The order path
+already works this way (every demo call site is a bare `recordOrderPaid`, and only the
+webhook settles), so the invoice now mirrors it. An invoice marked **settled outside
+Atwe** writes `status='paid'` directly, so `recordInvoicePaid`'s own guard can never
+match it and no wallet money moves there either.
+
+**IDEMPOTENCY COMES FROM THE GUARD, NOT FROM A NEW MECHANISM.** The call is
+`if (await recordInvoicePaid(invId)) await settleInvoiceToIssuer(invId);` — the settle
+runs only when that `UPDATE ... WHERE status IN ('sent','paying')` actually flipped a
+row. Stripe is at-least-once, so a credit placed OUTSIDE that guard would double-pay.
+
+**THE FEE IS BOOKED UNDER `inv<id>`, AND THAT NAMESPACE IS LOAD-BEARING.**
+`refundPlatformFee` hands a fee back by SUMMING `company_revenue` rows matching
+(`source='fee'`, `ref_id`, `payer_id`). An order and an invoice can trivially share an
+id, so an invoice that booked its fee under the bare id would have had it handed back
+by an unrelated order's refund. `chargePlatformFee` therefore takes an optional
+`{ref, what, note}`; the six order call sites are unchanged and behave byte-identically.
+
+**Atwe takes its normal share (`platformFeeFor`, 1% by default, the same switch the
+dashboard already controls), because an invoice is a sale of work.** That is a
+BUSINESS decision rather than a technical one and the founder can reverse it in one
+line — it is recorded here so nobody later reads it as an accident.
+
+**Guarded by `test/money-invoice.test.js` (5 checks), which drives the REAL webhook
+route rather than calling the helper** — the bug was never in the arithmetic, it was
+in what the route did and did not call. Stripe's signature is a documented HMAC over
+`timestamp.body`, so the test mints a valid one and the real `stripe` package verifies
+it; no key and no network are involved. It asserts the whole payment is accounted for
+(issuer balance + Atwe's fee == what was charged), that the customer's own wallet is
+untouched, that a re-delivered event and a fresh event on an already-paid invoice each
+pay once, that "settled outside Atwe" moves nothing even if a stale webhook lands
+afterwards, and — in the source, because a running server has billing configured — that
+the demo path still does not settle. **Self-tested: putting the old one-line webhook
+branch back fails 3 of the 5 by name.**
+
+**`test/helpers.js` gained a `port()` export** for this: the webhook needs a RAW body
+plus a signature header, which the `api` helper (which JSON-encodes and sets its own
+headers) cannot express.
+
+**A stray comment was fixed in passing:** `settleCardOrderToSeller`'s own explanation
+had drifted to sit above `seedHelpArticles`, which had been inserted between the
+comment and its function. Both now sit with what they describe.
 
 ### Tips (creator support)
 

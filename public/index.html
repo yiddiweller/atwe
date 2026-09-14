@@ -22929,7 +22929,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1859'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1860'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -32819,7 +32819,7 @@ function acSearchDiscover() {
   ].join('');
   const more = [
     T("acGoJobsBoard('workers')", 'Find workers', I.workers),
-    T("acOpenAiShop()", 'Shop with AI', I.aishop),
+    T("acOpenAiShop()", 'Shop with Atwe AI', I.aishop),
     T("acOpenCommunities()", 'Communities', I.communities),
     T("acOpenNewsletters()", 'Newsletters', I.newsletters),
     T("acOpenShowcaseDiscover()", 'Showcase', I.showcase),
@@ -35530,7 +35530,7 @@ const PLACES_EXTRA = [
      card silently took it out of search. It belongs here: it is one of the five worlds. */
   { l: 'Notifications',   sub: 'Alerts',    kw: 'notifications alerts activity bell whats happening mentions likes', run: 'acNavNotifs()' },
   { l: 'Marketplace',     sub: 'Shopping',  kw: 'marketplace buy shop browse items products for sale', run: 'acOpenMarketplace()' },
-  { l: 'Shop with AI',    sub: 'Shopping',  kw: 'ai shopping concierge find product recommend', run: 'acOpenAiShop()' },
+  { l: 'Shop with Atwe AI', sub: 'Shopping', kw: 'ai shopping concierge find product recommend shop with ai', run: 'acOpenAiShop()' },
   { l: 'Services',        sub: 'Discover',  kw: 'services local plumber tutor hire tradesperson', run: 'acOpenServices()' },
   { l: 'Businesses',      sub: 'Discover',  kw: 'business directory companies shops near me local', run: 'acOpenDirectory()' },
   { l: 'Jobs',            sub: 'Work',      kw: 'jobs vacancies roles hiring work careers apply', run: "acGoJobsBoard('jobs')" },
@@ -35544,7 +35544,7 @@ const PLACES_EXTRA = [
   /* Things people think of as an action rather than a page — but they still type
      the words into a search box and expect to end up there. */
   { l: 'Write a post',    sub: 'Home',      kw: 'post write compose new post share update status say something tweet', run: 'acOpenPost()' },
-  { l: 'Add to your story', sub: 'Home',    kw: 'story status 24 hours photo video add post', run: 'acOpenStoryComposer()' },
+  { l: 'Add to your Daily', sub: 'Home',    kw: 'daily dailies story status 24 hours photo video add post', run: 'acOpenStoryComposer()' },
   { l: 'Go live',         sub: 'Home',      kw: 'live broadcast stream space audio room going live', run: 'acOpenGoLive()' },
   { l: 'New chat',        sub: 'Messages',  kw: 'new chat message someone start conversation write dm', run: "acChatsFab()" },
   { l: 'New group',       sub: 'Messages',  kw: 'new group create group chat channel broadcast', run: "acOpenGroupCreate()" },
@@ -35808,7 +35808,7 @@ const _CAPS_KEY = 'atwe_caps_';
    than a button that goes nowhere. */
 const _CAP_WHERE = [
   [/^Beam|Messaging|^Groups & communities|^Team inbox|^Calls & meetings/i, 'Beam'],
-  [/^Home · Stories/i,                                'Add to your story'],
+  [/^Home · Stories/i,                                'Add to your Daily'],
   [/^Home|^Content & Home|^Notifications/i,           'Home'],
   [/Marketplace|^Commerce|^Delivery|^Sales, CRM/i,    'Marketplace'],
   [/Jobs/i,                                           'Jobs'],

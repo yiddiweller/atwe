@@ -844,13 +844,21 @@ async function platformFeeFor(sellerId, grossCents) {
 }
 // Take the fee out of the seller's balance right after they're paid, and book it
 // as company revenue. Best-effort: a fee hiccup must never unwind a real sale.
-async function chargePlatformFee(sellerId, orderId, grossCents) {
+// `opts` lets a non-order sale book its fee under its OWN reference. That is not
+// cosmetic: refundPlatformFee gives a fee back by summing company_revenue rows
+// matching (source 'fee', ref_id, payer_id), so an invoice whose id happened to
+// equal an order id would have its fee handed back by that order's refund. A
+// namespaced ref ('inv7' against an order's '7') makes the collision impossible.
+async function chargePlatformFee(sellerId, orderId, grossCents, opts) {
   try {
+    const o = opts || {};
+    const ref = o.ref != null ? o.ref : orderId;
+    const what = o.what || `order #${orderId}`;
     const fee = await platformFeeFor(sellerId, grossCents);
     if (!fee) return 0;
-    const d = await walletDebit(sellerId, fee, 'platform_fee', `Atwe fee on order #${orderId}`);
+    const d = await walletDebit(sellerId, fee, 'platform_fee', `Atwe fee on ${what}`);
     if (!d || d.insufficient || d.error) return 0;
-    await recordCompanyRevenue('fee', orderId, sellerId, fee, 'Marketplace fee');
+    await recordCompanyRevenue('fee', ref, sellerId, fee, o.note || 'Marketplace fee');
     rtPush(sellerId, 'wallet', { type: 'update' });
     return fee;
   } catch (_) { return 0; }
@@ -905,12 +913,6 @@ async function refundToPayee(payerId, payeeId, amountCents, note, kind) {
   }
   return { moved, covered };
 }
-// A card-paid marketplace order: the buyer's money landed in Atwe's Stripe
-// account, not in any member's balance, so nothing has reached the SELLER yet.
-// Credit their Atwe balance with the sale (the same custodial arrangement as a
-// wallet top-up — they cash out to their bank from there), then take the fee.
-// Called only from the Stripe webhook, and only when recordOrderPaid actually
-// flipped the order pending -> paid, so a replayed event can never pay twice.
 // Fill an EMPTY help centre with the starter articles. Only ever runs when
 // there are none at all: the moment the owner writes, edits or deletes one,
 // their help centre is theirs and a deploy must never write over it.
@@ -931,6 +933,12 @@ async function seedHelpArticles() {
     return n;
   } catch (e) { console.error('seedHelpArticles', e.message); return 0; }
 }
+// A card-paid marketplace order: the buyer's money landed in Atwe's Stripe
+// account, not in any member's balance, so nothing has reached the SELLER yet.
+// Credit their Atwe balance with the sale (the same custodial arrangement as a
+// wallet top-up — they cash out to their bank from there), then take the fee.
+// Called only from the Stripe webhook, and only when recordOrderPaid actually
+// flipped the order pending -> paid, so a replayed event can never pay twice.
 async function settleCardOrderToSeller(orderId) {
   try {
     const o = (await db.query('SELECT seller_id, total_cents FROM orders WHERE id = $1', [orderId])).rows[0];
@@ -938,6 +946,31 @@ async function settleCardOrderToSeller(orderId) {
     await walletCreditStandalone(o.seller_id, o.total_cents, 'receive', `Order #${orderId}`);
     await chargePlatformFee(o.seller_id, orderId, o.total_cents);
   } catch (e) { console.error('settleCardOrderToSeller', orderId, e); }
+}
+// The same arrangement for a card-paid INVOICE, which for a long time did not have
+// one: the customer really was charged, the invoice really was marked paid and the
+// issuer really was notified, and that was all it did — the money sat in Atwe's own
+// Stripe account and the member who had done the work saw "Paid" against a balance
+// that never moved. Found on 14 Sep 2026 by fact-checking the company document's
+// money claims against this file, where the asymmetry with the order branch ten
+// lines below it is what gave it away.
+//
+// Two things here are load-bearing and mirror the order path exactly:
+//   * it runs ONLY when recordInvoicePaid actually flipped the invoice to paid, so
+//     a re-delivered webhook (Stripe is at-least-once) can never pay twice;
+//   * the DEMO path deliberately never calls it. With no card processor nobody was
+//     charged, so crediting the issuer would invent money out of nothing — the sin
+//     the refund helpers above exist to prevent.
+// An invoice marked "settled outside Atwe" writes status='paid' directly, so
+// recordInvoicePaid's own guard can never match it and no wallet money moves.
+async function settleInvoiceToIssuer(invoiceId) {
+  try {
+    const v = (await db.query('SELECT issuer_id, amount_cents FROM invoices WHERE id = $1', [invoiceId])).rows[0];
+    if (!v || !(v.amount_cents > 0)) return;
+    await walletCreditStandalone(v.issuer_id, v.amount_cents, 'receive', `Invoice #${invoiceId}`);
+    await chargePlatformFee(v.issuer_id, invoiceId, v.amount_cents,
+      { ref: `inv${invoiceId}`, what: `invoice #${invoiceId}`, note: 'Invoice fee' });
+  } catch (e) { console.error('settleInvoiceToIssuer', invoiceId, e); }
 }
 const CONTROL_KEYS = FEATURE_CONTROLS.map((f) => f.key);
 let _featureControls = {}; // { key: false } = OFF
@@ -1268,7 +1301,10 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'invoice') {
       const s = event.data.object, m = s.metadata || {};
       const invId = parseInt(m.invoice_id, 10);
-      if (Number.isInteger(invId)) { await recordInvoicePaid(invId); moneyMoved = true; }
+      if (Number.isInteger(invId)) {
+        if (await recordInvoicePaid(invId)) await settleInvoiceToIssuer(invId);
+        moneyMoved = true;
+      }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'order') {
       const s = event.data.object, m = s.metadata || {};
       const orderId = parseInt(m.order_id, 10);
