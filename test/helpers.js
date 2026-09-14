@@ -134,4 +134,7 @@ async function stopServer() {
   if (child) { child.kill('SIGKILL'); child = null; }
 }
 
-module.exports = { SKIP, api, seedUser, login, uniq, startServer, stopServer, getPool: () => pool };
+// `port` is exported because one test has to build its own request by hand: the
+// Stripe webhook takes a RAW body plus a signature header, which the `api` helper
+// (which JSON-encodes and sets its own headers) cannot express.
+module.exports = { SKIP, api, seedUser, login, uniq, startServer, stopServer, getPool: () => pool, port: () => PORT };
