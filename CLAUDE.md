@@ -588,16 +588,33 @@ letter: no em dash, no emoji, no vendor named behind Atwe AI, the two dates kept
 Card described as coming and the sales advance as switched on market by market. When the
 product moves, re-issue it (edit the `.md`, run the tool) rather than patching a paragraph.
 
-**THE OFFICIAL SLOGAN IS `Atwe. Where you and your business live.`** (chosen 12 Sep 2026 from
-the founder's own direction, *"ATWE. A ALL IN ONE PLATFORM. WHERE YOU AND YOUR BUSINESS LIVES
-ONLINE. (It's like your second home...)"*, by a four-writer, three-judge panel). Two full
-stops; the one after Atwe is part of the line. The short form `Where you and your business
-live.` is allowed only where the name is already visible beside it, which is why the
-document's cover carries it under the wordmark. Never append "online" or "in one place";
-never an exclamation mark. Section 3 of the document is the rule book and carries three
-runners-up, each kept for a specific job (a sub-line under a photograph, a two-beat line for
-film, a welcome line). The founder can swap the line;
-nobody else may.
+**THE OFFICIAL LOCKUP, LOCKED BY THE FOUNDER ON 14 SEP 2026, IS THREE LINES:**
+
+```
+Atwe.
+Where you and your business live.
+Everything you need. One app.
+```
+
+**The first two lines are the SLOGAN** (chosen 12 Sep 2026 from the founder's own direction,
+*"ATWE. A ALL IN ONE PLATFORM. WHERE YOU AND YOUR BUSINESS LIVES ONLINE. (It's like your
+second home...)"*, by a four-writer, three-judge panel). Two full stops; the one after Atwe is
+part of the line. **The third line is its SUB-LINE and is never folded into the slogan** — it
+is always set beneath, always quieter (smaller, lighter, a step down in contrast), and never
+appears without the slogan above it. Where a stack will not fit, the slogan stands alone as
+`Atwe. Where you and your business live.`, which is the form for running text, a spoken read
+and any one-line space; the sub-line alone is never correct.
+
+**"Everything you need. One app." IS THE FOUNDER'S OWN ANSWER TO THE "ALL IN ONE" PROBLEM, and
+that is why it does not contradict the rule beside it.** *"All in one platform"* is what every
+large app claims and cannot be owned, so it may never be the line; the ban on appending
+"online" or "in one place" is about what goes INSIDE the slogan, and the document's own rule
+already said the remedy is *"a sub-line beneath it, not inside it"*. This is that sub-line.
+Never an exclamation mark, ever, on any of the three.
+
+Section 3 of the document is the rule book — the lockup, how to set each line, when to drop
+the third, and three runners-up each kept for a specific job (a sub-line under a photograph, a
+two-beat line for film, a welcome line). The founder can swap any of it; nobody else may.
 
 **The final version (12 Sep 2026) is persuasion first, inventory second.** It opens with a
 flow the product really does (a quote in the chat becomes the invoice with a pay button; a
