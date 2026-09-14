@@ -51,11 +51,23 @@ brighter. **The founder was asked and said keep it** - see the decision below.
 `.wallet-cashout`: three instances between them, both one-offs sitting beside a
 perfectly good `--t1`. Textbook "duplicated styling rules". Safe to fold in.
 
-### 3. Settings rows disagree with each other by a pixel
+### 3. Settings rows disagree with each other by a pixel  [CHASED DOWN: NOT DRIFT]
 
-`.iset-row` renders at **64.6px** and **63.6px** on the same screen. A row with a
-subtitle is legitimately taller than one without (that is iPhone Settings and it is
-deliberate), but two subtitle rows differing from each other is drift.
+`.iset-row` renders at **64.6px** and **63.6px** on the same screen, and that looked
+like textbook drift. It is not. Decomposed, every one of those rows is identical
+inside: `.iset-main` is **39.64px** in all of them, the label is 20.14 at a 20.15px
+line-height, the subtitle 17.5 at 17.5, and the padding is 12/12 everywhere. 39.64 +
+24 = **63.64** exactly.
+
+The extra pixel on the taller ones is the **divider**, and the rows that lack it are
+exactly the LAST row of each card - `.iset-group > .iset-row:last-child
+{border-bottom:none}`. That rule is the founder's own decision from the "a card's own
+edges are curves, no hairline across them" pass. So the two heights are one row shape
+plus or minus a line that is deliberately absent where a card curves.
+
+**Nothing to fix, and equalising it would put back a hairline the founder had
+removed.** Recorded here so a later pass does not rediscover the pixel and "correct"
+it.
 
 `--row-h` is 55 and `.me-row` honours it exactly, 60 instances. `.ac-item` at 72 in
 Beam and Notifications is its own signed-off design (full-bleed conversation rows),
@@ -82,10 +94,22 @@ is the footer set scaled to equalise INK rather than boxes, which this repo meas
 and documented. **Separating the deliberate from the drift is the work**, and it has
 to be done per family rather than by flattening the list.
 
-### 7. Avatars: 9 distinct sizes
+### 7. Avatars: 9 distinct sizes  [CHASED DOWN: NOT DRIFT]
 
-34, 36, 42, 44, 46, 48, 52, 54, 62. Some are certain (36 feed, 62 profile hero).
-**42 against 44 against 46 is the suspicious cluster** and is where to look first.
+34, 36, 42, 44, 46, 48, 52, 54, 62. The suspicious cluster was **42 / 44 / 46**, and
+measuring where each one lives settles all three:
+
+| size | where | verdict |
+|---|---|---|
+| **42** | inside `.tb-brand-act.prof`, the top bar's profile circle | a CONSEQUENCE, not a choice. That circle is 44 and keeps a real 1px `border` (documented: an inset shadow would be painted over by the avatar). With `box-sizing:border-box` a `width:100%` avatar fills the content box, so 44 - 2 = 42. |
+| **44** | `.sb-btn`, the sidebar/drawer row | the nav button's own size |
+| **46** | `.notif-ava-wrap`, a notification row | that list's own design |
+
+The 42 and the 44 are the same control measured inside and outside its ring, and 46
+belongs to a different list. **Never on screen as a mismatched pair**, either: the
+drawer is off-canvas on a phone. Making them equal would mean deleting a documented
+border or redesigning the notification row, so the brief's own rule applies - do not
+make a consistency change without proving the difference is accidental. It is not.
 
 ## What this audit did NOT cover yet
 
@@ -117,9 +141,84 @@ Asked, answered, and written down so it is not re-opened by a later pass:
 Both were one-line changes and both were declined. That is the founder's call and
 it is the end of it.
 
+## What the LATER passes found, and fixed
+
+The audit above is surfaces observed in passing. Sections 4 and 13 needed each screen
+driven into a state it does not normally sit in, and that is where the real faults
+were. All of these are measured, and each has a guard that fails without the fix.
+
+### Loading (section 4) - the page skeleton was fainter than the founder's own
+
+`.skel` sat on `--s2` and measured **1.14:1 on Black and 1.09:1 on Light** against
+what is behind it. The comment above it claimed `--s2` "is already the step up and is
+correct", which was true on Black and **flatly wrong on Light, where `--s1` and `--s2`
+are both `#F5F5F7`** - on a card there is no step at all.
+
+The reference is not a number somebody liked: it is `--post-skel`, the post-card
+skeleton the founder drove darker three separate times, which measures **1.24:1 on
+Black and 1.17:1 on Light** against its own card. The page skeleton now reads at the
+same strength (**1.23 / 1.19**) through its own token, `--skel-fill`, so `--s2` - every
+input and half the cards in the app - was not dragged around to tune a loading state.
+`--post-skel` is untouched.
+
+### Errors (section 13) - six of eight main surfaces had no way back
+
+`emptystates.js` already covers 38 EMPTY screens. Nobody had ever failed a surface's
+own request and looked. Driven with a 500, of eight main surfaces:
+
+| surface | what a person got |
+|---|---|
+| Home, Notifications | the designed state, with Try again |
+| Orders, Marketplace, Wallet, Saved | **the server's raw error string** - the marketplace printed the single word `boom` - and no retry |
+| Jobs | "Could not load jobs." and no retry |
+| **Beam** | **nothing at all, for ever** |
+
+Beam was the worst and had two causes. `acLoadChats`'s error branch was gated on
+`firstLoad`, and a boot restore into Beam is the only call on that path and passes
+`{silent:true}` - so a failed cold load showed no rows, no message, nothing to press.
+And even once that fired, the very next `acRenderChats` painted the shimmer straight
+back over it, because its guard asked for `.ac-skel`, **a class that has never existed
+in this app** (`acSkelRows` emits `.skel-row`), so the test was always true. Beam
+loaded for ever.
+
+All six now go through the app's own `acErr`. One more fault came out of proving it:
+on the Wallet the Try again button landed at **y 879 on an 844px phone** - a retry
+nobody can see. `acErr` now sizes its illustration to the room the container actually
+has (168 / 96 / none) instead of a fixed 168.
+
+**A failed REFRESH still changes nothing on screen**, deliberately: replacing a list
+somebody is reading because a background fetch blipped is worse than saying nothing.
+The guard skips that case by name rather than grading it.
+
+## Section 5: nothing is trapped behind the floating bar
+
+Nine surfaces, three phone widths (320 / 390 / 430), each scrolled to its genuine
+end with the bar put back the way a person has it when they stop and reach: **28
+checks, 0 failures, 3 skipped by name**. Home is skipped because an endless feed has
+no last thing to clear - whatever sits under the floating pill at any moment is the
+next card passing beneath it, which is what a floating bar is for. It becomes
+answerable the day `#acFeedEnd` renders.
+
+Two of that probe's own bugs are worth keeping, because each produced a false bug
+report before it was caught: **surfaces STACK unless you close what is open**, so the
+first run blamed Orders and Marketplace on a "New pot" button that belongs to the
+Wallet; and the endless feed above, which failed Home at all three widths on a feed
+that was simply still loading.
+
 ## What that leaves
 
-With the two colour and shape questions closed, the rest of the pass is not
-restyling at all - it is finding things that are actually WRONG: content a finger
-cannot reach, states that read as broken, values that disagree with themselves.
-That is the right shape for "more finished, not redesigned".
+With the two colour and shape questions closed, and the two remaining "drift"
+findings chased down to deliberate decisions, the pass is not restyling at all - it
+is finding things that are actually WRONG: content a finger cannot reach, states
+that read as broken, values that disagree with themselves. That is the right shape
+for "more finished, not redesigned".
+
+## Still NOT covered, said plainly
+
+- **Wider viewports.** Everything measured here is 320-430 phone widths. Tablet,
+  narrow desktop and wide desktop have not been driven for this pass.
+- **The money JOURNEYS** (section 14) and **onboarding** (15). `journeys.js` and
+  `twoperson.js` already cover the transactions end to end; nobody has walked them
+  looking for polish.
+- **Anything behind data this account does not have.** A check that never sees a
+  control reports a clean result, and this repo has recorded that five ways.
