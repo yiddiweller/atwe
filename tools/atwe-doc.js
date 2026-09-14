@@ -12,9 +12,13 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const SRC = path.join(ROOT, 'docs', 'ATWE.md');
-const OUT_HTML = path.join(ROOT, 'docs', 'ATWE.html');
-const OUT_PDF = path.join(ROOT, 'docs', 'ATWE.pdf');
+// `node tools/atwe-doc.js` renders the real document into docs/. A path argument renders
+// a DRAFT instead (`node tools/atwe-doc.js /tmp/draft.md`), writing draft.html and
+// draft.pdf beside the draft, so a version can be checked before it replaces docs/ATWE.md.
+const DRAFT = process.argv[2] ? path.resolve(process.argv[2]) : null;
+const SRC = DRAFT || path.join(ROOT, 'docs', 'ATWE.md');
+const OUT_HTML = DRAFT ? DRAFT.replace(/\.md$/, '') + '.html' : path.join(ROOT, 'docs', 'ATWE.html');
+const OUT_PDF = DRAFT ? DRAFT.replace(/\.md$/, '') + '.pdf' : path.join(ROOT, 'docs', 'ATWE.pdf');
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const inline = (s) => esc(s)
@@ -28,7 +32,7 @@ function convert(md) {
   const out = [];
   let i = 0, para = [], list = null, table = null, cover = true;
   const flushPara = () => { if (para.length) { out.push('<p>' + inline(para.join(' ')) + '</p>'); para = []; } };
-  const flushList = () => { if (list) { out.push('<ul>' + list.map((l) => '<li>' + inline(l) + '</li>').join('') + '</ul>'); list = null; } };
+  const flushList = () => { if (list) { const tag = list.ordered ? 'ol' : 'ul'; out.push('<' + tag + '>' + list.map((l) => '<li>' + inline(l) + '</li>').join('') + '</' + tag + '>'); list = null; } };
   const flushTable = () => {
     if (!table) return;
     const [head, ...rows] = table;
@@ -49,7 +53,8 @@ function convert(md) {
       const cells = ln.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
       (table = table || []).push(cells); continue;
     }
-    if ((m = /^- (.*)$/.exec(ln))) { flushPara(); flushTable(); (list = list || []).push(m[1]); continue; }
+    if ((m = /^- (.*)$/.exec(ln))) { flushPara(); flushTable(); if (list && list.ordered) flushList(); (list = list || []).push(m[1]); continue; }
+    if ((m = /^\d+\. (.*)$/.exec(ln))) { flushPara(); flushTable(); if (list && !list.ordered) flushList(); if (!list) { list = []; list.ordered = true; } list.push(m[1]); continue; }
     flushList(); flushTable(); para.push(ln.trim());
   }
   flush();
@@ -58,6 +63,21 @@ function convert(md) {
 
 const MARK = 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'public', 'logo-mark.png')).toString('base64');
 const md = fs.readFileSync(SRC, 'utf8');
+// THE BRAND RULES ARE CHECKED HERE, NOT TRUSTED. This is the one text that goes to the
+// world, so the renderer refuses to build it if it carries a long dash, an emoji, a
+// vendor name, or "Atwe AI" spelled any other way. Line numbers are printed so the fix
+// is a one-line edit in the Markdown.
+(function check(text) {
+  const bad = [];
+  const rules = [
+    [/[\u2014\u2013]/u, 'long dash (em or en)'],
+    [/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F000}-\u{1F2FF}]/u, 'emoji'],
+    [/\b(claude|anthropic|openai|gpt|gemini|llama)\b/iu, 'AI vendor or model name'],
+    [/\b(AtweAI|Atwe-AI|atwe ai|ATWE AI)\b/u, '"Atwe AI" spelled another way'],
+  ];
+  text.split('\n').forEach((ln, i) => { for (const [re, why] of rules) if (re.test(ln)) bad.push(`  line ${i + 1}: ${why}: ${ln.trim().slice(0, 90)}`); });
+  if (bad.length) { console.error('REFUSING to render ' + path.relative(ROOT, SRC) + ':\n' + bad.join('\n')); process.exit(1); }
+})(md);
 const body = convert(md);
 const css = `
   @page { size: A4; margin: 22mm 20mm 24mm 20mm; }
@@ -77,7 +97,7 @@ const css = `
   h2 { font-size: 20pt; font-weight: 800; letter-spacing: -.02em; margin: 14mm 0 4mm; padding-top: 4mm; border-top: 2px solid #111114; page-break-after: avoid; }
   h3 { font-size: 13pt; font-weight: 700; margin: 8mm 0 2.5mm; page-break-after: avoid; }
   p { margin: 0 0 3.2mm; }
-  ul { margin: 0 0 3.5mm; padding-left: 5mm; }
+  ul, ol { margin: 0 0 3.5mm; padding-left: 5mm; }
   li { margin: 0 0 1.4mm; }
   strong { font-weight: 700; }
   code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em; background: #f0f0f2; padding: .05em .3em; border-radius: 4px; }
