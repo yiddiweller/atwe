@@ -45,11 +45,24 @@ of the two, while the brighter sibling is nearly unused.
 hierarchy decision, and section 3 explicitly warns against simply making everything
 brighter. **The founder was asked and said keep it** - see the decision below.
 
-### 2. Two white alphas that are not tokens
+### 2. Two white alphas that are not tokens  [CHECKED: NOT DRIFT, and this line was wrong]
 
 `rgba(255,255,255,.88)` on `.xp-ai-s` and `rgba(255,255,255,.92)` on
-`.wallet-cashout`: three instances between them, both one-offs sitting beside a
-perfectly good `--t1`. Textbook "duplicated styling rules". Safe to fold in.
+`.wallet-cashout`. This section originally read *"both one-offs sitting beside a
+perfectly good `--t1`. Textbook duplicated styling. Safe to fold in."* **That was
+written from the token list without looking at what they sit on, which is the exact
+mistake this repo has recorded six times.**
+
+Both sit on a **blue gradient**: `.xp-ai` is `linear-gradient(...var(--accent-fill)...)`
+with `color:#fff`, and `.wallet-card` is `linear-gradient(--accent-fill, --violet)`
+with `color:#fff`. The app's secondary greys are tuned against the black and the white
+PAGE; a grey on a blue card reads as muddy, which is why an alpha-white is the right
+tool for "one step quieter than the white above it" — and why `.wallet-bal-label`, two
+lines further up, already does the same job a third way with `opacity:.85`.
+
+**Folding them into `--t1` would make each the same brightness as the heading it sits
+under and flatten the hierarchy on two cards.** Left alone, and the original line is
+kept above so the reasoning is not repeated by a later pass.
 
 ### 3. Settings rows disagree with each other by a pixel  [CHASED DOWN: NOT DRIFT]
 
@@ -80,19 +93,35 @@ not drift.
 (`.wallet-cardrow`). The existing guard `evencards.js` only polices blocks wider
 than 200px, which is why these sit under it.
 
-### 5. Three border alphas on chrome
+### 5. Three border alphas on chrome  [LEFT: no verified defect, and the bar is founder-locked]
 
 `--b1` .05, `--b2` .08 and `--b3` .12 are all in use on adjacent chrome
 (`.bottom-nav`, `.sb-user`, `.sb-btn`). Having three is not wrong in itself; having
 three *on neighbouring elements* is what reads as unfinished.
 
-### 6. Icon sizes: 23 distinct, but most are deliberate
+**Not acted on, deliberately.** `--b1..--b4` is a declared four-step family, so three
+of them in use is the system working rather than drift; the three elements are three
+different KINDS of thing (a floating bar, a card, a row); and the floating bar's own
+material is a decision the founder took by name and re-took twice. There is no
+measured fault here - nothing fails a contrast floor and nothing is unreachable - so
+under this pass's own rule (do not make a consistency change without proving the
+difference is accidental) it stays. If it is ever wanted, it is a look decision for
+the founder, not a fix.
+
+### 6. Icon sizes: 23 distinct, but most are deliberate  [LEFT: needs a per-family pass, not a sweep]
 
 The raw number looks alarming and mostly is not. `tb-brand-act` at 29 and 22.9 is
 the +/... glyph drawn as a ratio of its 44px circle; `sb-settings` at 16.1 and 19.1
 is the footer set scaled to equalise INK rather than boxes, which this repo measured
 and documented. **Separating the deliberate from the drift is the work**, and it has
 to be done per family rather than by flattening the list.
+
+**Not acted on in this pass, and said plainly rather than quietly dropped.** Every
+one spot-checked traced back to a recorded decision (a glyph sized as a ratio of its
+own circle, or a set equalised by ink). Sweeping 23 values to one number would undo
+those, and doing it honestly means measuring each family's ink the way `sbfoot.js`
+already does for the three footer icons. That is its own pass with its own guard; it
+is not a line-count fix.
 
 ### 7. Avatars: 9 distinct sizes  [CHASED DOWN: NOT DRIFT]
 
