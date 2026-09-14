@@ -619,6 +619,31 @@ REFUSES any source carrying a long dash, an emoji, a vendor name or "Atwe AI" sp
 another way, printing the line, so the brand rules are enforced at build time rather than
 trusted.
 
+**WRITING THE DOCUMENT FOUND THINGS THE APP'S OWN PROBES CANNOT, because it asked a
+question none of them ask: is this claim TRUE?** A probe drives a screen and reports what
+happened; nobody had ever read a sentence about the product and then gone to the code to
+check it. Three of the findings outlived the document and are recorded where the work is:
+
+- **A card-paid invoice never credits the issuer's wallet** — see "KNOWN AND NOT YET
+  FIXED" in the Invoices section. The biggest of the three, and a real money gap.
+- **The app's own search index still uses two pre-brand labels.** `PLACES_EXTRA` and the
+  Engine Discover tile say **"Add to your story"** (the feature is **Dailies**) and
+  **"Shop with AI"** (the assistant is **Atwe AI**, always two words) — four sites,
+  `public/index.html` around lines 32822, 35533, 35547 and 35811. The appendix of the
+  document uses the brand names, so it is one step ahead of the app; renaming them is a
+  small separate edit, and the `kw` synonym strings mean nobody loses the ability to find
+  them by the old words.
+- **The renderer's refusal list is the durable half.** Every one of those brand rules is
+  now enforced at build time rather than remembered, which is why the final version could
+  be re-rendered and re-checked in seconds rather than re-read.
+
+**The verification did NOT finish as designed, and that is worth knowing before trusting
+the document blindly.** Six critics read v1 and three refuters read the final, but the
+organisation's monthly spend limit refused the SECOND round of refuters and the
+agency-reader pass, so those two never ran. The money facts in the final were then checked
+by hand against the code, which is what turned up the invoice gap. If the document is
+re-issued, run those two passes.
+
 ## What this is
 
 **Atwe AI** — a single-page web chat application: an "intelligent assistant for
@@ -6143,6 +6168,30 @@ pushes a live `invoice` SSE. Client: an Invoices surface (To-pay / Sent tabs,
 `paInvoice` and the chat header ⋯ menu), the chat meta-card (`acMetaCard` invoice
 branch), and `?invoice=success|cancel` on return. This closes the marketplace loop
 (find work → chat → **get paid**).
+
+**KNOWN AND NOT YET FIXED: a card-paid invoice never reaches the issuer's Atwe
+balance.** Found on 14 Sep 2026 while fact-checking every money claim in
+`docs/ATWE.md` against the code, and written down here rather than fixed in the same
+breath because it is a money change and deserves its own pass. The customer really is
+charged (Stripe Checkout, `metadata.type=invoice`), the invoice really is marked paid
+and the issuer really is notified — and that is ALL `recordInvoicePaid` does: flip the
+status, `notify`, `rtPush`. There is no wallet credit anywhere on the path.
+
+**The asymmetry is the proof, because the order path does the very thing this one
+omits.** The webhook's order branch runs `recordOrderPaid(orderId)` and then
+**`settleCardOrderToSeller(orderId)`**, which `walletCreditStandalone`s the seller the
+total and takes Atwe's fee; the invoice branch, ten lines above it, runs
+`recordInvoicePaid(invId)` and stops. So the money is collected into the platform's
+own Stripe account and the member who did the work sees "Paid" with a balance that has
+not moved.
+
+**The document says only what is true today** — *"paid by card through the card
+processor and marked paid … it does not land in the wallet balance"* — so nothing has
+to change there when this is fixed; the sentence simply gets better. **The fix is a
+`settleInvoiceToIssuer` shaped exactly like `settleCardOrderToSeller`**, called from
+both the webhook branch and the demo path, and it must be idempotent the way the order
+one is (the webhook is at-least-once, and `recordInvoicePaid`'s own status guard is
+what makes a replay a no-op — a credit added outside that guard would double-pay).
 
 ### Tips (creator support)
 
