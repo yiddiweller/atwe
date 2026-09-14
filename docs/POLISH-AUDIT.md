@@ -30,7 +30,7 @@ not use the one that is already here.**
 
 ## What the numbers say is adrift
 
-### 1. Two secondary greys, and the DARKER one does 87% of the work
+### 1. Two secondary greys, and the DARKER one does 87% of the work  [DECIDED: KEEP]
 
 | token | value | on black | instances |
 |---|---|---|---|
@@ -43,7 +43,7 @@ of the two, while the brighter sibling is nearly unused.
 
 **Both clear the 4.5:1 floor, so this is not an accessibility failure.** It is a
 hierarchy decision, and section 3 explicitly warns against simply making everything
-brighter. **This needs your call, not mine** — see the questions at the end.
+brighter. **The founder was asked and said keep it** - see the decision below.
 
 ### 2. Two white alphas that are not tokens
 
@@ -61,7 +61,7 @@ deliberate), but two subtitle rows differing from each other is drift.
 Beam and Notifications is its own signed-off design (full-bleed conversation rows),
 not drift.
 
-### 4. Four card radii where the rule says one
+### 4. Four card radii where the rule says one  [DECIDED: KEEP]
 
 30px is the system and carries 22 instances. Alongside it: **18px**
 (`.job-card-modal`, `.wallet-card`), **16px** (`.mkt-card`), **14px**
@@ -101,10 +101,25 @@ Said plainly so the coverage is not overstated:
 - **Anything behind data this account does not have.** A check that never sees a
   control reports a clean result; this repo has recorded that four separate ways.
 
-## Questions that are yours, not mine
+## DECIDED BY THE FOUNDER - both stay exactly as they are
 
-1. **The secondary grey.** Move the app's main secondary text from `--t3` (5.20:1)
-   to `--t2` (6.44:1), or leave it? It touches usernames, timestamps and metadata
-   everywhere at once. It is one token, one line, and reversible.
-2. **Card radii.** Fold 14/16/18 into the 30 system, or are the sheet family and the
-   wallet rows deliberately their own shapes?
+Asked, answered, and written down so it is not re-opened by a later pass:
+
+1. **The secondary grey STAYS `--t3`** (`#7E7E83`, 5.20:1). It was offered against
+   `--t2` (6.44:1) because 41 instances against 6 looked like drift. It is not
+   drift, it is the intended weight. **Do not "fix" the metadata colour**, and do
+   not read section 7B's "avoid overly dim metadata" as licence to move this token.
+   Both values clear the 4.5:1 floor, so nothing here is an accessibility fault.
+2. **The card radii STAY as they are.** 30 is the system; the sheet family at 18,
+   `.mkt-card` at 16 and `.wallet-cardrow` at 14 are their own deliberate shapes.
+   **Do not fold them into `--post-card-r`.**
+
+Both were one-line changes and both were declined. That is the founder's call and
+it is the end of it.
+
+## What that leaves
+
+With the two colour and shape questions closed, the rest of the pass is not
+restyling at all - it is finding things that are actually WRONG: content a finger
+cannot reach, states that read as broken, values that disagree with themselves.
+That is the right shape for "more finished, not redesigned".
