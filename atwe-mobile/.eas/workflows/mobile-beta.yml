@@ -1,0 +1,80 @@
+# Atwe iPhone BETA — build in the cloud and put it in TestFlight, no Mac required.
+#
+# ── WHAT THIS IS FOR ───────────────────────────────────────────────────────
+# This is the TESTING half of the mobile release. It exists so the founder can
+# hold the next version of Atwe on their own phone before anybody else sees it.
+#
+#   development  → building, never builds a phone app
+#   beta         → THIS FILE → TestFlight, the version the founder tests
+#   main         → mobile-production.yml, a deliberate store release
+#
+# It replaces the old `ship` branch. `ship` was a pointer you force-pushed to,
+# which worked, but it meant the thing that got built was not a branch anybody
+# reviewed. Building from `beta` means the phone app and beta.atwe.com are the
+# same commit, which is the whole point of having a beta at all.
+#
+# ── WHY IT DOES NOT FIRE ON EVERY PUSH ─────────────────────────────────────
+# Each iOS build costs a credit. It used to fire on every push and it emptied
+# the account's monthly credits twice. The `paths` filter below means a beta
+# push that only changed the website, the server or a document builds nothing.
+#
+# Running it by hand always works and is the escape hatch if the filter is ever
+# wrong:  cd atwe-mobile && npx eas workflow:run mobile-beta.yml
+# or the Expo dashboard → Workflows → Run workflow.
+#
+# ── THE ONE THING THAT WILL BITE YOU ───────────────────────────────────────
+# If `branches` AND `tags` are both absent, EAS defaults branches to ['*'] and
+# this builds on EVERY push to EVERY branch. Never delete the branches list to
+# "temporarily disable" it — comment out the whole `on:` block or rename the
+# file instead.
+#
+# NB validating this file with PYTHON reports the trigger as missing: PyYAML is
+# YAML 1.1, where a bare `on:` is the BOOLEAN true rather than the string. EAS
+# and GitHub both parse with JS yaml (YAML 1.2), where it is the plain string
+# "on". Leave it unquoted; it is what every workflow file in the world uses.
+
+name: Atwe beta (TestFlight)
+
+on:
+  push:
+    branches: ['beta', 'ship']
+    paths:
+      # Written twice on purpose. EAS does not document whether `paths` is
+      # matched against the REPOSITORY root or the Expo project root (this
+      # project's base directory is `atwe-mobile`), and the two readings need
+      # different patterns. Listing both means the build fires under either
+      # one. The second group's names do not exist at the repository root, so
+      # under the repo-root reading they simply match nothing.
+      #
+      # if paths are REPOSITORY-root relative:
+      - 'atwe-mobile/**'
+      # if paths are PROJECT-root relative:
+      - 'app/**'
+      - 'src/**'
+      - 'assets/**'
+      - 'app.json'
+      - 'eas.json'
+      - 'babel.config.js'
+      - 'tsconfig.json'
+      # a document is not a reason to spend a build credit
+      - '!**/*.md'
+
+jobs:
+  build:
+    name: Build iOS
+    type: build
+    params:
+      platform: ios
+      # `production` is the BUILD profile, not the release channel. TestFlight
+      # only accepts a store-signed build, so a beta for the founder's real
+      # phone has to use it. `preview` is ad-hoc internal distribution and
+      # never reaches TestFlight.
+      profile: production
+  submit:
+    name: Send to TestFlight
+    needs: [build]
+    type: submit
+    params:
+      platform: ios
+      profile: production
+      build_id: ${{ needs.build.outputs.build_id }}

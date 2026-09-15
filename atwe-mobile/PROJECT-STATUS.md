@@ -704,11 +704,11 @@ that needs the account password and 2FA. From a machine that has the repo:
 ```bash
 cd atwe-mobile
 npx eas-cli login          # once per machine
-npx eas workflow:run build-ios.yml
+npx eas workflow:run mobile-beta.yml
 ```
 
 That workflow builds the production profile **and submits to TestFlight** in one
-go (`.eas/workflows/build-ios.yml`). Or the two steps by hand:
+go (`.eas/workflows/mobile-beta.yml`). Or the two steps by hand:
 
 ```bash
 npx eas build -p ios --profile production
@@ -1470,17 +1470,25 @@ Left undone on purpose: it needs Apple-portal access, it is a convenience rather
 than a feature, and it was standing between the founder and having the app on
 their phone at 2am.
 
-## 🚢 THE SHIP SWITCH — how a new version reaches the founder's phone
+## 🚢 HOW A NEW VERSION REACHES THE FOUNDER'S PHONE
 
-**Push the working branch to `ship`. That is the whole thing.**
+**Promote `development` to `beta`. That is the whole thing.**
 
 ```bash
-git push origin claude/claude-md-docs-cajkf9:ship --force
+git checkout beta && git merge development && git push origin beta
 ```
 
-`.eas/workflows/build-ios.yml` fires on a push to **`ship` and nothing else**,
-builds the production profile, and submits to TestFlight by itself. The founder
-does nothing — they get a TestFlight notification about 20 minutes later.
+`.eas/workflows/mobile-beta.yml` fires on a push to **`beta`** whose changes
+touched `atwe-mobile/`, builds the production profile, and submits to TestFlight
+by itself. The founder does nothing — they get a TestFlight notification about
+20 minutes later. A beta push that only changed the website or the server builds
+nothing, because every iOS build costs a credit.
+
+By hand, any time: `cd atwe-mobile && npx eas workflow:run mobile-beta.yml`.
+
+The old `ship` branch did this job and is being retired; `mobile-beta.yml` still
+lists it so nothing breaks during the changeover. Full picture:
+`docs/BRANCHES-AND-RELEASES.md`.
 
 **Why a dedicated branch rather than either extreme.** It used to fire on EVERY
 push, and that emptied the account's monthly iOS build credits twice — every
@@ -1500,9 +1508,11 @@ branch to `ship` does exactly that, which is why that is the documented move.
 
 **Running it by hand still works** (Expo dashboard → Workflows → Run workflow →
 enter the git ref → Load → pick the file → Confirm, or
-`npx eas workflow:run build-ios.yml`). Note the dashboard's git-ref box defaults
+`npx eas workflow:run mobile-beta.yml`). Note the dashboard's git-ref box defaults
 to `main`, **and `main` has no `atwe-mobile/` in it at all** — so it reports "no
-workflow files found" until you type the working branch. That cost real confusion.
+workflow files found" until you type `beta` or `development`. That cost real
+confusion. (Normalizing `main` onto the shared history would put `atwe-mobile/`
+there and end this; see `docs/BRANCHES-AND-RELEASES.md`.)
 
 ### What was learned about the cost, and it is not what this file used to say
 
@@ -1518,19 +1528,21 @@ one month before 0.2.0) were done another way.
 
 ## ⚠️ Build in batches — one SUCCESSFUL build is one credit
 
-`.eas/workflows/build-ios.yml` used to run **on every push that touched
-`atwe-mobile/**`**. Each run is one of the account's monthly **iOS build credits**, so
-every ordinary change — a colour, an icon, a one-line fix — spent one. That is what ran
-the credits out in an earlier run, and it quietly happened again: **three routine commits
+The iOS workflow used to run **on every push that touched `atwe-mobile/**` on any
+branch**. Each run is one of the account's monthly **iOS build credits**, so every
+ordinary change — a colour, an icon, a one-line fix — spent one. That is what ran the
+credits out in an earlier run, and it quietly happened again: **three routine commits
 in one afternoon cost three builds** before anyone noticed.
 
-**The push trigger is now REMOVED. Pushing changes nothing.** A build happens only when a
-person asks for one:
+**Pushing to `development` now builds nothing at all**, however much of the phone app
+it touches. Only a push to `beta` builds, and only when the change actually touched
+`atwe-mobile/` — so the credit is spent when a version is ready to be tested, not
+while it is being written. A build also happens whenever a person asks for one:
 
 ```
-Expo dashboard → Workflows → "Build and submit iOS" → Run workflow
+Expo dashboard → Workflows → "Atwe beta (TestFlight)" → Run workflow
 # or
-cd atwe-mobile && npx eas workflow:run build-ios.yml
+cd atwe-mobile && npx eas workflow:run mobile-beta.yml
 ```
 
 **So: commit and push freely while working — that is free — and run ONE build at the end
@@ -1545,8 +1557,8 @@ GitHub → Expo online build so updates don't need the Mac.
 
 ## How to run (fresh machine)
 ```bash
-# the app lives on the working BRANCH — clone it, not default main:
-git clone -b claude/claude-md-docs-cajkf9 https://github.com/yiddiweller/atwe.git atwe-app
+# the app lives on the working branch — clone development, not main:
+git clone -b development https://github.com/yiddiweller/atwe.git atwe-app
 cd atwe-app/atwe-mobile
 npm install --legacy-peer-deps
 npx expo install --fix
@@ -2853,8 +2865,8 @@ returns 403 to a *personal* account, which is correct — the screen handles it
 and reads *"Only a business account has reach figures."*
 
 **State at the stop:** `tsc` clean · nine offline checkers pass · 54 screens × 2
-themes · 8 browser probes · everything committed and pushed to
-`claude/claude-md-docs-cajkf9`. **Nothing shipped.**
+themes · 8 browser probes · everything committed and pushed to the working
+branch (now `development`). **Nothing shipped.**
 
 ## ⏸ STOPPED HERE — read this first when picking the app back up
 
@@ -2870,10 +2882,10 @@ So the first three moves, in order:
 1. ~~Check expo.dev → Builds.~~ **DONE — the founder checked on 2 Sep 2026 and
    it is credits.** The builds never ran; nothing here is broken. No need to
    re-investigate this.
-2. **Get credits, then ship ONE build** (`git push origin
-   claude/claude-md-docs-cajkf9:ship --force`). It carries six rounds of work at
-   once, so expect the founder to have a lot to react to — walk them through it
-   one screen at a time, as always.
+2. **Get credits, then ship ONE build** by promoting `development` to `beta`
+   (`git checkout beta && git merge development && git push origin beta`). It
+   carries six rounds of work at once, so expect the founder to have a lot to
+   react to — walk them through it one screen at a time, as always.
 3. **Only then** judge the material. The web preview cannot render Liquid Glass
    or a native blur; every "does it look like Apple's?" question is unanswerable
    until it is on a phone.

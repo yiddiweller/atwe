@@ -10,7 +10,15 @@ This file is that guarantee. It is committed, so it cannot be lost with a sessio
 | where | commit | what |
 |---|---|---|
 | **production** (`main`) | `4c4daaa27de54d1e84294640638bec5adfb09627` | Build 1861 |
-| **working branch** (`claude/claude-md-docs-cajkf9`) | `1bcf3a6bd6f94ffdf8eef2a00aa2dbcaa2baaa4f` | Build 1861 |
+| **working branch** (then `claude/claude-md-docs-cajkf9`, now `beta` and `development`) | `1bcf3a6bd6f94ffdf8eef2a00aa2dbcaa2baaa4f` | Build 1861 |
+
+> **Branch names changed after this was written.** The September 2026 cleanup
+> replaced the Claude working branch with `development` (building) and `beta`
+> (testing); both start at the polish tip `055d6f4`, so the baseline commit above
+> is still an ancestor of both and every command here still works with the new
+> name substituted. The branch itself is frozen at
+> `archive/claude-claude-md-docs-cajkf9-2026-09-14` on the remote. The SHAs are
+> the real anchor and none of them moved.
 
 Both are **already pushed to the remote**, so they survive anything that happens
 locally. They are the same tree by content; the SHAs differ only because `main` is
@@ -39,9 +47,9 @@ meantime.
 ## Putting the working branch back
 
 ```
-git checkout claude/claude-md-docs-cajkf9
+git checkout beta          # or development, whichever you are putting back
 git reset --hard 1bcf3a6bd6f94ffdf8eef2a00aa2dbcaa2baaa4f
-git push --force-with-lease origin claude/claude-md-docs-cajkf9
+git push --force-with-lease origin beta
 ```
 
 ## Taking back ONE change instead of all of them

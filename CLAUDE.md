@@ -308,8 +308,8 @@ resume the iOS / mobile work): FIRST read **`atwe-mobile/PROJECT-STATUS.md`** �
 the living resume point (current state · what's built · next steps · how to run ·
 Apple / TestFlight status · locked decisions · gotchas) — then continue the build
 from exactly there. **Keep `PROJECT-STATUS.md` updated** as each phase lands so it
-always reflects the true state, and commit + push every change to the working
-branch (`claude/claude-md-docs-cajkf9`).
+always reflects the true state, and commit + push every change to
+**`development`** (the working branch — see `docs/BRANCHES-AND-RELEASES.md`).
 
 **⏸ As of 2 Sep 2026 the app is PAUSED on EAS build credits, not on code** —
 confirmed by the founder on expo.dev; the builds never ran, nothing here failed.
@@ -317,9 +317,10 @@ The tree is **26.8 Beta** (0.19.0 before the year-style scheme below); the found
 phone still runs **0.13**, so six rounds of
 finished work have never been seen on a device. `PROJECT-STATUS.md` opens with
 this and its **"STOPPED HERE"** section says what to do first. **Never run an EAS
-build unasked** — `git push origin claude/claude-md-docs-cajkf9:ship --force` is
-the trigger and it is the founder's to give. Committing and pushing to the
-working branch is free and always fine. The app now **requires iOS 26** (real
+build unasked** — promoting `development` to **`beta`** is what builds a phone app
+(`atwe-mobile/.eas/workflows/mobile-beta.yml`), and that promotion is the founder's
+to give. Committing and pushing to `development` is free and always fine: nothing
+on that branch builds anything or reaches anybody. The app now **requires iOS 26** (real
 Liquid Glass, no fallback — their decision, taken twice); do not reinstate a
 fallback to widen reach without asking them.
 

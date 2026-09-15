@@ -1,0 +1,60 @@
+# Atwe iPhone PRODUCTION — the deliberate store release.
+#
+# ── WHY THIS IS NOT AUTOMATIC ──────────────────────────────────────────────
+# `main` is production and ordinary work reaches it all the time. If every push
+# to main submitted to the App Store, a one-line server fix would queue an app
+# review. A store release is a decision somebody makes, not a side effect of
+# merging, so this fires on a RELEASE TAG rather than on a branch.
+#
+# ── HOW TO RELEASE ─────────────────────────────────────────────────────────
+#   1. main is approved and carries the code you want in the store
+#   2. git tag -a release-26.8.1 -m "Atwe 26.8.1" <the approved main commit>
+#   3. git push origin release-26.8.1
+#   4. this builds and uploads to App Store Connect, ~20 minutes
+#   5. a HUMAN opens App Store Connect and presses Submit for Review
+#
+# Step 5 is not optional and is not automatable here: EAS `submit` uploads a
+# build, it does not release it to the public. That is the correct shape — the
+# upload is mechanical, the release is a decision.
+#
+# By hand, if you would rather not tag:
+#   cd atwe-mobile && npx eas workflow:run mobile-production.yml
+#
+# ── THE TAG NAME MATTERS ───────────────────────────────────────────────────
+# `release-*` and nothing else. The archive tags this repository already
+# carries (archive/...) must never match, or restoring an old branch would
+# queue an App Store build.
+#
+# ── ANDROID IS NOT WIRED UP YET, ON PURPOSE ────────────────────────────────
+# eas.json's submit profile points at ./play-service-account.json, which does
+# not exist in this repository, and there is no Play developer account yet. An
+# Android job here would fail every run. Add the platform to this file on the
+# day that account exists and the key is in place, not before.
+#
+# NB on the bare `on:` key and the branches/tags default, see the long note in
+# mobile-beta.yml. If `branches` and `tags` are both absent EAS builds on every
+# push to every branch.
+
+name: Atwe production (App Store)
+
+on:
+  push:
+    # tags ONLY. No branches key means branches defaults to [] here, which is
+    # what we want: no push to any branch can ever start a store build.
+    tags: ['release-*']
+
+jobs:
+  build:
+    name: Build iOS for the store
+    type: build
+    params:
+      platform: ios
+      profile: production
+  submit:
+    name: Upload to App Store Connect
+    needs: [build]
+    type: submit
+    params:
+      platform: ios
+      profile: production
+      build_id: ${{ needs.build.outputs.build_id }}
