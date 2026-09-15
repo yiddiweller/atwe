@@ -12,12 +12,14 @@ cannot be answered wrongly.
 
 ---
 
-## The four commands
+## The five commands
 
 ```bash
 node tools/seed-beta.js check     # what would happen, and whether it is allowed
 node tools/seed-beta.js status    # what this database currently holds that is tagged beta
-node tools/seed-beta.js seed      # build the world
+node tools/seed-beta.js seed      # build the world (once)
+node tools/seed-beta.js add-account <file.json>
+                                  # add ONE account to the world already there
 node tools/seed-beta.js reset     # remove exactly what this tool created
 ```
 
@@ -178,6 +180,75 @@ empty.
 
 ---
 
+## Adding ONE account later
+
+The full `seed` builds a world. Once that world exists you almost never want it
+again -- what you want is to let one more person in. That is a separate command
+and it shares nothing with the seeder except the guards:
+
+```bash
+node tools/seed-beta.js add-account seed/atwe-beta.json
+```
+
+Flags: `--commerce` (off by default), `--no-immerse`, `--claim-reserved`,
+`--yes` for CI.
+
+**It adds one account and nothing else.** It never calls `seedDemo`, never
+recreates the discovery population, never creates a shop or a commerce fixture,
+never deletes anything, and never updates a row it did not just insert. The
+tests assert each of those against the comment-free source, so it cannot drift.
+
+**It refuses rather than overwriting.** An existing username, an existing email,
+or a file carrying a credential all stop it before the password is even asked
+for -- so nobody types a secret into a run that was never going to happen.
+
+**The identity file is public profile text only**, exactly like the founder's:
+email, username, name, headline, bio, accountType, role, categories. A file
+containing `password`, `passwordHash`, `secret`, `token`, `stripe*`, `oauth*`,
+`totp*`, `session*`, `isAdmin` or `adminPerms` is refused **by name**, because
+silently ignoring a `password` field would leave somebody believing they had set
+one. `seed/atwe-beta.example.json` is the template.
+
+**A RESERVED username needs `--claim-reserved`.** Atwe locks a list of names
+(`routes.js` `SYSTEM_ROUTES`, seeded into `reserved_usernames` on every boot) so
+nobody can impersonate the company or shadow a route, and `usernameReserved()`
+refuses them at signup and at username-change. **`atwe` is on that list.** This
+tool writes a row directly and therefore bypasses that gate, so it asks the
+question itself and refuses until you say plainly that this is the legitimate
+owner claiming its own name. The reservation row is **left in place**: a name
+somebody already holds is unaffected by it, so the name stays locked against
+everyone else.
+
+**Joining the world that is already there** is on by default and is
+`demo.js`'s own `immerseInDemo`, reused after a line-by-line audit. It makes
+four writes and they are all additive rows belonging to, or addressed to, the
+one new account:
+
+| | |
+|---|---|
+| `INSERT follows` | follower is the new account |
+| `INSERT at_messages` | recipient is the new account |
+| `INSERT notifications` | owner is the new account |
+| `INSERT at_group_members` | the new account joins one existing group |
+
+There is no `UPDATE`, no `DELETE` and no `seedDemo` call anywhere in it, so it
+cannot duplicate or mutate the global beta world -- only attach somebody to it.
+Every row cascades away with the account, so reset stays complete. `--no-immerse`
+skips it.
+
+**Commerce is opt-in.** A new beta account gets no wallet money, orders or
+invoices unless you pass `--commerce`, and that needs two existing beta shops to
+buy from or it skips rather than inventing them.
+
+**The reusable half lives in `seed/beta-account.js`** -- no CLI, no prompts, no
+`console`, no `process.exit`. It takes a db handle and plain values and returns
+plain objects, so a future **Admin -> Beta Access** screen can call
+`createBetaAccount` / `immerseAccount` / `findByUsername` directly without
+shelling out. Removing a beta account is deliberately NOT implemented; `reset`
+remains the only delete path.
+
+---
+
 ## Reset, and why it is safe
 
 ```bash
@@ -227,7 +298,10 @@ There is no `DROP` and no `TRUNCATE` in this tool.
 | `test/seed-guard.test.js` | 17 tests over those functions, including one asserting a credential never reaches a printed report |
 | `tools/seed-beta.js` | the four commands |
 | `seed/beta-commerce.js` | the money and commerce rows |
-| `seed/beta-identity.example.json` | the template, with no password field |
+| `seed/beta-account.js` | adding ONE account: reusable, no CLI, ready for an admin screen |
+| `test/beta-account.test.js` | 20 tests over that, self-tested against five real breaks |
+| `seed/beta-identity.example.json` | the founder's template, with no password field |
+| `seed/atwe-beta.example.json` | the @atwe company template, likewise |
 | `demo.js` | unchanged -- the discovery population, the same code the admin dashboard's demo switch runs |
 
 `users.seed_tag` and the four other `seed_tag` columns are nullable, indexed
