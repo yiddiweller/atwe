@@ -9,3 +9,6 @@ scratchpad/node_modules
 scratchpad/**/out/
 scratchpad/out/
 scratchpad/destinations.json
+
+# Beta seeding: the local identity file (never a password, but never committed either)
+seed/beta-identity.json

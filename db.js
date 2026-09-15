@@ -5027,6 +5027,33 @@ async function initSchema() {
   // removed in one shot; deleting these users cascades to all their content.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false;`);
   await query(`CREATE INDEX IF NOT EXISTS users_demo_idx ON users(is_demo) WHERE is_demo = true;`);
+
+  /* WHO PUT THIS ROW HERE. `seed_tag` is written ONLY by tools/seed-beta.js, and
+     it is what makes that tool's reset precise: it deletes rows carrying its own
+     tag and nothing else, so no reset path can ever remove an untagged row or
+     sweep `is_demo` broadly. NULL everywhere in production; no behaviour anywhere
+     reads it, so it changes nothing outside the seeder.
+
+     It lives on FIVE tables, and the list is not arbitrary. Deleting a user
+     cascades away everything that references users(id) ON DELETE CASCADE, which
+     covers the overwhelming majority of seeded content. These four do NOT cascade
+     -- their owner column is ON DELETE SET NULL, so the row SURVIVES its owner --
+     and would otherwise be left behind as orphans by a reset:
+        at_groups.created_by, communities.created_by,
+        ad_campaigns.advertiser_id, gift_cards.buyer_id
+     Anything else the seeder writes is transitively owned by a tagged user, or by
+     a tagged row here (post_hashtags -> posts, course_lessons -> courses and
+     order_items -> orders each cascade from their own parent). */
+  await query(`ALTER TABLE users        ADD COLUMN IF NOT EXISTS seed_tag TEXT;`);
+  await query(`ALTER TABLE at_groups    ADD COLUMN IF NOT EXISTS seed_tag TEXT;`);
+  await query(`ALTER TABLE communities  ADD COLUMN IF NOT EXISTS seed_tag TEXT;`);
+  await query(`ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS seed_tag TEXT;`);
+  await query(`ALTER TABLE gift_cards   ADD COLUMN IF NOT EXISTS seed_tag TEXT;`);
+  await query(`CREATE INDEX IF NOT EXISTS users_seed_tag_idx        ON users(seed_tag)        WHERE seed_tag IS NOT NULL;`);
+  await query(`CREATE INDEX IF NOT EXISTS at_groups_seed_tag_idx    ON at_groups(seed_tag)    WHERE seed_tag IS NOT NULL;`);
+  await query(`CREATE INDEX IF NOT EXISTS communities_seed_tag_idx  ON communities(seed_tag)  WHERE seed_tag IS NOT NULL;`);
+  await query(`CREATE INDEX IF NOT EXISTS ad_campaigns_seed_tag_idx ON ad_campaigns(seed_tag) WHERE seed_tag IS NOT NULL;`);
+  await query(`CREATE INDEX IF NOT EXISTS gift_cards_seed_tag_idx   ON gift_cards(seed_tag)   WHERE seed_tag IS NOT NULL;`);
   await query(`
     CREATE TABLE IF NOT EXISTS wallet_tx (
       id            SERIAL PRIMARY KEY,
