@@ -1,0 +1,20 @@
+{
+  "_comment": [
+    "Copy this to seed/beta-identity.json and edit it. That filename is gitignored.",
+    "There is deliberately NO password field here, and the seeder REFUSES a file that",
+    "has one. The password comes from BETA_SEED_PASSWORD or a hidden prompt, so it is",
+    "never written to disk, never committed and never printed.",
+    "",
+    "role: \"member\" builds an ordinary account, which is what tests the real product.",
+    "Use \"admin\" only when you specifically need the staff dashboard from this login --",
+    "an admin sees moderation queues, revenue and every member's detail, so the app it",
+    "shows you is not the app a member sees."
+  ],
+  "email": "founder@beta.atwe.com",
+  "username": "founder",
+  "name": "Atwe Founder",
+  "headline": "Building Atwe",
+  "bio": "Testing the beta build.",
+  "accountType": "personal",
+  "role": "member"
+}
