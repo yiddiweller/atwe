@@ -12,3 +12,5 @@ scratchpad/destinations.json
 
 # Beta seeding: the local identity file (never a password, but never committed either)
 seed/beta-identity.json
+seed/atwe-beta.json
+seed/*-beta.json

@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "The official Atwe company account for beta. Copy to seed/atwe-beta.json and edit.",
+    "",
+    "PUBLIC PROFILE TEXT ONLY. There is deliberately no password field, and the tool",
+    "REFUSES a file carrying password / passwordHash / secret / token / stripe / oauth /",
+    "totp / session / isAdmin or any other credential or permission. The password comes",
+    "from BETA_SEED_PASSWORD or a hidden prompt; the role is set here and shown back to",
+    "you for confirmation before anything is written.",
+    "",
+    "accountType: the app has exactly two, personal and business. A company IS a business",
+    "account -- Atwe has no separate company page.",
+    "",
+    "role: \"member\" is an ordinary account with no staff access, which is what tests the",
+    "real product. \"admin\" gives the staff dashboard and should be asked for deliberately.",
+    "",
+    "NOTE: \"atwe\" is a RESERVED username (routes.js SYSTEM_ROUTES). The tool refuses it",
+    "unless you pass --claim-reserved, and leaves the reservation in place afterwards so",
+    "the name stays locked against everyone else."
+  ],
+  "email": "beta+atwe@atwe.test",
+  "username": "atwe",
+  "name": "Atwe",
+  "headline": "Atwe",
+  "bio": "Official Atwe beta account.",
+  "accountType": "business",
+  "role": "member"
+}
