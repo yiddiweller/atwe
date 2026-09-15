@@ -16,6 +16,12 @@ somewhere else: Railway watches the web branches, EAS watches the phone. That
 separation is the point. A branch does not know it is deployed, and a
 deployment does not decide what the code is.
 
+Each Railway environment is connected to exactly one branch and stays that way:
+**beta deploys `beta`, production deploys `main`, and `development` deploys
+nowhere.** Nothing is ever tested by repointing an environment at a different
+branch -- that would make "what is running on beta" a setting rather than a
+fact. Work reaches beta by being promoted to `beta`.
+
 ## development
 
 Every ordinary change lands here: a feature that is not finished, an

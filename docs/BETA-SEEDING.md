@@ -29,6 +29,21 @@ Options: `--yes` skips the typed confirmation (for CI only), and
 
 ---
 
+## How this reaches beta
+
+The permanent flow is **`development` -> `beta` -> `main`**, and it does not
+bend for this. Railway's beta environment is connected to the **`beta` branch**
+and stays that way; production deploys from `main`. See
+`docs/BRANCHES-AND-RELEASES.md`.
+
+So the seeding tool reaches beta the same way every other change does: it is
+built on `development`, promoted to `beta` when it is approved, and Railway
+deploys `beta` normally -- which is also what applies the `seed_tag` columns,
+since `db.init()` runs at boot. **Never point the beta Railway environment at
+`development`.**
+
+---
+
 ## Before you can run it
 
 **1. `ATWE_ENV=beta` on the beta service, and nowhere else.** Nothing inherits
@@ -73,7 +88,13 @@ Run that **in the production shell**, copy the hash, and set it as a variable on
 the production one. The hash cannot be reversed, so the variable is not a
 secret.
 
-**5. `BETA_SEED_PASSWORD` in the shell you run the command from.** Not in a
+**5. This work must be on the `beta` branch and deployed.** Promote it
+`development` -> `beta` and let Railway deploy `beta` as it always does;
+`db.init()` adds the `seed_tag` columns at boot. The seeder will call
+`db.init()` itself if the columns are missing, but it is not a substitute for
+the deploy, and it is never a reason to point beta at `development`.
+
+**6. `BETA_SEED_PASSWORD` in the shell you run the command from.** Not in a
 file, not in the repo, not committed. If it is unset and you are at a terminal
 you will be prompted for it; the prompt does not echo. It is never printed and
 never appears in any report.
@@ -111,6 +132,27 @@ sellers the entire commerce journey is untestable.
 
 ---
 
+## What it will and will not claim
+
+The accounts a seed run creates are captured as an **exact set of ids** -- the
+set of user ids before, the set after, and the difference. Nothing is inferred
+from an id ordering, and `is_demo` is never a reason to claim a row.
+
+**A demo account that already exists is not ours.** If this database holds demo
+accounts with no `seed_tag`, the seed **refuses** rather than adopting them:
+claiming them would quietly place somebody else's rows inside reset's reach.
+The refusal names the count and the two ways out -- remove them first (the admin
+dashboard's demo switch, turned off, does exactly that), or, if they came from an
+interrupted run of this same tool, tag them by hand and re-run:
+
+```sql
+UPDATE users SET seed_tag = 'beta' WHERE is_demo = true AND seed_tag IS NULL;
+```
+
+That statement is yours to run deliberately. The tool will never run it for you.
+
+---
+
 ## What gets built
 
 | | |
@@ -142,8 +184,9 @@ empty.
 node tools/seed-beta.js reset
 ```
 
-Every row this tool creates **or adopts** is tagged `seed_tag = 'beta'` first.
-Reset then deletes:
+Every row this tool creates is tagged `seed_tag = 'beta'` first, and **only**
+what it created -- see "What it will and will not claim" above. Reset then
+deletes:
 
 ```sql
 DELETE FROM at_groups    WHERE seed_tag = 'beta';
@@ -161,6 +204,9 @@ point.** A reset that reasoned about `is_demo` would delete demo accounts this
 tool never created. On a database somebody else had already been using, those
 are somebody's work. What is not tagged is not ours: `status` reports untagged
 demo accounts so you can see them, and reset leaves them exactly where they are.
+
+The whole tool contains exactly one `DELETE`, parameterised by `seed_tag` and
+run over a hardcoded table list.
 
 The four tables beside `users` are there because their owner column is
 `ON DELETE SET NULL` rather than `ON DELETE CASCADE` -- `at_groups.created_by`,

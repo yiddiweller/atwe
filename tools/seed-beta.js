@@ -13,12 +13,13 @@
  *    tested with no database (test/seed-guard.test.js). `check` is the same code
  *    path `seed` runs; there is no "just this once" flag that skips it.
  *
- * 2. RESET DELETES BY seed_tag AND BY NOTHING ELSE. There is deliberately NO
- *    `is_demo` clause anywhere in the reset path. A reset that reasoned about
- *    is_demo would delete demo accounts this tool never created -- on a database
- *    someone else had already been using, that is somebody's work. Every account
- *    this tool creates OR adopts is tagged first; what is not tagged is not ours
- *    and is reported, never removed.
+ * 2. IT ONLY EVER CLAIMS WHAT IT MADE, AND RESET DELETES BY seed_tag ALONE.
+ *    The accounts this run creates are captured as an EXACT set of ids (before
+ *    and after), never inferred from an id ordering and never from `is_demo`.
+ *    A pre-existing demo account is somebody else's row: the seed REFUSES
+ *    rather than adopting it. There is deliberately no `is_demo` clause
+ *    anywhere in the reset path -- what is not tagged is reported, never
+ *    removed.
  *
  * 3. NO CREDENTIAL IS EVER PRINTED. The password comes from BETA_SEED_PASSWORD
  *    or a hidden prompt -- never from a file, never echoed, never logged, and
@@ -175,47 +176,60 @@ async function ensureSeedTag(db) {
   const again = await db.query(
     `SELECT 1 FROM information_schema.columns
       WHERE table_name = 'users' AND column_name = 'seed_tag' LIMIT 1`);
-  if (!again.rowCount) throw new Error('users.seed_tag still missing after db.init(). Deploy this branch first.');
+  if (!again.rowCount) {
+    throw new Error('users.seed_tag still missing after db.init(). ' +
+                    'Promote this work to the beta branch and let Railway deploy beta first.');
+  }
   return true;
 }
 
 /* -------------------------------------------------------------------- tags */
 
-/* Tag everything this run is responsible for. Runs more than once during a
-   seed, deliberately: each stage can create rows, and a row that is created and
-   never tagged is a row reset can never remove. Cheap and idempotent.
-   `sinceId` is the highest user id that existed BEFORE this run. */
-async function tagEverything(db, sinceId) {
+/* THE EXACT SET OF ACCOUNTS THIS RUN CREATED -- never a heuristic.
+ *
+ * An earlier version tagged `id > maxIdBeforeThisRun OR is_demo = true`, which
+ * would BLANKET-ADOPT every demo account already sitting in the database. That
+ * is wrong on a database somebody else had been using: those accounts are their
+ * work, and adopting them would quietly put them inside reset's blast radius.
+ *
+ * So the ids are captured exactly -- the set of user ids before, the set after,
+ * and the difference. Nothing is inferred from an id ordering, and `is_demo` is
+ * never a reason to claim a row. */
+async function userIds(db) {
+  const r = await db.query('SELECT id FROM users');
+  return new Set(r.rows.map((x) => x.id));
+}
+
+function newlyCreated(before, after) {
+  const out = [];
+  for (const id of after) if (!before.has(id)) out.push(id);
+  return out;
+}
+
+async function tagUsers(db, ids) {
+  if (!ids.length) return 0;
+  const r = await db.query(
+    `UPDATE users SET seed_tag = $1 WHERE id = ANY($2::int[]) AND seed_tag IS DISTINCT FROM $1`,
+    [TAG, ids]);
+  return r.rowCount;
+}
+
+/* The three SET NULL survivors demo.js writes, plus gift cards. Keyed on the
+   accounts ALREADY tagged, so a row can only become ours if its owner is ours.
+   Tagged while the owner column still names them -- after the delete it is
+   null. Runs more than once during a seed, deliberately: each stage can create
+   rows, and a row created and never tagged is one reset can never remove. */
+async function tagSurvivors(db) {
   const out = {};
-
-  /* Anything created during this run, plus every demo account -- the demo
-     population IS the beta world's discovery layer, so it is adopted, tagged
-     and therefore removable. */
-  out.users = (await db.query(
-    `UPDATE users SET seed_tag = $1
-      WHERE (id > $2 OR is_demo = true) AND seed_tag IS DISTINCT FROM $1`, [TAG, sinceId])).rowCount;
-
-  /* The three SET NULL survivors demo.js writes. Tagged while their owner still
-     points at them, because after the delete the owner column is null. */
-  out.at_groups = (await db.query(
-    `UPDATE at_groups SET seed_tag = $1
-      WHERE seed_tag IS DISTINCT FROM $1
-        AND created_by IN (SELECT id FROM users WHERE seed_tag = $1)`, [TAG])).rowCount;
-  out.communities = (await db.query(
-    `UPDATE communities SET seed_tag = $1
-      WHERE seed_tag IS DISTINCT FROM $1
-        AND created_by IN (SELECT id FROM users WHERE seed_tag = $1)`, [TAG])).rowCount;
-  out.ad_campaigns = (await db.query(
-    `UPDATE ad_campaigns SET seed_tag = $1
-      WHERE seed_tag IS DISTINCT FROM $1
-        AND advertiser_id IN (SELECT id FROM users WHERE seed_tag = $1)`, [TAG])).rowCount;
-  /* gift_cards tag themselves at insert, but a card bought by a tagged account
-     is ours too. */
-  out.gift_cards = (await db.query(
-    `UPDATE gift_cards SET seed_tag = $1
-      WHERE seed_tag IS DISTINCT FROM $1
-        AND buyer_id IN (SELECT id FROM users WHERE seed_tag = $1)`, [TAG])).rowCount;
-
+  const pairs = [['at_groups', 'created_by'], ['communities', 'created_by'],
+                 ['ad_campaigns', 'advertiser_id'], ['gift_cards', 'buyer_id']];
+  for (const [table, owner] of pairs) {
+    const r = await db.query(
+      `UPDATE ${table} SET seed_tag = $1
+        WHERE seed_tag IS DISTINCT FROM $1
+          AND ${owner} IN (SELECT id FROM users WHERE seed_tag = $1)`, [TAG]);
+    out[table] = r.rowCount;
+  }
   return out;
 }
 
@@ -268,7 +282,19 @@ async function doSeed(db, opts) {
   await ensureSeedTag(db);
 
   const before = await counts(db);
-  const maxId = (await db.query('SELECT COALESCE(MAX(id),0)::int AS m FROM users')).rows[0].m;
+
+  /* REFUSE rather than adopt. Demo accounts this tool did not create belong to
+     whoever made them; claiming them would put them inside reset's reach. */
+  if (before._untagged_demo) {
+    console.error(`\nREFUSED. ${before._untagged_demo} demo account(s) in this database are not tagged "${TAG}", ` +
+                  'so this tool did not create them.');
+    console.error('  Adopting them would mean a later reset deletes somebody else\'s rows, so it will not.');
+    console.error('  Either remove them first (the admin dashboard\'s demo switch, turned off, does exactly that),');
+    console.error('  or -- if they came from an interrupted run of THIS tool -- tag them by hand and re-run:');
+    console.error(`    UPDATE users SET seed_tag = '${TAG}' WHERE is_demo = true AND seed_tag IS NULL;`);
+    console.error('\nNothing was changed.');
+    return 1;
+  }
 
   console.log('\nWHAT WILL BE CREATED');
   console.log(`  identity file             ${source}`);
@@ -280,10 +306,6 @@ async function doSeed(db, opts) {
   console.log('\nTHIS DATABASE NOW');
   console.log(`  users total               ${before._users_total}`);
   console.log(`  already tagged "${TAG}"      ${before.users}`);
-  if (before._untagged_demo) {
-    console.log(`  demo users NOT tagged     ${before._untagged_demo}  <-- these will be ADOPTED and tagged "${TAG}",`);
-    console.log('                            which means a later reset WILL remove them.');
-  }
 
   if (!opts.yes) {
     const a = await promptVisible(`\nType "seed ${TAG}" to proceed, anything else to stop: `);
@@ -293,6 +315,9 @@ async function doSeed(db, opts) {
   console.log('\nSeeding...');
   const hash = await bcrypt.hash(pw, 10);
   pw = null;
+
+  /* Everything created from here is tagged by exact id. */
+  const idsBefore = await userIds(db);
 
   const me = await upsertUser(db, { ...identity, isAdmin: identity.role === 'admin' }, hash);
   console.log(`  account   @${identity.username} (${me.created ? 'created' : 'already existed, re-tagged'})`);
@@ -311,8 +336,11 @@ async function doSeed(db, opts) {
   const demoCount = await demo.seedDemo(db, me.id);
   console.log(`  discovery ${demoCount} accounts`);
 
-  let tagged = await tagEverything(db, maxId);
-  console.log(`  tagged    ${Object.entries(tagged).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  const created = newlyCreated(idsBefore, await userIds(db));
+  const taggedUsers = await tagUsers(db, created);
+  let tagged = await tagSurvivors(db);
+  console.log(`  tagged    ${created.length} account(s) created here (${taggedUsers} newly tagged), ` +
+              Object.entries(tagged).map(([k, v]) => `${k} ${v}`).join(', '));
 
   const followed = await demo.immerseInDemo(db, me.id);
   console.log(`  following ${followed}`);
@@ -331,15 +359,17 @@ async function doSeed(db, opts) {
     console.error(`  commerce  FAILED and was rolled back: ${e.message}`);
   } finally { client.release(); }
 
-  /* Again, because the stages above create rows. */
-  tagged = await tagEverything(db, maxId);
+  /* Again, because the stages above create rows. Exact ids once more, so a row
+     made by immerse or commerce cannot slip through untagged. */
+  await tagUsers(db, newlyCreated(idsBefore, await userIds(db)));
+  tagged = await tagSurvivors(db);
 
   const after = await counts(db);
   console.log('\nDONE');
   for (const t of TAGGED_TABLES) console.log(`  ${t.padEnd(16)}${after[t]} tagged "${TAG}"`);
   console.log(`  ${'users total'.padEnd(16)}${after._users_total}`);
   if (after._untagged_demo) {
-    console.log(`\n  ${after._untagged_demo} demo user(s) are still untagged. They were not created here ` +
+    console.log(`\n  ${after._untagged_demo} demo user(s) are untagged. They were not created here ` +
                 'and reset will NOT remove them.');
   }
   console.log(`\nSign in at ${process.env.APP_URL} as ${identity.email} with the password you supplied.`);
