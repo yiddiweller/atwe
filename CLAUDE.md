@@ -2565,6 +2565,53 @@ Two moderation/legal-lookup tools, both gated by **`requirePerm('moderation')`**
   Client: multi-select on the Reports/Support view (`REP_SEL` set, per-row checkboxes,
   Select-all, `bulkReports(status,removeTarget)` → the bulk bar).
 
+### `requireAdmin` IS THE SUPERADMIN GATE — it is not a weaker `requirePerm`
+
+Worth writing down because it reads backwards from the outside, and a security review
+of Beta Access raised exactly that objection: the dashboard hides a tab behind
+`TAB_PERM.<tab> = 'super'` while the routes carry only `auth.requireAdmin`, which looks
+like a UI-only restriction over an API any admin could call by hand. **It is not a
+mismatch. The two are the same fact spelled two ways.**
+
+| | |
+|---|---|
+| `auth.requireAdmin` | refuses unless the token claims `is_admin`, then **re-reads `is_admin` from the database** and refuses again. It never reads `admin_perms`. |
+| `auth.requirePerm(scope)` | the SCOPED gate: `!row.is_admin && !perms.includes(scope)` — passes a non-super account carrying the scope. Strictly looser. |
+| `publicUser` | `adminPerms: row.is_admin ? 'all' : [...]` |
+| `admin.html` | `superadmin: user.adminPerms === 'all'` |
+| `admin.html` `canSee` | a `'super'` tab needs `ME.superadmin` |
+
+So **`is_admin` === superadmin === what `requireAdmin` enforces === what the UI calls
+`'super'`.** An "ordinary admin without super rights" is, in this codebase, a **scoped
+staffer**: `admin_perms` non-empty, `is_admin` false — and `requireAdmin` refuses them
+twice over. Sixteen `'super'` tabs (Site, Audit log, Staff, Vault, Storage, Cluster,
+Feed, Activity, Beta Access, …) are all written this way, so **changing one of them to
+`requirePerm` to "add a permission check" WIDENS it.**
+
+**THE SECOND GATE IS THE ONE THAT MATTERS AND IS EASY TO DROP.** A token is a signed
+claim, so a staffer holding one minted while they still had admin presents
+`is_admin:true` and sails past the payload check; only the database re-read refuses
+them. Any future gate written here must re-read, never trust the claim.
+
+**Guarded by `scratchpad`-style source checks in `test/beta-access-authz.test.js`** (10
+checks, no database, always on): `requireAdmin` refuses on the payload AND on the DB
+row, never mentions `admin_perms`, `requirePerm` really is looser, every Beta Access
+route is `requireAdmin` then `betaOnly` in that order, and the UI/server definitions of
+superadmin agree. Self-tested twice — widening one route to `requirePerm('users')` fails
+it, and letting `requireAdmin` admit scoped staff fails three more.
+
+**Its live half is OPT-IN (`ATWE_LIVE_BETA_AUTHZ=1`) and that is measured, not lazy.**
+It spawns its own server, `node --test` runs files concurrently, and the extra load
+tipped two unrelated money tests over — `money-invoice`'s and `money-cardflows`'
+re-delivered-webhook checks, which wait for a fire-and-forget settlement with a **fixed
+1500ms sleep** (`const settle` in each). That sleep is the real fragility and it is
+pre-existing; it is fine at the suite's usual concurrency and not at one server more.
+The source half is the always-on guard and it caught both deliberate breaks on its own,
+so the live half is confirmation rather than coverage. **Run it before any promotion:**
+`TEST_DATABASE_URL=… ATWE_LIVE_BETA_AUTHZ=1 node --test test/beta-access-authz.test.js`
+(24 checks: a scoped staffer refused on all six routes on an honest token AND on one
+claiming admin, a superadmin served on beta, every route refused off beta).
+
 ### Staff roles & scoped access (RBAC) — admin **Staff** tab
 
 Least-privilege staff access so a 100-person team doesn't all get the full dashboard.
