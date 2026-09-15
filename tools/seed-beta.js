@@ -6,6 +6,8 @@
  *   node tools/seed-beta.js seed     build the beta world
  *   node tools/seed-beta.js add-account <file.json>
  *                                    add ONE account to the world already there
+ *   node tools/seed-beta.js activate-official
+ *                                    give the app's OWN @atwe account a beta password
  *   node tools/seed-beta.js reset    remove EXACTLY what this tool created, and nothing else
  *
  * THREE RULES THIS FILE EXISTS TO ENFORCE.
@@ -507,6 +509,114 @@ async function doAddAccount(db, opts) {
   return 0;
 }
 
+/* ------------------------------ activate the app's OWN @atwe account */
+
+/* NOT add-account. @atwe already exists on every database, because server.js
+   creates it itself on boot so the platform can post as itself. This command
+   gives that existing account a beta password so somebody can sign in as it,
+   and it refuses every row it cannot prove is that account. It creates nothing,
+   deletes nothing, renames nothing and promotes nothing. */
+async function doActivateOfficial(db, opts) {
+  const uname = account.OFFICIAL_USERNAME;
+
+  await ensureSeedTag(db);
+
+  const { row, count } = await account.findOfficial(db, uname);
+  if (count > 1) {
+    console.error(`\nREFUSED. ${count} accounts hold @${uname}. Something is wrong with the unique index; not touching any of them.`);
+    return 1;
+  }
+  if (!row) {
+    console.error(`\nREFUSED. There is no @${uname} account in this database.`);
+    console.error('  The app creates it itself on boot (server.js ensureOfficialAccount), so either this');
+    console.error('  database has never run the app, or something removed it. Start the beta app once, then retry.');
+    return 1;
+  }
+
+  /* If an identity file was named, it must DESCRIBE this same account. It is
+     never used to write anything -- it only has to agree, so that pointing this
+     command at the wrong file is caught rather than silently ignored. */
+  if (opts.identity) {
+    let raw;
+    try { raw = JSON.parse(fs.readFileSync(opts.identity, 'utf8')); }
+    catch (e) { console.error(`\nCould not read ${opts.identity}: ${e.message}`); return 1; }
+    let id;
+    try { id = account.normalizeIdentity(raw); }
+    catch (e) { console.error(`\nREFUSED. ${opts.identity}: ${e.message}`); return 1; }
+    if (id.username !== uname) {
+      console.error(`\nREFUSED. ${opts.identity} describes @${id.username}, but this command only ever acts on @${uname}.`);
+      return 1;
+    }
+    if (id.role !== 'member') {
+      console.error(`\nREFUSED. ${opts.identity} asks for role "${id.role}". This command never grants staff access.`);
+      return 1;
+    }
+    console.log(`\n  identity file             ${opts.identity} (checked, never written)`);
+  }
+
+  const problem = account.officialMismatch(row, uname);
+  if (problem) {
+    console.error(`\nREFUSED. @${uname} exists, but it is not provably the account the app created:`);
+    console.error(`  ${problem}`);
+    console.error('\n  This command only ever activates the built-in account, and only when every');
+    console.error('  identity check passes. It will not overwrite an account it cannot account for.');
+    return 1;
+  }
+
+  const want = account.officialIdentity(uname);
+  console.log('\nTHE ACCOUNT THIS WILL ACTIVATE');
+  console.log(`  id                        ${row.id}`);
+  console.log(`  username                  @${row.username}`);
+  console.log(`  email                     ${row.email}`);
+  console.log(`  name                      ${row.name}`);
+  console.log(`  account type              ${row.account_type}`);
+  console.log(`  staff access              none (is_admin false, no scopes)  <-- and this command cannot grant any`);
+  console.log(`  seed_tag now              ${row.seed_tag == null ? 'none' : `"${row.seed_tag}"`}`);
+  console.log(`  headline                  ${row.headline || '(none)'}${row.headline === want.headline ? '' : '   [differs from the app default; not required]'}`);
+  console.log(`  verified seal             ${row.verified ? 'yes' : 'no'}${row.verified ? '' : '   [app default is yes; not required]'}`);
+
+  console.log('\nWHAT WILL CHANGE, and nothing else');
+  console.log('  password_hash             set to the beta password you are about to type');
+  console.log('  email_verified            true');
+  console.log(`  seed_tag                  "${account.KEEP_TAG}"  <-- deliberately NOT "${TAG}": see below`);
+  console.log('\n  NOT touched: username, email, name, account type, the verified seal, the headline,');
+  console.log('  every admin column, and every Stripe / OAuth / two-factor / device column.');
+  console.log(`\n  RESET SAFETY. "${TAG}" is what reset deletes. This row is tagged "${account.KEEP_TAG}"`);
+  console.log('  instead, so a beta reset does not match it, and reset separately refuses to delete');
+  console.log(`  @${uname} by name even if somebody re-tags it by hand. The app\'s own account survives.`);
+  console.log(`\n  join the existing world   ${opts.immerse ? 'yes - follows, DMs, notifications, one group' : 'no (--no-immerse)'}`);
+  console.log('  commerce history          no - this command never adds any');
+
+  if (opts.dryRun) { console.log('\n--dry-run: nothing was written.'); return 0; }
+
+  if (!opts.yes) {
+    const a = await promptVisible(`\nType "activate ${uname}" to give it a beta password, anything else to stop: `);
+    if (a !== `activate ${uname}`) { console.log('Stopped. Nothing was changed.'); return 1; }
+  }
+
+  let pw;
+  try { pw = await readPassword(); }
+  catch (e) { console.error(`\n${e.message}`); return 1; }
+  const hash = await auth.hashPassword(pw);
+  pw = null;
+
+  let done;
+  try { done = await account.activateOfficial(db, { passwordHash: hash, username: uname }); }
+  catch (e) { console.error(`\nREFUSED. ${e.message}`); return 1; }
+  console.log(`\n  activated                 @${done.username} (id ${done.id}), seed_tag "${done.seedTag}"`);
+
+  if (opts.immerse) {
+    try {
+      const r = await account.immerseAccount(db, done.id);
+      console.log(`  joined the world          following ${r.followed} account(s); ${r.note}`);
+    } catch (e) { console.error(`  joined the world          FAILED (the account is still activated): ${e.message}`); }
+  }
+
+  console.log(`\nDONE. Sign in at ${process.env.APP_URL} as @${done.username} (or ${row.email}) with the password you supplied.`);
+  console.log('No account was created, renamed, promoted or deleted.');
+  return 0;
+}
+
 /* ------------------------------------------------------------------- reset */
 
 async function doReset(db, opts) {
@@ -517,6 +627,7 @@ async function doReset(db, opts) {
   for (const t of TAGGED_TABLES) console.log(`  ${t.padEnd(16)}${before[t]} row(s) tagged "${TAG}"`);
   console.log('\n  Everything those users own is removed by the database\'s own foreign keys.');
   console.log(`  NOTHING is selected by is_demo. ${before._untagged_demo} untagged demo user(s) will be LEFT ALONE.`);
+  console.log(`  @${account.OFFICIAL_USERNAME} (the app's own account) is EXCLUDED by name and is never deleted.`);
   console.log(`  users in this database after the delete: about ${before._users_total - before.users}`);
 
   if (!before.users && !TAGGED_TABLES.some((t) => before[t])) {
@@ -538,7 +649,19 @@ async function doReset(db, opts) {
        which cascades everything genuinely owned. No DROP, no TRUNCATE, and no
        predicate anywhere but seed_tag. */
     for (const t of ['at_groups', 'communities', 'ad_campaigns', 'gift_cards', 'users']) {
-      const r = await client.query(`DELETE FROM ${t} WHERE seed_tag = $1`, [TAG]);
+      /* THE APP'S OWN @atwe ACCOUNT IS NEVER DELETED, whatever it is tagged.
+         server.js creates it on boot so the platform can post as itself, and
+         deleting it would cascade away every post it ever made, hand it a new
+         id and a new random password on the next boot, and leave the admin
+         "post as Atwe" route answering "no @atwe account exists" until then.
+         It should never carry this tag in the first place (activate-official
+         writes "beta-keep"), so this excludes nothing today -- it is here so a
+         hand-tagged row cannot turn a routine reset into that outage.
+         IS DISTINCT FROM, not <>, so a NULL username still matches and is
+         still deleted: a row with no handle is not the official account. */
+      const guard = t === 'users' ? ' AND lower(username) IS DISTINCT FROM $2' : '';
+      const args  = t === 'users' ? [TAG, account.OFFICIAL_USERNAME] : [TAG];
+      const r = await client.query(`DELETE FROM ${t} WHERE seed_tag = $1${guard}`, args);
       removed[t] = r.rowCount;
     }
     await client.query('COMMIT');
@@ -568,11 +691,12 @@ async function main() {
     commerce: argv.includes('--commerce'),
     immerse: !argv.includes('--no-immerse'),
     claimReserved: argv.includes('--claim-reserved'),
+    dryRun: argv.includes('--dry-run'),
     identity: (argv.find((a) => a.startsWith('--identity=')) || '').split('=')[1] || positional[1] || null,
   };
 
-  if (!['check', 'status', 'seed', 'reset', 'add-account'].includes(cmd)) {
-    console.error(`Unknown command "${cmd}". Use: check | status | seed | add-account | reset`);
+  if (!['check', 'status', 'seed', 'reset', 'add-account', 'activate-official'].includes(cmd)) {
+    console.error(`Unknown command "${cmd}". Use: check | status | seed | add-account | activate-official | reset`);
     return 2;
   }
 
@@ -604,6 +728,7 @@ async function main() {
       return 0;
     }
     if (cmd === 'add-account') return await doAddAccount(db, opts);
+    if (cmd === 'activate-official') return await doActivateOfficial(db, opts);
     return cmd === 'seed' ? await doSeed(db, opts) : await doReset(db, opts);
   } finally {
     try { await db.getPool().end(); } catch (e) { /* nothing to close */ }

@@ -12,7 +12,7 @@ cannot be answered wrongly.
 
 ---
 
-## The five commands
+## The six commands
 
 ```bash
 node tools/seed-beta.js check     # what would happen, and whether it is allowed
@@ -20,6 +20,8 @@ node tools/seed-beta.js status    # what this database currently holds that is t
 node tools/seed-beta.js seed      # build the world (once)
 node tools/seed-beta.js add-account <file.json>
                                   # add ONE account to the world already there
+node tools/seed-beta.js activate-official
+                                  # give the app's OWN @atwe account a beta password
 node tools/seed-beta.js reset     # remove exactly what this tool created
 ```
 
@@ -246,6 +248,76 @@ plain objects, so a future **Admin -> Beta Access** screen can call
 `createBetaAccount` / `immerseAccount` / `findByUsername` directly without
 shelling out. Removing a beta account is deliberately NOT implemented; `reset`
 remains the only delete path.
+
+---
+
+## The app's own @atwe account
+
+**@atwe is not ours to create, and `add-account` will always refuse it.** `server.js`
+creates it itself on every boot (`ensureOfficialAccount`) so the platform can post as
+itself from day one. On the live beta database it is **id 1**, and that refusal is the
+tool working correctly, not a bug.
+
+**It cannot be signed into, deliberately.** The app gives it a password of 48 random
+bytes, hashes it immediately and shows nobody. `server.js` says so in its own words:
+*"Nobody signs in as it ... so there is no shared login to leak."* Staff post as it
+through an admin route instead.
+
+So making it signable-in is a real, if small, widening of that posture. It is beta-only,
+it is one command, and the command refuses anything it cannot positively identify:
+
+```bash
+node tools/seed-beta.js activate-official
+```
+
+**It takes no username.** That is the point of the name: it can only ever act on the
+app's own account, so it can never become a generic "overwrite any member" tool. An
+identity file may be passed and is only ever CHECKED, never written.
+
+**What proves the row is the built-in account.** Every value below is read out of
+`ensureOfficialAccount`, not invented here, and a test asserts they still match the app:
+
+| check | why |
+|---|---|
+| `username` = `atwe` | the handle the app claims (`ATWE_OFFICIAL_USERNAME`) |
+| `email` = `no-reply+atwe@atwe.internal` | **the strongest proof.** `@atwe.internal` is not a deliverable domain and signup needs a code that really arrives, so no person could hold this address |
+| `name` = `Atwe` | the app's own literal |
+| `account_type` = `business` | the app's own literal |
+| `is_demo` false | otherwise it is seeded sample data |
+| `is_admin` false, no staff scopes | **this command hands out a password and will never hand out a staff login** |
+| no two-factor, not suspended, not deactivated | a password alone has to be the whole story |
+| no Stripe / Connect / OAuth link | the built-in account never has one |
+| `seed_tag` unset or `beta-keep` | a row tagged `beta` is seeded data, not this |
+
+`headline` and the verified seal are **reported but not required** - both are editable
+product copy, and refusing over them would be a false alarm on the genuine account.
+
+**What it writes: three columns, and nothing else.** `password_hash`, `email_verified`
+and the keep-tag. Username, email, name, account type, the seal, the headline, every
+admin column and every external credential are left exactly as they are, so this can
+neither rename the account nor promote it. The identity is re-asserted inside the
+`UPDATE`'s own `WHERE`, so a row that changed underneath is missed rather than written
+to.
+
+**seed_tag is `beta-keep`, NOT `beta`, and that is the important decision here.**
+Reset deletes `WHERE seed_tag = 'beta'`. Tagging the app's own account that way would
+make a routine beta reset **delete it** - and by cascade every post it had ever made.
+It would return on the next boot with a fresh random password (breaking this login) and
+a different id, and until that boot the admin "post as Atwe" route would answer *"no
+@atwe account exists"*. `beta-keep` records that beta tooling touched the row while
+being invisible to a predicate that tests equality with `beta`.
+
+**Reset is separately hardened.** The users delete now carries
+`AND lower(username) IS DISTINCT FROM $2` with the official username, so the account
+survives even if somebody re-tags it `beta` by hand. Two independent protections,
+because one of them is a value a human can overwrite.
+
+**`--claim-reserved` is not needed here.** `atwe` is on `routes.js`'s reserved list, but
+the app **deletes that reservation** the moment it creates the account, so on any
+database the beta app has booted against there is nothing left to claim.
+
+Immersion (`--no-immerse` to skip) is the same audited `immerseInDemo` `add-account`
+uses. Commerce is never added by this command at all.
 
 ---
 

@@ -203,9 +203,147 @@ async function immerseAccount(db, userId) {
   return { followed, note: 'follows + DMs + notifications + one group membership, all owned by this account' };
 }
 
+/* ---- 5. THE APP'S OWN BUILT-IN ACCOUNT ------------------------------- */
+
+/* @atwe is NOT a seeded account and never was. server.js creates it itself
+   (`ensureOfficialAccount`, called on every boot) so the platform can post as
+   itself from day one, and @atwe is a RESERVED handle precisely so nobody else
+   can ever hold it. Everything below is read out of that function rather than
+   invented, so if the app's own definition changes this stops matching and
+   refuses instead of guessing.
+
+   WHY IT CANNOT BE SIGNED INTO TODAY, and this is deliberate rather than an
+   oversight: the account is created with a password of 48 random bytes that is
+   hashed immediately and never shown to anybody. server.js says so in its own
+   words -- "Nobody signs in as it ... so there is no shared login to leak."
+   Staff post as it through an admin route instead. Activating a login for it is
+   therefore a REAL, if small, widening of that posture, which is why this is
+   beta-only, narrow, and refuses anything it cannot positively identify. */
+
+const OFFICIAL_USERNAME = (process.env.ATWE_OFFICIAL_USERNAME || 'atwe').toLowerCase();
+
+/* NOT "beta". Reset deletes `WHERE seed_tag = 'beta'`, so tagging the app's own
+   account that way would make a routine beta reset DELETE it -- and with it, by
+   cascade, every post it had ever made. It would come back on the next boot with
+   a fresh random password (breaking this login) and a different id, and until
+   that boot the admin "post as Atwe" route would answer "no @atwe account
+   exists". A distinct value records that beta tooling touched the row while
+   being invisible to a predicate that tests for equality with "beta". */
+const KEEP_TAG = 'beta-keep';
+
+/* Exactly what `ensureOfficialAccount` writes. */
+function officialIdentity(username = OFFICIAL_USERNAME) {
+  return {
+    username,
+    email: `no-reply+${username}@atwe.internal`,
+    name: 'Atwe',
+    accountType: 'business',
+    headline: 'Product news and tips from Atwe',
+  };
+}
+
+/* Returns a plain-English reason to REFUSE, or null when this row is provably
+   the account server.js made. Split into two kinds of check on purpose.
+
+   PROVENANCE -- things a human signup could not have produced, so matching them
+   proves where the row came from. The email is the strongest of the four:
+   "@atwe.internal" is not a deliverable domain and signup requires a code that
+   really arrives, so no person could hold this address.
+
+   SAFETY -- this hands somebody a working password, so it also refuses any row
+   that would make that password more powerful than an ordinary member's, or
+   that is not in a state where a plain login is the whole story.
+
+   Deliberately NOT required: `headline` and `verified`. Those are editable
+   product copy and a badge; staff changing either does not make the row a
+   different account, and refusing over them would be a false alarm on the real
+   one. They are reported instead. */
+function officialMismatch(row, username = OFFICIAL_USERNAME) {
+  const want = officialIdentity(username);
+  if (!row) return `no @${username} account exists in this database`;
+
+  const s = (v) => String(v == null ? '' : v).trim().toLowerCase();
+  if (s(row.username) !== want.username) return `its username is "${row.username}", not "${want.username}"`;
+  if (s(row.email) !== want.email) {
+    return `its email is "${row.email}", but the built-in account is created with "${want.email}". ` +
+           'Refusing: this row was not made by the app itself.';
+  }
+  if (s(row.name) !== want.name.toLowerCase()) return `its name is "${row.name}", not "${want.name}"`;
+  if (s(row.account_type) !== want.accountType) return `its account type is "${row.account_type}", not "${want.accountType}"`;
+  if (row.is_demo === true) return 'it is flagged is_demo, so it is seeded sample data rather than the built-in account';
+
+  if (row.is_admin === true) {
+    return 'it carries ADMIN rights. Refusing: this command hands out a password, and it will never hand out a staff login.';
+  }
+  const perms = Array.isArray(row.admin_perms) ? row.admin_perms : [];
+  if (perms.length) return `it carries staff scopes (${perms.join(', ')}). Refusing for the same reason as admin.`;
+  if (row.totp_enabled === true) return 'it has two-factor enabled, so a password alone would not sign in. Refusing rather than disabling it.';
+  if (row.status && s(row.status) !== 'active') return `its status is "${row.status}", not active`;
+  if (row.deactivated === true) return 'it is deactivated (hibernated)';
+  for (const [col, what] of [['stripe_customer_id', 'a Stripe customer'], ['stripe_connect_id', 'a Stripe Connect account'],
+                             ['oauth_provider', 'a linked sign-in provider']]) {
+    if (row[col]) return `it has ${what} attached, which the built-in account never does`;
+  }
+  if (row.seed_tag != null && s(row.seed_tag) !== KEEP_TAG) {
+    return `it is tagged seed_tag "${row.seed_tag}". The built-in account is untagged; a tagged row is seeded data.`;
+  }
+  return null;
+}
+
+/* Every column the checks above read, so a caller cannot accidentally judge the
+   row on a partial SELECT. Also returns how MANY rows hold the handle: more than
+   one would mean the unique index is gone and nothing here should be trusted. */
+async function findOfficial(db, username = OFFICIAL_USERNAME) {
+  const r = await db.query(
+    `SELECT id, name, email, username, account_type, is_demo, is_admin, admin_perms, admin_role,
+            verified, email_verified, headline, status, deactivated, totp_enabled,
+            stripe_customer_id, stripe_connect_id, oauth_provider, seed_tag, created_at
+       FROM users WHERE lower(username) = $1`, [String(username).toLowerCase()]);
+  return { row: r.rows[0] || null, count: r.rowCount };
+}
+
+/* Gives the app's own account a password somebody can sign in with, in beta.
+
+   It writes THREE columns and no others: the hash, `email_verified` (needed only
+   where REQUIRE_EMAIL_VERIFICATION is on, and already true on a real built-in
+   row), and the keep-tag. Username, email, name, account type, the verified
+   seal, the headline, every admin column and every external credential are left
+   exactly as they are -- so this can neither rename the account nor promote it.
+
+   The identity is re-asserted inside the UPDATE's own WHERE, not merely checked
+   beforehand, so if anything changed the row between the check and the write it
+   affects zero rows and reports that instead of writing to a row it never
+   inspected. */
+async function activateOfficial(db, { passwordHash, username = OFFICIAL_USERNAME } = {}) {
+  if (!passwordHash || typeof passwordHash !== 'string' || !passwordHash.startsWith('$2')) {
+    throw new Error('activateOfficial needs a bcrypt hash from auth.hashPassword');
+  }
+  const uname = String(username).toLowerCase();
+  const { row, count } = await findOfficial(db, uname);
+  if (count > 1) throw new Error(`${count} accounts hold @${uname}. Refusing to touch any of them.`);
+  const problem = officialMismatch(row, uname);
+  if (problem) throw new Error(`@${uname} is not the built-in Atwe account: ${problem}`);
+
+  const r = await db.query(
+    `UPDATE users
+        SET password_hash = $1, email_verified = true, seed_tag = $2
+      WHERE id = $3
+        AND lower(username) = $4
+        AND lower(email)    = $5
+        AND account_type    = 'business'
+        AND is_demo  IS NOT TRUE
+        AND is_admin IS NOT TRUE
+      RETURNING id, username`,
+    [passwordHash, KEEP_TAG, row.id, uname, officialIdentity(uname).email]);
+  if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
+  return { id: r.rows[0].id, username: r.rows[0].username, seedTag: KEEP_TAG, wasTagged: row.seed_tag != null };
+}
+
 module.exports = {
   TAG, FORBIDDEN_FIELDS, ALLOWED_FIELDS, ACCOUNT_TYPES, ROLES,
   identityProblem, normalizeIdentity,
   findByUsername, findByEmail, reservationFor,
   createBetaAccount, immerseAccount,
+  OFFICIAL_USERNAME, KEEP_TAG, officialIdentity, officialMismatch,
+  findOfficial, activateOfficial,
 };
