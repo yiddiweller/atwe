@@ -4,6 +4,8 @@
  *   node tools/seed-beta.js check    what would happen, and why it would or would not be allowed
  *   node tools/seed-beta.js status   what this database currently holds that is tagged beta
  *   node tools/seed-beta.js seed     build the beta world
+ *   node tools/seed-beta.js add-account <file.json>
+ *                                    add ONE account to the world already there
  *   node tools/seed-beta.js reset    remove EXACTLY what this tool created, and nothing else
  *
  * THREE RULES THIS FILE EXISTS TO ENFORCE.
@@ -36,7 +38,8 @@ const readline = require('readline');
 const stream = require('stream');
 const path = require('path');
 const fs = require('fs');
-const bcrypt = require('bcryptjs');
+const auth = require(path.join(__dirname, '..', 'auth'));
+const account = require(path.join(__dirname, '..', 'seed', 'beta-account'));
 
 const guard = require(path.join(__dirname, 'seed-guard'));
 
@@ -131,6 +134,17 @@ function promptVisible(question) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     rl.question(question, (a) => { rl.close(); resolve(String(a || '').trim()); });
   });
+}
+
+/* A password reaches this tool from exactly two places and is hashed by the
+   app's own auth.hashPassword. It is never read from a file, never printed,
+   never logged, and never placed in any object this tool prints. */
+async function readPassword() {
+  let pw = process.env.BETA_SEED_PASSWORD || '';
+  if (!pw) pw = await promptHidden('Beta account password (not echoed): ');
+  const problem = guard.passwordProblem(pw);
+  if (problem) throw new Error(`The beta password is ${problem}. Nothing was changed.`);
+  return pw;
 }
 
 /* ---------------------------------------------------------------- preflight */
@@ -274,10 +288,9 @@ async function upsertUser(db, u, hash) {
 async function doSeed(db, opts) {
   const { id: identity, source } = loadIdentity(opts.identity);
 
-  let pw = process.env.BETA_SEED_PASSWORD || '';
-  if (!pw) pw = await promptHidden('Beta account password (not echoed): ');
-  const problem = guard.passwordProblem(pw);
-  if (problem) { console.error(`\nThe beta password is ${problem}. Nothing was changed.`); return 1; }
+  let pw;
+  try { pw = await readPassword(); }
+  catch (e) { console.error(`\n${e.message}`); return 1; }
 
   await ensureSeedTag(db);
 
@@ -313,7 +326,7 @@ async function doSeed(db, opts) {
   }
 
   console.log('\nSeeding...');
-  const hash = await bcrypt.hash(pw, 10);
+  const hash = await auth.hashPassword(pw);   // the app's own hasher, never a local copy
   pw = null;
 
   /* Everything created from here is tagged by exact id. */
@@ -376,6 +389,124 @@ async function doSeed(db, opts) {
   return 0;
 }
 
+/* ------------------------------------------------------- add ONE account */
+
+/* Adds a single beta account to the world that is ALREADY there. It never
+   calls seedDemo, never creates the discovery population, never creates a
+   shop or any commerce fixture, and never deletes or overwrites anything.
+   All of that lives in doSeed and is not reachable from here. */
+async function doAddAccount(db, opts) {
+  if (!opts.identity) {
+    console.error('\nUsage: node tools/seed-beta.js add-account <identity.json> [--commerce] [--no-immerse] [--claim-reserved]');
+    return 2;
+  }
+
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(opts.identity, 'utf8')); }
+  catch (e) { console.error(`\nCould not read ${opts.identity}: ${e.message}`); return 1; }
+
+  let id;
+  try { id = account.normalizeIdentity(raw); }
+  catch (e) { console.error(`\nREFUSED. ${opts.identity}: ${e.message}`); return 1; }
+
+  await ensureSeedTag(db);
+
+  /* Everything that would make this refuse is checked BEFORE the password is
+     asked for, so nobody types a secret into a run that was never going to
+     happen. */
+  const clash = await account.findByUsername(db, id.username);
+  if (clash) {
+    console.error(`\nREFUSED. @${id.username} already exists (id ${clash.id}, seed_tag ${clash.seed_tag || 'none'}).`);
+    console.error('  This tool never overwrites a profile, re-tags an account or resets a password.');
+    console.error('  Pick a different username, or remove that account deliberately by hand first.');
+    return 1;
+  }
+  const mail = await account.findByEmail(db, id.email);
+  if (mail) {
+    console.error(`\nREFUSED. ${id.email} already belongs to @${mail.username || mail.id}. Nothing was changed.`);
+    return 1;
+  }
+  const reserved = await account.reservationFor(db, id.username);
+  if (reserved && !opts.claimReserved) {
+    console.error(`\nREFUSED. "${id.username}" is a RESERVED username.`);
+    console.error('  Atwe locks these (routes.js SYSTEM_ROUTES) so nobody can impersonate the company');
+    console.error('  or shadow a route, and the app refuses them at signup and at username-change.');
+    console.error('  Creating one is a deliberate act by the legitimate owner:');
+    console.error(`    node tools/seed-beta.js add-account ${opts.identity} --claim-reserved`);
+    console.error('  The reservation row is LEFT IN PLACE, so the name stays locked against everyone else.');
+    return 1;
+  }
+
+  console.log('\nWHAT WILL BE ADDED');
+  console.log(`  identity file             ${opts.identity}`);
+  console.log(`  account                   @${id.username} <${id.email}>`);
+  console.log(`  display name              ${id.name}`);
+  console.log(`  account type              ${id.accountType}`);
+  console.log(`  role                      ${id.role}${id.role === 'admin' ? '  <-- STAFF ACCESS' : '  (ordinary member - no staff access)'}`);
+  console.log(`  reserved name             ${reserved ? 'yes, claiming it deliberately (row left in place)' : 'no'}`);
+  console.log(`  join the existing world   ${opts.immerse ? 'yes - follows, DMs, notifications, one group' : 'no (--no-immerse)'}`);
+  console.log(`  commerce history          ${opts.commerce ? 'yes (--commerce)' : 'no - not the default'}`);
+  console.log('\n  NOT touched: the demo population, shops, global commerce fixtures, any existing account.');
+
+  const before = await counts(db);
+  console.log(`\n  users in this database    ${before._users_total}  (tagged "${TAG}": ${before.users})`);
+
+  if (!opts.yes) {
+    const a = await promptVisible(`\nType "add ${id.username}" to create it, anything else to stop: `);
+    if (a !== `add ${id.username}`) { console.log('Stopped. Nothing was changed.'); return 1; }
+  }
+
+  let pw;
+  try { pw = await readPassword(); }
+  catch (e) { console.error(`\n${e.message}`); return 1; }
+  const hash = await auth.hashPassword(pw);
+  pw = null;
+
+  let made;
+  try {
+    made = await account.createBetaAccount(db, {
+      identity: raw, passwordHash: hash, tag: TAG, claimReserved: opts.claimReserved,
+    });
+  } catch (e) { console.error(`\nREFUSED. ${e.message}`); return 1; }
+  console.log(`\n  created                   @${made.username} (id ${made.id}), seed_tag "${TAG}"`);
+
+  if (opts.immerse) {
+    try {
+      const r = await account.immerseAccount(db, made.id);
+      console.log(`  joined the world          following ${r.followed} account(s); ${r.note}`);
+    } catch (e) { console.error(`  joined the world          FAILED (the account still exists): ${e.message}`); }
+  }
+
+  if (opts.commerce) {
+    const pool = db.getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const sellers = (await client.query(
+        `SELECT id, name FROM users WHERE seed_tag = $1 AND is_demo = false AND id <> $2 ORDER BY id LIMIT 2`,
+        [TAG, made.id])).rows;
+      if (sellers.length < 2) {
+        await client.query('ROLLBACK');
+        console.error('  commerce                  SKIPPED: needs two existing beta shops to buy from.');
+      } else {
+        const { seedCommerce } = require(path.join(__dirname, '..', 'seed', 'beta-commerce'));
+        const c = await seedCommerce(client, { meId: made.id, sellers, tag: TAG });
+        await client.query('COMMIT');
+        console.log(c && c.skipped ? '  commerce                  already seeded, skipped'
+                                   : `  commerce                  ${Object.entries(c).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+      }
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error(`  commerce                  FAILED and was rolled back: ${e.message}`);
+    } finally { client.release(); }
+  }
+
+  const after = await counts(db);
+  console.log(`\nDONE. users ${before._users_total} -> ${after._users_total}, tagged "${TAG}" ${before.users} -> ${after.users}.`);
+  console.log(`Sign in at ${process.env.APP_URL} as ${id.email} with the password you supplied.`);
+  return 0;
+}
+
 /* ------------------------------------------------------------------- reset */
 
 async function doReset(db, opts) {
@@ -431,13 +562,17 @@ async function doReset(db, opts) {
 async function main() {
   const argv = process.argv.slice(2);
   const cmd = (argv.find((a) => !a.startsWith('-')) || 'check').toLowerCase();
+  const positional = argv.filter((a) => !a.startsWith('-'));
   const opts = {
     yes: argv.includes('--yes'),
-    identity: (argv.find((a) => a.startsWith('--identity=')) || '').split('=')[1] || null,
+    commerce: argv.includes('--commerce'),
+    immerse: !argv.includes('--no-immerse'),
+    claimReserved: argv.includes('--claim-reserved'),
+    identity: (argv.find((a) => a.startsWith('--identity=')) || '').split('=')[1] || positional[1] || null,
   };
 
-  if (!['check', 'status', 'seed', 'reset'].includes(cmd)) {
-    console.error(`Unknown command "${cmd}". Use: check | status | seed | reset`);
+  if (!['check', 'status', 'seed', 'reset', 'add-account'].includes(cmd)) {
+    console.error(`Unknown command "${cmd}". Use: check | status | seed | add-account | reset`);
     return 2;
   }
 
@@ -468,6 +603,7 @@ async function main() {
       console.log(`  ${'untagged demo'.padEnd(16)}${c._untagged_demo}  (not ours - reset leaves these)`);
       return 0;
     }
+    if (cmd === 'add-account') return await doAddAccount(db, opts);
     return cmd === 'seed' ? await doSeed(db, opts) : await doReset(db, opts);
   } finally {
     try { await db.getPool().end(); } catch (e) { /* nothing to close */ }
