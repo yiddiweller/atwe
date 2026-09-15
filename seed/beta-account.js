@@ -339,11 +339,62 @@ async function activateOfficial(db, { passwordHash, username = OFFICIAL_USERNAME
   return { id: r.rows[0].id, username: r.rows[0].username, seedTag: KEEP_TAG, wasTagged: row.seed_tag != null };
 }
 
+/* ---- 6. RESET AN ORDINARY BETA ACCOUNT'S PASSWORD -------------------- */
+
+/* The admin-side counterpart to createBetaAccount, and deliberately the same
+   shape: one guarded UPDATE, three refusals, nothing else touched.
+
+   OWNERSHIP IS RE-ASSERTED INSIDE THE UPDATE'S OWN WHERE rather than merely
+   checked beforehand, exactly as activateOfficial does. If anything changed the
+   row between the check and the write, the statement affects zero rows and says
+   so, instead of writing to a row it never inspected.
+
+   `seed_tag = 'beta'` is the whole ownership test and it is what keeps this
+   away from two kinds of account at once: a real member (untagged) and the
+   app's own @atwe (tagged "beta-keep"). The admin and staff-scope clauses are
+   belt and braces on top -- this hands somebody a working password, so it will
+   never hand out one that carries staff access, whatever the row says.
+
+   ONE COLUMN IS WRITTEN. Not the username, not the email, not the tag, not the
+   verified seal, not a single admin or credential column. */
+async function resetBetaPassword(db, { userId, passwordHash, tag = TAG } = {}) {
+  if (!passwordHash || typeof passwordHash !== 'string' || !passwordHash.startsWith('$2')) {
+    throw new Error('resetBetaPassword needs a bcrypt hash from auth.hashPassword');
+  }
+  const id = parseInt(userId, 10);
+  if (!Number.isInteger(id)) throw new Error('resetBetaPassword needs a numeric account id');
+
+  const found = await db.query(
+    `SELECT id, username, seed_tag, is_admin, admin_perms FROM users WHERE id = $1`, [id]);
+  const row = found.rows[0];
+  if (!row) throw new Error('that account no longer exists');
+  if (row.seed_tag !== tag) {
+    throw new Error(
+      `@${row.username || row.id} was not created by beta tooling` +
+      `${row.seed_tag === KEEP_TAG ? ' -- it is the app\'s own built-in account, which has its own separate flow' : ''}. ` +
+      'Refusing: this only ever touches accounts beta tooling made.');
+  }
+  if (row.is_admin === true) throw new Error('that account carries admin rights, and this never re-passwords a staff login');
+
+  const r = await db.query(
+    `UPDATE users
+        SET password_hash = $1
+      WHERE id = $2
+        AND seed_tag     = $3
+        AND is_demo  IS NOT TRUE
+        AND is_admin IS NOT TRUE
+        AND jsonb_array_length(COALESCE(admin_perms, '[]'::jsonb)) = 0
+      RETURNING id, username`,
+    [passwordHash, id, tag]);
+  if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
+  return { id: r.rows[0].id, username: r.rows[0].username };
+}
+
 module.exports = {
   TAG, FORBIDDEN_FIELDS, ALLOWED_FIELDS, ACCOUNT_TYPES, ROLES,
   identityProblem, normalizeIdentity,
   findByUsername, findByEmail, reservationFor,
   createBetaAccount, immerseAccount,
   OFFICIAL_USERNAME, KEEP_TAG, officialIdentity, officialMismatch,
-  findOfficial, activateOfficial,
+  findOfficial, activateOfficial, resetBetaPassword,
 };

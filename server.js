@@ -21,6 +21,7 @@ const geoip = require('./geoip');
 const finance = require('./finance');
 const apple = require('./apple');
 const demo = require('./demo');
+const betaAccess = require('./beta-access');   // Admin -> Beta Access (beta deployments only)
 const reservedSeed = require('./reserved-seed');
 const { SYSTEM_ROUTES } = require('./routes');   // words that are real URLs — never usernames
 const FEATURE_CONTROLS = require('./feature-controls-data');
@@ -2539,6 +2540,13 @@ app.get('/api/config', auth.optionalAuth, (req, res) => {
     features: Object.fromEntries(FEATURE_KEYS.map((k) => [k, featureEnabledFor(k, req)])),
     disabledFeatures: disabledFeatureKeys(), // module-level Feature Controls that are OFF → client shows "Unavailable"
     requireAdmin2fa: process.env.REQUIRE_ADMIN_2FA === 'true', // staff must have 2FA to use the dashboard
+    /* Is this the beta deployment? A UI HINT ONLY -- it lets the dashboard leave
+       the Beta Access item out of the sidebar rather than render a tab whose every
+       route would answer 403. It is not a boundary and is not treated as one:
+       `betaOnly` re-runs the same guard on every Beta Access route, so flipping
+       this in a browser buys nothing. Safe to publish -- it says no more than the
+       address bar already does on beta.atwe.com. */
+    betaEnv: betaAccess.isBeta(process.env),
     // What the locked-out screen should say during planned downtime (empty = the default wording).
     maintenance: (_maintenance && (_maintenance.title || _maintenance.body)) ? _maintenance : null,
   });
@@ -13586,6 +13594,153 @@ async function offloadMedia(dataUrl, kind) {
    chunk. Measured on the test database: 22.4s -> 0.075s, byte-identical counts
    (a NULL yields NULL either way, so the semantics match exactly). If you ever add
    another "does this column hold a data URL" query, write it the same way. */
+/* ─── Admin → Beta Access ───────────────────────────────────────────────────
+   Managing the beta testers' accounts from the dashboard instead of a console.
+
+   THIS SECTION IS A SKIN. Every rule lives in beta-access.js and
+   seed/beta-account.js, which `tools/seed-beta.js` also calls, so the console
+   and the dashboard can never drift into refusing different things. A route
+   here validates its input, passes it on, and audit-logs what happened.
+
+   IT ONLY EXISTS ON BETA, AND THAT IS ENFORCED HERE, NOT IN THE BROWSER.
+   `/api/config` carries a `betaEnv` flag so the dashboard can leave the nav item
+   out, but hiding a button is a courtesy and never a boundary: `betaOnly` runs
+   the same `checkEnvironment` guard the seeder gates on, so on production every
+   one of these routes answers 403 whatever the client believes. Read-only routes
+   are gated too -- the list is a list of who can get into beta, and production
+   has no business answering that question at all.
+
+   NOTHING HERE GRANTS STAFF ACCESS, and there is no delete. */
+
+function betaOnly(req, res, next) {
+  const state = betaAccess.envState(process.env);
+  if (!state.ok) return res.status(403).json(betaAccess.envRefusal(state));
+  next();
+}
+
+/* The password arrives twice on purpose. The form shows a confirmation field,
+   so the API insists on it too -- otherwise the promise the screen makes is one
+   the server does not keep, and a mistyped password would be set silently. It
+   is validated by the seeder's own `passwordProblem` (length, no obvious word),
+   hashed by the app's own auth.hashPassword, and neither it nor the hash is put
+   in a response, a log line or an audit row. */
+function betaPasswordFrom(body) {
+  const pw = String((body && body.password) || '');
+  const confirm = String((body && body.confirm) || '');
+  if (!pw) return { error: 'Enter a password.' };
+  if (pw !== confirm) return { error: 'The two passwords do not match.' };
+  const problem = betaAccess.passwordProblem(pw);
+  if (problem) return { error: `The password is ${problem}.` };
+  return { password: pw };
+}
+
+app.get('/api/admin/beta/accounts', auth.requireAdmin, betaOnly, async (_req, res) => {
+  try {
+    res.json({
+      accounts: await betaAccess.listAccounts(db),
+      environment: betaAccess.envState(process.env).info,
+      integrations: betaAccess.integrationState(process.env).seen,
+    });
+  } catch (err) { console.error(err); fault(res); }
+});
+
+app.get('/api/admin/beta/accounts/:id', auth.requireAdmin, betaOnly, async (req, res) => {
+  try {
+    const acct = await betaAccess.getAccount(db, req.params.id);
+    if (!acct) return res.status(404).json({ error: 'That account is not managed by beta tooling.' });
+    res.json({ account: acct });
+  } catch (err) { console.error(err); fault(res); }
+});
+
+/* Add a beta account. Everything it accepts is ordinary public profile text.
+   `role` is not read at all -- beta-access.js pins it to member -- so no form
+   field, and no hand-rolled request, can grant staff access through this door. */
+app.post('/api/admin/beta/accounts', auth.requireAdmin, betaOnly, async (req, res) => {
+  const pw = betaPasswordFrom(req.body);
+  if (pw.error) return res.status(400).json({ error: pw.error });
+  const b = req.body || {};
+  const identity = {
+    email: String(b.email || '').trim(),
+    username: String(b.username || '').trim().replace(/^@/, ''),
+    name: String(b.name || '').trim(),
+    accountType: b.accountType === 'business' ? 'business' : 'personal',
+  };
+  if (b.headline) identity.headline = String(b.headline).slice(0, 200);
+  if (b.bio) identity.bio = String(b.bio).slice(0, 600);
+  try {
+    const problem = betaAccess.identityProblemFor(identity);
+    if (problem) return res.status(400).json({ error: problem });
+    const acct = await betaAccess.createAccount(db, {
+      identity,
+      passwordHash: await auth.hashPassword(pw.password),
+    });
+    adminAudit(req, 'beta_account_created', 'user', acct.id,
+      { username: acct.username, accountType: acct.accountType });
+    res.json({ account: acct });
+  } catch (err) {
+    /* A refusal from the service layer is a sentence written for a person --
+       "@x already exists", "that is a reserved username" -- so it is shown as
+       given rather than replaced with a generic failure. */
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/beta/accounts/:id/password', auth.requireAdmin, betaOnly, async (req, res) => {
+  const pw = betaPasswordFrom(req.body);
+  if (pw.error) return res.status(400).json({ error: pw.error });
+  try {
+    const done = await betaAccess.resetPassword(db, {
+      id: req.params.id,
+      passwordHash: await auth.hashPassword(pw.password),
+    });
+    /* A password everybody else's device still holds a session for is only half
+       reset, so the beta sessions go with it. This is the app's own revocation
+       path (the same two lines a real password reset runs), scoped to this one
+       account, and it touches nothing outside this database. */
+    await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [done.id]).catch(() => {});
+    auth.sessionInvalidateAll();
+    rtKickUser(done.id);
+    adminAudit(req, 'beta_password_reset', 'user', done.id,
+      { username: done.username, official: done.official });
+    res.json({ ok: true, account: await betaAccess.getAccount(db, done.id), signedOut: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.post('/api/admin/beta/accounts/:id/immerse', auth.requireAdmin, betaOnly, async (req, res) => {
+  try {
+    const out = await betaAccess.joinTestWorld(db, req.params.id);
+    if (!out.alreadyIn) {
+      adminAudit(req, 'beta_world_joined', 'user', out.account.id,
+        { username: out.account.username, followed: out.followedNow });
+    }
+    res.json(out);
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+/* Revoke / restore beta access.
+   NOT a delete, and nothing is removed: this is the app's own account-status
+   model (`applyAccountStatus`), which sets users.status, drops that account's
+   sessions and disconnects it. `accountStatusBlock` then refuses the login. It
+   is reversible in one press -- status back to active -- and every post, order
+   and message the tester made is untouched.
+   Ordinary beta accounts only. The official @atwe can never reach this. */
+app.post('/api/admin/beta/accounts/:id/access', auth.requireAdmin, betaOnly, async (req, res) => {
+  const enabled = req.body && (req.body.enabled === true || req.body.enabled === 'true');
+  try {
+    const acct = await betaAccess.assertManageable(db, req.params.id, 'ordinary');
+    if (acct.id === req.user.id) return res.status(400).json({ error: 'You cannot revoke your own access.' });
+    const reason = enabled ? null : 'Beta access was revoked by an administrator.';
+    /* 3650 days is the ceiling applyAccountStatus allows, i.e. as close to
+       "until somebody restores it" as this model gets. An expiry is not a
+       problem here: a lapsed one simply hands beta access back, which is the
+       same outcome as pressing Restore. */
+    await applyAccountStatus(req, acct.id, enabled ? 'active' : 'suspended', reason, 3650);
+    adminAudit(req, enabled ? 'beta_access_restored' : 'beta_access_revoked', 'user', acct.id,
+      { username: acct.username });
+    res.json({ account: await betaAccess.getAccount(db, acct.id) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 app.get('/api/admin/storage', auth.requireAdmin, async (_req, res) => {
   const out = { configured: storage.isConfigured(), inDatabase: null, databaseSize: null };
   try {

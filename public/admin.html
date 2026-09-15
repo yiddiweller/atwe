@@ -484,6 +484,44 @@
   .ref-note{font-size:12px;margin-top:4px;color:var(--t3);}
   .ref-side{flex:0 0 auto;}
   .ref-acts{display:flex;flex-direction:column;gap:6px;}
+  /* Admin → Beta Access. Beta testers' accounts, managed from here instead of a
+     console. Nothing bespoke: the rows borrow the shape .staff-row already uses,
+     and everything else is .panel / .in / .btn / .act / .pill. */
+  .ba-row{display:flex;gap:14px;align-items:center;padding:13px 2px;border-bottom:1px solid var(--b1);}
+  .ba-row:last-child{border-bottom:none;}
+  .ba-main{flex:1;min-width:0;}
+  .ba-name{font-weight:700;font-size:14.5px;overflow-wrap:anywhere;}
+  .ba-sub{font-size:12.5px;color:var(--t3);margin-top:3px;overflow-wrap:anywhere;}
+  /* `.pill` capitalises every word, which is right for the one-word pills the
+     rest of the dashboard uses ("pro", "free") and wrong for a phrase: it
+     rendered "Can Sign In" and "Not In The Test World". These are sentences, so
+     they keep the case they were written in. */
+  .ba-tags .pill,.ba-f .pill{text-transform:none;}
+  .ba-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+  .ba-acts{display:flex;gap:8px;flex-wrap:wrap;flex:0 0 auto;}
+  .ba-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-top:4px;}
+  .ba-f label{display:block;font-size:11px;font-weight:700;letter-spacing:.4px;
+    text-transform:uppercase;color:var(--t3);margin-bottom:4px;}
+  .ba-f .v{font-size:14px;overflow-wrap:anywhere;}
+  .ba-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}
+  .ba-form .fld{display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .ba-form .fld.wide{grid-column:1 / -1;}
+  .ba-form label{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--t3);}
+  .ba-form .in{margin:0;}
+  .ba-note{background:var(--s2);border-radius:var(--r-md);padding:12px 14px;
+    font-size:13px;color:var(--t2);line-height:1.5;margin-bottom:14px;}
+  .ba-err{color:var(--red);font-size:13px;margin-top:10px;overflow-wrap:anywhere;}
+  .ba-ok{color:var(--accent);font-size:13px;margin-top:10px;}
+  .ba-back{margin-bottom:14px;}
+  @media (max-width:640px){
+    .ba-row{flex-direction:column;align-items:stretch;}
+    .ba-acts{width:100%;}
+    /* A finger needs 44pt. `.act` is 35px across the whole dashboard, which is a
+       wider decision than this screen; the floor is scoped to Beta Access's own
+       action rows so nothing else moves. */
+    .ba-acts .act,.ba-acts .btn{flex:1;text-align:center;min-height:44px;}
+    .ba-back .act{min-height:44px;}
+  }
   /* Cards (gift-card program + Atwe Card waitlist) */
   .gc-issue{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
   .gc-issue .fld{display:flex;flex-direction:column;gap:5px;}
@@ -1241,6 +1279,7 @@
       <button class="tab" data-v="appreviews" onclick="switchTab('appreviews')">App reviews</button>
       <button class="tab" data-v="advances" onclick="switchTab('advances')">Advances</button>
       <button class="tab" data-v="cluster" onclick="switchTab('cluster')">Servers</button>
+      <button class="tab" data-v="betaaccess" onclick="switchTab('betaaccess')">Beta Access</button>
     </nav>
     <div class="side-foot">
       <div class="side-role">Signed in as <b id="sideRole">Admin</b></div>
@@ -1788,8 +1827,17 @@ const TAB_PERM = {
   campaigns: 'super', experiments: 'super', wording: 'super',
   places: 'super', emailbrand: 'super',
   revshare: 'revenue', authenticate: 'moderation',
+  betaaccess: 'super',
 };
-function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
+/* Is this deployment the beta one? Set from /api/config on sign-in. It starts
+   false so Beta Access is absent until the server says so, rather than flickering
+   in and out. This only decides whether the item is DRAWN and whether switchTab
+   will open it — every /api/admin/beta route re-runs the real environment guard
+   server-side, so a browser that flips this gets 403s and an empty page. */
+let BETA_ENV = false;
+function canSee(tab){
+  if (tab === 'betaaccess' && !BETA_ENV) return false;
+  const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
 async function load(){
   if (!token) { showGate(); return; }
@@ -1807,6 +1855,7 @@ async function load(){
     // Staff-2FA policy: when required, a staffer without 2FA is gated until they enable
     // it (in the normal app — so this can't create an unrecoverable lockout).
     if (cfg.requireAdmin2fa && !user.twoFactorEnabled) { show2faGate(); return; }
+    BETA_ENV = cfg.betaEnv === true;
     ME = { id: user.id, perms: user.adminPerms === 'all' ? [] : (user.adminPerms || []), role: user.adminRole || null, superadmin: user.adminPerms === 'all', twoFa: !!user.twoFactorEnabled };
     applyTabPerms();
     if (!canSee(VIEW)) VIEW = firstVisibleTab();
@@ -1875,6 +1924,7 @@ const NAV_TITLES = {
   revshare:'Creator share', authenticate:'Item authentication',
   storage:'Media storage', cluster:'Servers', webinars:'Webinars',
   appreviews:'App store reviews', advances:'Advances',
+  betaaccess:'Beta Access',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1895,6 +1945,7 @@ function renderView(){
   if (VIEW === 'appreviews') return renderAppReviews();
   if (VIEW === 'advances') return renderAdvancesAdmin();
   if (VIEW === 'webinars') return renderWebinarsAdmin();
+  if (VIEW === 'betaaccess') return renderBetaAccessView();
   if (VIEW === 'storage') return renderStorageView();
   if (VIEW === 'cluster') return renderClusterView();
   if (VIEW === 'revshare') renderRevShareView();
@@ -6467,7 +6518,7 @@ function openAttention(){
    One box that finds a person, a post or a listing without knowing which tab
    they live in. */
 /* Where each section lives in the sidebar — used as the subtitle in search. */
-const ADMIN_GROUP = {"overview":"Overview","revenue":"Money","finance":"Money","ads":"Money","affiliations":"Money","refunds":"Money","cards":"Money","fraud":"Money","chargebacks":"Money","revshare":"Money","users":"People","staff":"People","approvals":"People","usernames":"People","moderate":"Trust & safety","reports":"Trust & safety","investigate":"Trust & safety","orders":"Trust & safety","adjust":"Trust & safety","payouts":"Trust & safety","risk":"Trust & safety","retention":"Trust & safety","curate":"Trust & safety","catalog":"Trust & safety","disputes":"Trust & safety","appeals":"Trust & safety","support":"Trust & safety","safety":"Trust & safety","copyright":"Trust & safety","impersonation":"Trust & safety","modqa":"Trust & safety","authenticate":"Trust & safety","datareq":"Trust & safety","posts":"Content","announcements":"Content","broadcasts":"Content","circles":"Content","feed":"Content","activity":"Insights","traffic":"Insights","growth":"Insights","demand":"Insights","reports2":"Insights","churn":"Insights","campaigns":"Insights","experiments":"Insights","numbers":"Insights","groups":"Insights","audit":"Insights","features":"Product","featurecontrols":"Product","vault":"Private","alerts":"System","developers":"System","apilog":"System","incidents":"System","wording":"System","places":"System","emailbrand":"System","aistudio":"System","ops":"System","setup":"System","site":"System","storage":"System","webinars":"System","appreviews":"System","advances":"System","cluster":"System"};
+const ADMIN_GROUP = {"overview":"Overview","revenue":"Money","finance":"Money","ads":"Money","affiliations":"Money","refunds":"Money","cards":"Money","fraud":"Money","chargebacks":"Money","revshare":"Money","users":"People","staff":"People","approvals":"People","usernames":"People","moderate":"Trust & safety","reports":"Trust & safety","investigate":"Trust & safety","orders":"Trust & safety","adjust":"Trust & safety","payouts":"Trust & safety","risk":"Trust & safety","retention":"Trust & safety","curate":"Trust & safety","catalog":"Trust & safety","disputes":"Trust & safety","appeals":"Trust & safety","support":"Trust & safety","safety":"Trust & safety","copyright":"Trust & safety","impersonation":"Trust & safety","modqa":"Trust & safety","authenticate":"Trust & safety","datareq":"Trust & safety","posts":"Content","announcements":"Content","broadcasts":"Content","circles":"Content","feed":"Content","activity":"Insights","traffic":"Insights","growth":"Insights","demand":"Insights","reports2":"Insights","churn":"Insights","campaigns":"Insights","experiments":"Insights","numbers":"Insights","groups":"Insights","audit":"Insights","features":"Product","featurecontrols":"Product","vault":"Private","alerts":"System","developers":"System","apilog":"System","incidents":"System","wording":"System","places":"System","emailbrand":"System","aistudio":"System","ops":"System","setup":"System","site":"System","storage":"System","webinars":"System","appreviews":"System","advances":"System","cluster":"System","betaaccess":"System"};
 /* The words a person would actually type for each section. Without these the
    palette only matched a section when your words appeared literally in its
    NAME — so "gift card" found nothing, because the tab is called "Cards". */
@@ -6538,9 +6589,13 @@ const ADMIN_TAB_KW = {"overview":"dashboard home summary today at a glance",
   "webinars":"webinars live sessions",
   "appreviews":"app store reviews ratings",
   "advances":"cash advance funding merchant advance",
-  "cluster":"servers machines infrastructure"};
+  "cluster":"servers machines infrastructure",
+  "betaaccess":"beta access testers tester invite early access add beta account beta password test world beta tester"};
 /* Panels inside the sections, read out of the dashboard's own headings. */
 const ADMIN_PANELS = [
+  {l:'Beta testers', tab:'betaaccess', kw:'beta accounts list testers who can sign in'},
+  {l:'Add beta account', tab:'betaaccess', kw:'new beta tester create invite add account'},
+  {l:'Beta environment', tab:'betaaccess', kw:'beta environment check guard atwe_env'},
 { tab: "adjust", l: "Adjust a wallet", kw: "credit debit correct balance money adjustment" },
   { tab: "ads", l: "Sponsored listings", kw: "seller ads product ads campaigns" },
   { tab: "alerts", l: "Watching for surprises" },
@@ -8638,6 +8693,278 @@ load();
    database ends up carrying every byte anybody ever uploaded. This screen says
    plainly whether a proper file store is switched on, and lets you prove the
    settings actually work before trusting them. */
+/* ─── Admin → Beta Access ─────────────────────────────────────────────────
+   Beta testers' accounts, managed here instead of from a console.
+
+   THE SCREEN DECIDES NOTHING. Every rule — who may be listed, what may be
+   changed, what is refused — lives in beta-access.js and seed/beta-account.js,
+   which the console tool calls too. This file asks, renders and confirms.
+
+   IT IS ONLY REACHABLE ON BETA. The sidebar item is absent unless /api/config
+   says betaEnv (see canSee), and that is a courtesy: every route behind it
+   re-runs the real environment guard, so a browser that forces its way in gets
+   403 and an explanation rather than a working page.
+
+   WORDING. A staffer is not reading a database. The words on screen are "beta
+   account", "protected", "in the test world"; seed_tag, SQL and hashes stay in
+   the code and the audit log where they belong. */
+let BETA = { list: [], open: null, env: null, integrations: [] };
+
+async function renderBetaAccessView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML =
+    `<div id="baBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  BETA.open = null;
+  await loadBetaAccounts();
+}
+
+async function loadBetaAccounts(){
+  const el = liveBox('baBody');
+  try {
+    const d = await api('GET', '/api/admin/beta/accounts');
+    BETA.list = d.accounts || [];
+    BETA.env = d.environment || null;
+    BETA.integrations = d.integrations || [];
+    renderBetaList();
+  } catch (e){
+    /* The environment refusal is the one error worth explaining rather than
+       just printing — it means somebody is looking at this on the wrong
+       deployment, and the reasons come back with it. */
+    const why = (e.data && Array.isArray(e.data.detail) && e.data.detail.length)
+      ? `<ul style="margin:10px 0 0;padding-inline-start:18px;">${e.data.detail.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+    el.innerHTML = `<div class="panel"><h3>Not available here</h3>
+      <div class="muted" style="font-size:13.5px;">${esc(e.message)}${why}</div></div>`;
+  }
+}
+
+function baPill(a){
+  if (a.official) return `<span class="pill pro">Protected beta account</span>`;
+  return `<span class="pill free">Beta account</span>`;
+}
+function baAccessPill(a){
+  if (a.accountStatus === 'active') return `<span class="pill free">Can sign in</span>`;
+  return `<span class="pill susp">Access revoked</span>`;
+}
+function baWorldPill(a){
+  return a.inTestWorld
+    ? `<span class="pill free">In the test world</span>`
+    : `<span class="pill" style="background:var(--s3);color:var(--t3);">Not in the test world</span>`;
+}
+
+function renderBetaList(){
+  const el = liveBox('baBody');
+  const rows = BETA.list.map(a => `
+    <div class="ba-row">
+      <div class="ba-main">
+        <div class="ba-name">${esc(a.name || '-')} <span class="muted">@${esc(a.username || '')}</span></div>
+        <div class="ba-sub">${esc(a.email || '')} · ${a.accountType === 'business' ? 'Business' : 'Personal'}</div>
+        <div class="ba-tags">${baPill(a)}${baAccessPill(a)}${baWorldPill(a)}${
+          a.staff ? '<span class="pill admin">Staff access</span>' : ''}${
+          a.official && !a.officialVerified ? '<span class="pill ban">Not recognised</span>' : ''}</div>
+      </div>
+      <div class="ba-acts"><button class="act" onclick="baOpen(${a.id})">Open</button></div>
+    </div>`).join('');
+
+  const envLine = BETA.env
+    ? `Beta environment · ${esc(BETA.env.APP_URL_host || '')} · database ${esc(BETA.env.database || '')}`
+    : 'Beta environment';
+  /* Integrations are shown, never enforced here. Creating an account sends no
+     mail and joining the test world sends no push, so a live key is something a
+     staffer should SEE rather than a reason to refuse them a password reset. */
+  const live = (BETA.integrations || []).filter(i => i.state && i.state !== 'disabled').map(i => i.name);
+
+  el.innerHTML = `
+    <div class="ba-note">${esc(envLine)}.
+      ${live.length
+        ? `Live services on this environment: <b>${esc(live.join(', '))}</b>. Adding an account and joining the test world do not send anything out, but anything a tester then does here can reach these.`
+        : 'No outside services are switched on here, so nothing a tester does can reach the real world.'}</div>
+
+    <div class="panel">
+      <h3>Add a beta account</h3>
+      <div class="muted" style="margin:-4px 0 14px;font-size:13px;">Creates one new account that can sign in to beta, and nothing else. It is a normal member account: no staff access, and no way to grant any from here. If the name or the email is already taken, this refuses rather than overwriting anybody.</div>
+      <div class="ba-form">
+        <div class="fld"><label for="baName">Name</label>
+          <input class="in" id="baName" autocomplete="off" placeholder="Their full name"></div>
+        <div class="fld"><label for="baUser">Username</label>
+          <input class="in" id="baUser" autocomplete="off" placeholder="without the @"></div>
+        <div class="fld"><label for="baEmail">Email</label>
+          <input class="in" id="baEmail" type="email" autocomplete="off" placeholder="name@example.com"></div>
+        <div class="fld"><label for="baType">Account type</label>
+          <select class="in" id="baType"><option value="personal">Personal</option><option value="business">Business</option></select></div>
+        <div class="fld"><label for="baHead">Headline <span style="text-transform:none;font-weight:500;">(optional)</span></label>
+          <input class="in" id="baHead" autocomplete="off" placeholder="What they do"></div>
+        <div class="fld"><label for="baBio">Short bio <span style="text-transform:none;font-weight:500;">(optional)</span></label>
+          <input class="in" id="baBio" autocomplete="off" placeholder="A line about them"></div>
+        <div class="fld"><label for="baPw">Password</label>
+          <input class="in" id="baPw" type="password" autocomplete="new-password" placeholder="At least 10 characters"></div>
+        <div class="fld"><label for="baPw2">Confirm password</label>
+          <input class="in" id="baPw2" type="password" autocomplete="new-password" placeholder="Type it again"></div>
+      </div>
+      <button class="btn" style="margin-top:14px;" id="baAddBtn" onclick="baCreate()">Add beta account</button>
+      <div class="muted" style="margin-top:10px;font-size:12.5px;">The password works on beta only. Give it to them yourself; it is never shown again here.</div>
+      <div id="baAddMsg"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Beta accounts</h3>
+      <div class="muted" style="margin:-4px 0 10px;font-size:13px;">Everyone beta tooling put here. Accounts that belong to somebody else are not listed and cannot be reached from this screen.</div>
+      ${rows || '<div class="empty">No beta accounts yet. Add one above.</div>'}
+    </div>`;
+}
+
+/* ── One account ── */
+function baOpen(id){
+  BETA.open = BETA.list.find(a => a.id === id) || null;
+  if (!BETA.open) return;
+  renderBetaDetail();
+}
+function baBack(){ BETA.open = null; renderBetaList(); }
+
+function baField(label, value){
+  return `<div class="ba-f"><label>${esc(label)}</label><div class="v">${value}</div></div>`;
+}
+
+function renderBetaDetail(){
+  const a = BETA.open; if (!a) return;
+  const el = liveBox('baBody');
+  const yes = '<span class="pill free">Yes</span>', no = '<span class="muted">No</span>';
+  const created = a.createdAt ? esc(fmtDateTime(a.createdAt)) : '<span class="muted">unknown</span>';
+
+  /* The official account's actions are deliberately a short list: a beta
+     password, and nothing else. No delete, no rename, no account-type change,
+     no staff grant — those are not hidden, they do not exist for it. */
+  const actions = a.official
+    ? `<button class="act" onclick="baPwOpen()">Reset beta password</button>`
+    : `<button class="act" onclick="baPwOpen()">Reset password</button>
+       ${a.inTestWorld ? '' : `<button class="act" onclick="baJoinWorld()">Join test world</button>`}
+       ${a.accountStatus === 'active'
+          ? `<button class="act danger" onclick="baSetAccess(false)">Revoke access</button>`
+          : `<button class="act" onclick="baSetAccess(true)">Restore access</button>`}`;
+
+  const officialNote = a.official ? `<div class="ba-note">
+    This is Atwe's own built-in account. The app creates it itself on every start so the
+    platform can post as itself, and it is kept out of the way of the beta reset on purpose.
+    It can be given a beta password here and nothing else: it cannot be renamed, changed,
+    given staff access, or removed from this screen.
+    ${a.officialVerified ? '' : `<br><br><b>It no longer matches the account the app creates:</b> ${esc(a.officialProblem || '')} Every action on it is refused until that is understood.`}
+  </div>` : '';
+
+  el.innerHTML = `
+    <div class="ba-back"><button class="act ghost" onclick="baBack()">← All beta accounts</button></div>
+    ${officialNote}
+    <div class="panel">
+      <h3>${esc(a.name || '-')} <span class="muted" style="font-weight:600;">@${esc(a.username || '')}</span></h3>
+      <div class="ba-tags" style="margin:-2px 0 16px;">${baPill(a)}${baAccessPill(a)}${baWorldPill(a)}${
+        a.staff ? '<span class="pill admin">Staff access</span>' : ''}</div>
+      <div class="ba-fields">
+        ${baField('Email', esc(a.email || '-'))}
+        ${baField('Account type', a.accountType === 'business' ? 'Business' : 'Personal')}
+        ${baField('Headline', a.headline ? esc(a.headline) : '<span class="muted">none</span>')}
+        ${baField('Beta status', a.official ? 'Protected beta account' : 'Beta account')}
+        ${baField('Can sign in', a.accountStatus === 'active' ? yes : `${no} <span class="muted">· ${esc(a.statusReason || 'access revoked')}</span>`)}
+        ${baField('Staff access', a.staff ? '<span class="pill admin">Yes</span>' : no)}
+        ${baField('In the test world', a.inTestWorld ? yes : no)}
+        ${baField('Two-factor', a.twoFactor ? yes : no)}
+        ${baField('Added', created)}
+      </div>
+      <div class="ba-acts" style="margin-top:18px;">${actions}</div>
+      <div id="baDetailMsg"></div>
+    </div>
+    <div class="panel" id="baPwPanel" style="display:none;">
+      <h3>${a.official ? 'Set a new beta password' : 'Set a new password'}</h3>
+      <div class="muted" style="margin:-4px 0 14px;font-size:13px;">This replaces the password for <b>@${esc(a.username || '')}</b> on beta. You do not need the old one. Everywhere they are already signed in on beta will be signed out, so give them the new password.</div>
+      <div class="ba-form" style="max-width:520px;">
+        <div class="fld"><label for="baNewPw">New password</label>
+          <input class="in" id="baNewPw" type="password" autocomplete="new-password" placeholder="At least 10 characters"></div>
+        <div class="fld"><label for="baNewPw2">Confirm new password</label>
+          <input class="in" id="baNewPw2" type="password" autocomplete="new-password" placeholder="Type it again"></div>
+      </div>
+      <div class="ba-acts" style="margin-top:14px;">
+        <button class="btn" onclick="baPwSave()">Save new password</button>
+        <button class="act ghost" onclick="baPwClose()">Cancel</button>
+      </div>
+      <div id="baPwMsg"></div>
+    </div>`;
+}
+
+function baPwOpen(){ const p = liveBox('baPwPanel'); p.style.display = ''; const f = document.getElementById('baNewPw'); if (f) f.focus(); }
+function baPwClose(){
+  const p = liveBox('baPwPanel'); p.style.display = 'none';
+  ['baNewPw','baNewPw2'].forEach(id => { const f = document.getElementById(id); if (f) f.value = ''; });
+  liveBox('baPwMsg').innerHTML = '';
+}
+function baMsg(id, text, ok){ liveBox(id).innerHTML = `<div class="${ok ? 'ba-ok' : 'ba-err'}">${esc(text)}</div>`; }
+/* A password never goes near a toast, a log, or the query string. It is read
+   straight out of the field, posted, and the field is cleared. */
+function baClear(ids){ ids.forEach(id => { const f = document.getElementById(id); if (f) f.value = ''; }); }
+
+async function baCreate(){
+  const v = id => (document.getElementById(id) || {}).value || '';
+  const body = {
+    name: v('baName').trim(), username: v('baUser').trim().replace(/^@/, ''),
+    email: v('baEmail').trim(), accountType: v('baType'),
+    headline: v('baHead').trim(), bio: v('baBio').trim(),
+    password: v('baPw'), confirm: v('baPw2'),
+  };
+  const btn = document.getElementById('baAddBtn'); if (btn) btn.disabled = true;
+  liveBox('baAddMsg').innerHTML = '';
+  try {
+    const d = await api('POST', '/api/admin/beta/accounts', body);
+    baClear(['baName','baUser','baEmail','baHead','baBio','baPw','baPw2']);
+    notify('@' + (d.account && d.account.username) + ' can now sign in to beta.');
+    await loadBetaAccounts();
+  } catch (e){
+    baMsg('baAddMsg', e.message, false);
+  } finally { if (btn) btn.disabled = false; }
+}
+
+async function baPwSave(){
+  const a = BETA.open; if (!a) return;
+  const pw = (document.getElementById('baNewPw') || {}).value || '';
+  const c2 = (document.getElementById('baNewPw2') || {}).value || '';
+  if (!confirm(`Set a new beta password for @${a.username}? They will be signed out of beta everywhere and will need the new password to get back in.`)) return;
+  try {
+    await api('POST', `/api/admin/beta/accounts/${a.id}/password`, { password: pw, confirm: c2 });
+    baClear(['baNewPw','baNewPw2']);
+    baPwClose();
+    notify('New beta password set for @' + a.username + '.');
+    await baRefreshOpen();
+  } catch (e){ baMsg('baPwMsg', e.message, false); }
+}
+
+async function baJoinWorld(){
+  const a = BETA.open; if (!a) return;
+  if (!confirm(`Put @${a.username} into the beta test world? They will follow some of the sample accounts and get a few sample messages and notifications, so the app is not empty. Nothing else is created and nothing is removed.`)) return;
+  try {
+    const d = await api('POST', `/api/admin/beta/accounts/${a.id}/immerse`, {});
+    notify(d.alreadyIn ? '@' + a.username + ' was already in the test world.'
+                       : '@' + a.username + ' joined the test world.');
+    await baRefreshOpen();
+  } catch (e){ baMsg('baDetailMsg', e.message, false); }
+}
+
+async function baSetAccess(enabled){
+  const a = BETA.open; if (!a) return;
+  const q = enabled
+    ? `Give @${a.username} beta access back? They will be able to sign in again.`
+    : `Revoke beta access for @${a.username}? They will be signed out and will not be able to sign in. Nothing they posted or bought is deleted, and you can give access back at any time.`;
+  if (!confirm(q)) return;
+  try {
+    await api('POST', `/api/admin/beta/accounts/${a.id}/access`, { enabled });
+    notify(enabled ? '@' + a.username + ' can sign in again.' : 'Beta access revoked for @' + a.username + '.');
+    await baRefreshOpen();
+  } catch (e){ baMsg('baDetailMsg', e.message, false); }
+}
+
+/* Re-read the list so the badges match the database, then stay on the same
+   account rather than bouncing the staffer back to the top. */
+async function baRefreshOpen(){
+  const id = BETA.open && BETA.open.id;
+  await loadBetaAccounts();
+  const again = BETA.list.find(x => x.id === id);
+  if (again) { BETA.open = again; renderBetaDetail(); }
+}
+
 async function renderStorageView(){
   const c = document.getElementById('content');
   document.getElementById('stats').innerHTML = '';
