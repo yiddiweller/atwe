@@ -520,9 +520,20 @@ test('28. activating reruns no global seed and adds no commerce', () => {
 });
 
 test('29. there is no broad UPDATE or DELETE anywhere in the new path', () => {
+  /* THIS USED TO COUNT THE UPDATES AND EXPECT ONE, and it went red the moment
+     Beta Access added resetBetaPassword -- a second, deliberate, equally narrow
+     statement. A count is not the invariant; being pinned to a single id is.
+     So every UPDATE in the module is checked, and a third one added later is
+     held to the same rule rather than simply failing the tally. */
   const ups = [...MOD_CODE.matchAll(/UPDATE\s+\w+[\s\S]*?RETURNING/g)].map((m) => m[0]);
-  assert.equal(ups.length, 1, 'the module issues exactly one UPDATE');
-  const where = ups[0].split('WHERE')[1] || '';
-  assert.match(where, /id = \$3/, 'and it is pinned to one id');
+  assert.ok(ups.length >= 1, 'the module issues at least one UPDATE');
+  for (const up of ups) {
+    const where = up.split('WHERE')[1] || '';
+    assert.match(where, /\bid = \$\d+/, `every UPDATE is pinned to one id: ${up.slice(0, 40)}`);
+    /* And re-asserts who owns the row in the same statement, so a row that
+       changed underneath is missed rather than written to. */
+    assert.match(where, /seed_tag|lower\(username\)/, 'and re-asserts ownership in its own WHERE');
+    assert.match(where, /is_admin IS NOT TRUE/, 'and never writes to a staff account');
+  }
   assert.doesNotMatch(MOD_CODE, /\bDELETE\b|\bDROP\b|\bTRUNCATE\b/i);
 });
