@@ -417,8 +417,12 @@ if (!h.SKIP && process.env.ATWE_LIVE_BETA_AUTHZ === '1') {
     /* The app creates @atwe itself on boot; if a previous run left one, reuse
        it and put it back to how ensureOfficialAccount makes it. */
     await pool.query(
-      `UPDATE users SET is_admin = false, admin_perms = '[]'::jsonb, admin_role = NULL, seed_tag = NULL
+      `UPDATE users SET is_admin = false, admin_perms = '[]'::jsonb, admin_role = NULL, seed_tag = NULL,
+              email = 'no-reply+atwe@atwe.internal'
         WHERE lower(username) = 'atwe'`);
+    /* And free the activated address, in case a crashed run left a fixture on
+       it. Scoped to this suite's own throwaway handle, never a real account. */
+    await pool.query(`DELETE FROM users WHERE lower(username) = 'emailsquatter'`);
     const { rows } = await pool.query(`SELECT id FROM users WHERE lower(username) = 'atwe'`);
     assert.ok(rows[0], 'the server created its own @atwe account on boot');
     official = { id: rows[0].id };
@@ -429,6 +433,70 @@ if (!h.SKIP && process.env.ATWE_LIVE_BETA_AUTHZ === '1') {
     const out = await account.activateOfficial(pool, { passwordHash: hash, allowAdmin: true });
     assert.equal(out.seedTag, 'beta-keep');
     assert.equal(out.isAdmin, false, 'not an admin yet — that is a separate act');
+  });
+
+  test('live: it refuses to take ceo@atwe.com off another account', async () => {
+    /* The squatter is a throwaway, and it is deleted again below. This is the
+       one refusal that cannot be proved with a fake db alone, because the whole
+       point is what a real UNIQUE index would otherwise do to us. */
+    await pool.query(
+      `INSERT INTO users (name, email, password_hash, username, account_type)
+       VALUES ('Squatter', 'ceo@atwe.com', 'x', 'emailsquatter', 'personal')`);
+    await assert.rejects(
+      () => account.setOfficialEmail(pool, { env: BETA_ENV }),
+      /already belongs to @emailsquatter/);
+    const still = (await pool.query('SELECT email FROM users WHERE id = $1', [official.id])).rows[0];
+    assert.equal(still.email, 'no-reply+atwe@atwe.internal', 'and @atwe was not moved');
+    await pool.query(`DELETE FROM users WHERE lower(username) = 'emailsquatter'`);
+  });
+
+  test('live: the email moves to ceo@atwe.com and NOTHING else changes', async () => {
+    const before = (await pool.query(
+      `SELECT username, name, account_type, seed_tag, password_hash, email_verified, verified,
+              is_admin, admin_perms, admin_role, status, headline
+         FROM users WHERE id = $1`, [official.id])).rows[0];
+    assert.equal(before.seed_tag, 'beta-keep', 'it is the protected beta account before the move');
+
+    const out = await account.setOfficialEmail(pool, { env: BETA_ENV });
+    assert.equal(out.already, false);
+    assert.equal(out.from, 'no-reply+atwe@atwe.internal');
+    assert.equal(out.to, 'ceo@atwe.com');
+
+    const after = (await pool.query(
+      `SELECT email, username, name, account_type, seed_tag, password_hash, email_verified, verified,
+              is_admin, admin_perms, admin_role, status, headline
+         FROM users WHERE id = $1`, [official.id])).rows[0];
+    assert.equal(after.email, 'ceo@atwe.com', 'the address moved');
+    for (const col of Object.keys(before)) {
+      assert.deepEqual(after[col], before[col], `${col} must be untouched by an email move`);
+    }
+    /* Spelled out, because these three are what the founder asked to be sure of. */
+    assert.equal(after.password_hash, before.password_hash, 'the beta password is not rotated');
+    assert.equal(after.seed_tag, 'beta-keep', 'still protected from a beta reset');
+    assert.equal(after.is_admin, false, 'and the move grants nothing');
+  });
+
+  test('live: the activated row is still the canonical official account', async () => {
+    const { row } = await account.findOfficial(pool);
+    assert.equal(row.email, 'ceo@atwe.com');
+    assert.equal(account.officialEmailState(row.email), 'activated');
+    assert.equal(account.officialMismatch(row), null,
+      'the canonical checks recognise the activated identity');
+  });
+
+  test('live: running it again writes nothing', async () => {
+    const before = (await pool.query('SELECT email, password_hash FROM users WHERE id = $1', [official.id])).rows[0];
+    const out = await account.setOfficialEmail(pool, { env: BETA_ENV });
+    assert.equal(out.already, true);
+    const after = (await pool.query('SELECT email, password_hash FROM users WHERE id = $1', [official.id])).rows[0];
+    assert.deepEqual(after, before);
+  });
+
+  test('live: production refuses the move, against the real database', async () => {
+    await assert.rejects(
+      () => account.setOfficialEmail(pool, { env: { ATWE_ENV: 'production', APP_URL: 'https://atwe.com',
+                                                    DATABASE_URL: 'postgres://u:p@prod-db.internal:5432/atwe' } }),
+      /not switched on for production yet/);
   });
 
   test('live: promote makes it a superadmin and changes nothing else', async () => {
@@ -497,7 +565,8 @@ if (!h.SKIP && process.env.ATWE_LIVE_BETA_AUTHZ === '1') {
     /* Put the row back the way the app makes it, so a later run of any other
        suite against this database finds an ordinary built-in account. */
     await pool.query(
-      `UPDATE users SET is_admin = false, seed_tag = NULL WHERE lower(username) = 'atwe'`);
+      `UPDATE users SET is_admin = false, seed_tag = NULL, email = 'no-reply+atwe@atwe.internal'
+        WHERE lower(username) = 'atwe'`);
     await h.stopServer();
   });
 }

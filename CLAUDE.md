@@ -2706,6 +2706,108 @@ canonical-identity suite. **The live half promotes a REAL `@atwe` row, calls the
 Access API as it, resets its password and confirms it is still a superadmin with the
 keep-tag intact — then puts the row back.**
 
+**THE OFFICIAL ACCOUNT HAS TWO LEGITIMATE EMAILS, AND ONE WAY BETWEEN THEM (16 Sep 2026).**
+The founder's final identity model is that the ACTIVATED `@atwe` signs in as **`ceo@atwe.com`**,
+in both environments, and that `@yiddiweller` uses **`yiddiweller@gmail.com`**. The app still
+CREATES the row with an internal address, so a genuine `@atwe` is in one of exactly two states
+and **both are canonical**:
+
+| state | email | what it is |
+|---|---|---|
+| **DORMANT** | `no-reply+atwe@atwe.internal` | exactly what `ensureOfficialAccount` writes |
+| **ACTIVATED** | `ceo@atwe.com` | after the deliberate transition below |
+
+**THIS IS AN ALLOWLIST OF TWO, NOT A LOOSENING — and the distinction is the whole point.**
+`officialEmailState(email)` returns `'dormant'`, `'activated'` or **null**, and null still
+refuses exactly as it always did. There is deliberately no pattern, no domain rule and no
+environment variable: two exact strings, or no. The dormant one is derived from the username
+because `server.js` builds it that way; the activated one is a CONSTANT, because it is a real
+mailbox rather than a pattern and must not move if `ATWE_OFFICIAL_USERNAME` ever does.
+
+**WHAT THE MOVE COSTS, and it is a real cost.** `@atwe.internal` is not a deliverable domain
+and signup demands a code that really arrives, so while the address is dormant it is on its own
+proof that no person could hold the row — the strongest single signal the tool has.
+`ceo@atwe.com` is a real mailbox, so that particular proof is **spent**, and whoever controls
+that inbox can start a password reset for `@atwe`. What carries the weight afterwards:
+`users.email` is UNIQUE and `users` holds a unique index on `lower(username)`, so exactly one
+row can ever be `@atwe` and exactly one row can ever hold that address; the app itself created
+it; `officialMismatch` still demands the name, business type, no demo flag, no staff scopes, no
+two-factor, an active status, no Stripe/Connect/OAuth and the `beta-keep` tag; and the
+transition refuses outright if any other account already holds the address.
+
+**IT IS A ONE-WAY DOOR.** Nothing in this tree ever writes the internal address into a row, so
+a row that has spent its provenance cannot be walked backwards to re-acquire the appearance of
+it. `test/beta-official-email.test.js` check 15 greps both files for exactly that.
+
+**THE TRANSITION IS ONE ACCOUNT, ONE DIRECTION, ONE COLUMN.** `account.setOfficialEmail`, and
+its console door:
+
+```
+node tools/seed-beta.js set-official-email
+```
+
+It resolves `@atwe` itself (no username argument, no option that redirects it), goes through
+**`assertOfficialAccessAllowed(env, 'login')`** — the same gate `activate-official` passes,
+because the activated address IS the login identity, so there is no third policy to remember —
+requires `seed_tag = 'beta-keep'`, refuses if another account holds the address, and writes
+**`email` and nothing else**. Being handed the activated address already is a no-op that writes
+nothing. The WHERE re-asserts the whole identity including `is_admin IS NOT DISTINCT FROM $6`,
+so a row promoted or demoted mid-flight is missed rather than written to. A `23505` at write
+time (somebody claiming the address between the look and the write) becomes a sentence rather
+than a stack trace.
+
+**EMAIL MIGRATION AND ADMIN PROMOTION ARE SEPARATE COMMANDS, deliberately.** Two different
+powers, decided one at a time. `set-official-email` cannot grant admin (there is still exactly
+ONE `SET is_admin = true` in the tree and it is in `promoteOfficialAdmin`) and cannot touch a
+password — no hash is taken, made or passed to it.
+
+**`email_verified` IS DELIBERATELY LEFT ALONE, and that differs from the app's own
+change-email route on purpose.** That route serves a MEMBER moving to an address they must
+prove they control, so it clears the flag and mails a link. This is an OPERATOR moving the
+company's own account to the company's own domain from a CLI that already required a beta
+deployment, the canonical identity and the keep-tag. Clearing the flag here would buy no proof
+(there is no inbox in the loop) and on a deployment with `REQUIRE_EMAIL_VERIFICATION` it would
+lock the account out of the very login this exists to give it. The honest reading is that the
+column was never a proof for this row: `ensureOfficialAccount` writes it `true` at creation for
+an address that can never receive anything.
+
+**TWO WHERE CLAUSES CHANGED WITH IT, and both got STRICTER, not looser.** `activateOfficial`
+and `promoteOfficialAdmin` used to name a fixed `officialIdentity(uname).email`; with two
+canonical addresses that would refuse the account the moment it moved. They now re-assert the
+row's OWN already-validated address, the same reasoning as `is_admin IS NOT DISTINCT FROM`:
+it narrows the write to the row that was actually inspected. **Promoting still works after the
+move**, and the live suite proves it in that order.
+
+**HOW @yiddiweller BECOMES `yiddiweller@gmail.com` — NO CODE NEEDED, and none was written.**
+The product already has the safe mechanism: **`POST /api/auth/change-email`** (Settings →
+Change email), `requireAuth` + `blockImpersonation` + rate-limited 5/min. It refuses BEFORE any
+state change when mail cannot be delivered (`mailCanDeliver`), requires the account's own
+current password, 409s on an address another account holds, then writes `email` +
+`email_verified = false` and sends a fresh verification link. So: sign in to **beta** as
+`@yiddiweller`, Settings → Change email, enter the password, set `yiddiweller@gmail.com`, click
+the emailed link. Two preconditions on the beta deployment: **SMTP must be configured** (or the
+route refuses, correctly), and if `REQUIRE_EMAIL_VERIFICATION=true` the account is signed out
+of new sessions until the link is clicked. **Do not build a beta-only tool for this** — a
+second door onto a human account's email would be exactly the unaudited path the `@atwe`
+machinery is shaped to avoid.
+
+**ONE INTERACTION TO KNOW ABOUT `ADMIN_EMAIL`, because it is a third, silent door onto
+superadmin.** `db.init()` runs `UPDATE users SET is_admin = true WHERE lower(email) = $1` on
+**every boot** for whatever `ADMIN_EMAIL` holds. So (a) setting beta's `ADMIN_EMAIL` to
+`yiddiweller@gmail.com` promotes that account automatically once the email change lands, which
+is a legitimate and existing route; and (b) **`ADMIN_EMAIL` must NOT be set to `ceo@atwe.com`**,
+or `@atwe` would be promoted on the next boot, bypassing `promote-official-admin` and every
+check in it. Neither is configured by this work; both are Railway variables the founder owns.
+
+**Guarded by `test/beta-official-email.test.js`** (22 always-on checks) plus five live ones
+inside `test/beta-official-admin.test.js`. The live half lives THERE rather than in its own
+file for a measured reason: `node --test` runs FILES concurrently, and that file already owns
+the real `@atwe` row, so two files mutating one row in two processes would race. It squats
+`ceo@atwe.com` on a throwaway account and proves the refusal, moves the address for real and
+diffs **every other column**, proves re-running writes nothing, proves the activated row still
+passes `officialMismatch`, proves production refuses against the real database, and then
+promotes — so promotion is proved on an activated-email row.
+
 **WHAT A LATER PRODUCTION ACTIVATION TAKES**, written down so it is not improvised: flip
 `OFFICIAL_ACCESS.production` to true/true in `seed/beta-account.js`, ship that through
 `main`, set `ATWE_OFFICIAL_PROD_ACTIVATION` on the production service, then run
