@@ -2861,6 +2861,89 @@ of new sessions until the link is clicked. **Do not build a beta-only tool for t
 second door onto a human account's email would be exactly the unaudited path the `@atwe`
 machinery is shaped to avoid.
 
+**@yiddiweller ON BETA HAS ITS OWN NARROW COMMAND, and it is NOT the @atwe flow.** The
+app's own **Settings → Change email** remains the right door and is unchanged. It simply
+cannot be used on beta today: SMTP is off there, so `mailCanDeliver` refuses **before any
+state change** rather than stranding somebody on an address they can never verify. Correct
+behaviour, and the whole reason this exists.
+
+```
+node tools/seed-beta.js set-founder-email        # --dry-run and --yes supported
+```
+
+**ONE ACCOUNT, ONE ADDRESS, BOTH HARDCODED.** `FOUNDER_USERNAME = 'yiddiweller'` and
+`FOUNDER_EMAIL = 'yiddiweller@gmail.com'` are literals in `seed/beta-account.js` section 5d.
+There is **no username argument, no email argument and no environment variable** that moves
+either — that is the security property, not a convenience: a general "change any beta
+account's email" tool would be a second unaudited door onto every seeded account. Changing
+the pair is a code change, reviewed like any other.
+
+**IT WRITES ONE COLUMN, `email`.** Proved live against a real database by diffing **every
+column in the row** before and after, not a remembered list: the only key that changes is
+`email`. Password, username, name, account type, `seed_tag='beta'`, `is_admin`,
+`admin_perms`, `admin_role`, status, the verified seal, headline and bio are all untouched,
+and posts, follows, messages and world immersion are rows in other tables keyed on the
+account **id**, which does not move.
+
+**REFUSALS:** not beta (`guard.checkEnvironment`, quoted so the message names the variable
+to fix) · no such account · username not exactly `yiddiweller` · `seed_tag` not exactly
+`beta` (an untagged real member and the `beta-keep` @atwe row are both refused by name) ·
+`is_demo` · **a scoped staffer or a named staff role** · **a non-active status**. The last
+two are refusals *because of what happens next*: moving this row onto `ADMIN_EMAIL` means
+the next boot writes `is_admin = true` on it, and quietly widening a deliberately narrower
+access level, or promoting a suspended account, is not a migration.
+
+**IT IS GATED ON "IS THIS BETA", NOT ON THE OFFICIAL-ACCOUNT POLICY**, deliberately: a
+future production activation of `@atwe` must not silently also open a door onto a human's
+account. `setFounderEmail` calls `guard.checkEnvironment` and never
+`assertOfficialAccessAllowed`.
+
+**THE ADMIN_EMAIL CLASH IS THE OPPOSITE OF THE @atwe RULE, AND THAT IS THE POINT.**
+`setOfficialEmail` **refuses** when `ADMIN_EMAIL` matches, because `@atwe` becoming a
+superadmin by itself is exactly what nobody decided. Beta's `ADMIN_EMAIL` really **is**
+`yiddiweller@gmail.com`, on purpose, because the founder's own account is *meant* to hold
+superadmin. So the clash is **reported loudly and allowed** — the migration does not even
+consult `ADMIN_EMAIL`, and the CLI prints the consequence in full.
+
+**NO NEW PROMOTION MECHANISM WAS INVENTED, and the existing one is boot-only.** `db.init()`
+runs `UPDATE users SET is_admin = true WHERE lower(email) = <ADMIN_EMAIL>` on every boot
+(`db.js`), and that is the **only** place an existing account is promoted by email — the
+four `ADMIN_EMAIL` hits in `server.js` are signup handlers for **new** accounts. **There is
+no safe way to trigger it without a restart**, and none was built: `db.init` is not exported
+as a smaller piece, no admin route re-applies it, and the seed CLI reaches it only through
+`ensureSeedTag`, which **returns early when `users.seed_tag` already exists** — and on beta
+it does. So a restart or a deploy of the beta service is what applies the promotion, which
+a beta deploy does anyway.
+
+**The stored value must satisfy `db.init()`'s own predicate or the point is lost silently**,
+so that is asserted directly: the live test runs `lower(email) = ' YIDDIWELLER@Gmail.com
+'.trim().toLowerCase()` — spelled exactly as `db.js` spells it — and requires it to match
+this account and only this account.
+
+**Collisions use the SAME sweep `@atwe` uses** (`findEmailOwners`: ILIKE narrows, JS
+decides, all holders named, never `rows[0]`), so the two can never disagree about what a
+duplicate is. Proved refused live for exact, upper, mixed case, spaces, tab+newline, NBSP
+and BOM padding; proved not to block `xyiddiweller@gmail.com` and friends.
+
+**Guarded by `test/beta-founder-email.test.js`** (21 always-on checks) plus **7 live ones**
+in `test/beta-official-admin.test.js` — there for the same measured reason as the `@atwe`
+live half: `node --test` runs FILES concurrently and a third live server against one
+Postgres tipped the money tests over once. Self-tested eight ways, each caught by name:
+writing `is_admin` fails 2, a caller-named account fails 1, dropping the `seed_tag`
+requirement fails 1, reverting the collision sweep fails 2, an un-normalised write fails 2,
+accepting a scoped staffer fails 1, removing the beta gate fails 1, and dropping the
+`ADMIN_EMAIL` explanation fails 1.
+
+**A GUARD WAS REFRAMED RATHER THAN DELETED, and the reason is the usual one.**
+`beta-official-admin` check 5c used to assert the three files never contain the string
+"yiddiweller" at all — right while the only thing in them was `@atwe`'s machinery, stale the
+moment a separate, narrower thing arrived. It now asserts what it was protecting: each of
+the six **official-account** functions, `beta-access.js`, and the three official CLI
+commands must not know about any human account, and the founder migration must grant
+nothing. **`public/index.html` is excluded from the human-account scan on purpose** — it
+carries a "Designed by yiddiweller.com" credit in the app's own footer copy, and matching
+the bare word there would be failing on unrelated prose.
+
 **ONE INTERACTION TO KNOW ABOUT `ADMIN_EMAIL`, because it is a third, silent door onto
 superadmin.** `db.init()` runs `UPDATE users SET is_admin = true WHERE lower(email) = $1` on
 **every boot** for whatever `ADMIN_EMAIL` holds. So (a) setting beta's `ADMIN_EMAIL` to

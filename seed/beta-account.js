@@ -803,6 +803,184 @@ async function setOfficialEmail(db, { username = OFFICIAL_USERNAME, env = null,
   };
 }
 
+/* ---- 5d. THE FOUNDER'S OWN BETA ACCOUNT: ONE EMAIL, ONE ACCOUNT -------
+
+   A SEPARATE THING FROM EVERYTHING ABOVE, and the separation is the point.
+   Sections 5 to 5c are about @atwe, the account the APP creates, which no
+   signup can make and which is being given powers it never had. This is an
+   ORDINARY beta account that beta tooling created with `add-account`, and all
+   this does is correct its email. It grants nothing, and it is not governed by
+   the official-account access policy: a future production activation of @atwe
+   must not silently also open a door onto a human's account.
+
+   WHY A COMMAND AT ALL, when the app has a perfectly good change-email flow.
+   `POST /api/auth/change-email` is the right door and stays the right door: it
+   is password-gated, it refuses before any state change when mail cannot be
+   delivered, and it mails a verification link. That last part is exactly why it
+   cannot be used on beta today -- SMTP is off there, so `mailCanDeliver` refuses
+   first thing and nothing happens. Correctly. This is the operator's way to do
+   the same edit on a deployment with no mail, and it is deliberately the
+   narrowest possible shape.
+
+   ONE ACCOUNT, ONE ADDRESS, BOTH HARDCODED. There is no username argument, no
+   email argument and no environment variable that moves either. That is not
+   convenience, it is the security property: a general "change any beta
+   account's email" tool is a much larger thing than this, and would be a second
+   unaudited door onto every seeded account. If the founder's handle or address
+   ever changes, that is a code change, reviewed like any other.
+
+   ADMIN_EMAIL IS DELIBERATE HERE, AND IT IS THE OPPOSITE OF section 5c.
+   `setOfficialEmail` REFUSES when ADMIN_EMAIL matches, because @atwe becoming a
+   superadmin by itself on the next boot is exactly what nobody decided. Beta's
+   ADMIN_EMAIL really is this address, on purpose, and the founder's own account
+   is SUPPOSED to hold superadmin. So the clash is reported loudly and allowed.
+
+   WHAT THIS COMMAND STILL WILL NOT DO IS WRITE is_admin. The promotion stays
+   where it already lives -- `db.init()` runs
+   `UPDATE users SET is_admin = true WHERE lower(email) = <ADMIN_EMAIL>` on every
+   boot (db.js), and the next restart or deploy applies it. Reusing that is the
+   whole reason no new mechanism is invented here: there is exactly one way a
+   human account becomes staff by email, it is auditable, and this command is not
+   a second one. It writes ONE column, `email`, and says plainly what the next
+   boot will then do. */
+
+const FOUNDER_USERNAME = 'yiddiweller';
+const FOUNDER_EMAIL = 'yiddiweller@gmail.com';
+
+/* Every column the checks below read, so a caller cannot judge the row on a
+   partial SELECT. Shaped like `findOfficial` for the same reason. */
+async function findFounder(db) {
+  const r = await db.query(
+    `SELECT id, name, email, username, account_type, is_demo, is_admin, admin_perms, admin_role,
+            verified, email_verified, headline, status, deactivated, totp_enabled,
+            stripe_customer_id, stripe_connect_id, oauth_provider, seed_tag, created_at
+       FROM users WHERE lower(username) = $1`, [FOUNDER_USERNAME]);
+  return { row: r.rows[0] || null, count: r.rowCount };
+}
+
+/* A plain-English reason to refuse, or null. Deliberately SHORTER than
+   `officialMismatch`: this row was made by a person through `add-account`, so
+   most of what proves @atwe is the app's own row proves nothing here. What is
+   left is the three things that identify it and the two that make the move
+   unsafe given what ADMIN_EMAIL will do next. */
+function founderMismatch(row) {
+  if (!row) return `no @${FOUNDER_USERNAME} account exists in this database`;
+  const s = (v) => String(v == null ? '' : v).trim().toLowerCase();
+
+  if (s(row.username) !== FOUNDER_USERNAME) return `its username is "${row.username}", not "${FOUNDER_USERNAME}"`;
+  if (s(row.seed_tag) !== TAG) {
+    return `its seed_tag is ${row.seed_tag == null ? 'unset' : `"${row.seed_tag}"`}, not "${TAG}". ` +
+           'This only ever touches an account beta tooling created. A real member\'s account is untagged, ' +
+           `and the app's own @${OFFICIAL_USERNAME} is tagged "${KEEP_TAG}" and has its own separate flow.`;
+  }
+  if (row.is_demo === true) return 'it is flagged is_demo, so it is seeded sample data rather than a beta account';
+
+  /* THE TWO THAT MATTER BECAUSE OF WHAT HAPPENS NEXT. Moving this row onto
+     ADMIN_EMAIL means the next boot writes is_admin = true on it. A SCOPED
+     staffer is a deliberately weaker thing than a superadmin, so quietly
+     widening one to full access is not a migration, it is a promotion nobody
+     asked for -- and a suspended or banned account being promoted is worse
+     still. Refuse and let a person decide, rather than guessing. */
+  const perms = Array.isArray(row.admin_perms) ? row.admin_perms : [];
+  if (perms.length) {
+    return `it carries staff scopes (${perms.join(', ')}). Refusing: ADMIN_EMAIL would promote this row to ` +
+           'FULL superadmin on the next boot, which is a widening of a deliberately narrower access level. ' +
+           'Decide that on the Staff tab first, then run this.';
+  }
+  if (row.admin_role) {
+    return `it carries the staff role "${row.admin_role}". Refusing for the same reason as scopes.`;
+  }
+  if (row.status && s(row.status) !== 'active') {
+    return `its status is "${row.status}", not active. Refusing: ADMIN_EMAIL would promote a ` +
+           `${s(row.status)} account to superadmin on the next boot. Reinstate it first.`;
+  }
+  return null;
+}
+
+/* Moves the founder's beta account to its final login email. One column, one
+   account, one address, and nothing about staff access.
+
+   `guard.checkEnvironment` is the gate, NOT `assertOfficialAccessAllowed`: this
+   is not the official account and has nothing to do with which environment may
+   give @atwe a login. Conflating them would mean a future production activation
+   of @atwe also opened this, which is not what anybody agreed. */
+async function setFounderEmail(db, { env = null } = {}) {
+  const e = env || process.env;
+  const envCheck = guard.checkEnvironment(e);
+  if (!envCheck.ok) {
+    /* `failures` is what checkEnvironment really returns; quoting it means the
+       refusal names the exact variable to fix rather than saying "not beta". */
+    const why = Array.isArray(envCheck.failures) ? envCheck.failures.join(' ') : '';
+    throw new Error(`this does not look like beta, so nothing was read or changed. ${why}`.trim());
+  }
+
+  const { row, count } = await findFounder(db);
+  if (count > 1) throw new Error(`${count} accounts hold @${FOUNDER_USERNAME}. Refusing to touch any of them.`);
+
+  const problem = founderMismatch(row);
+  if (problem) throw new Error(`@${FOUNDER_USERNAME} cannot be migrated: ${problem}`);
+
+  /* Already done. Writes nothing, so re-running is always safe. */
+  if (normalizeEmail(row.email) === normalizeEmail(FOUNDER_EMAIL)) {
+    return {
+      id: row.id, username: row.username, email: row.email,
+      from: row.email, to: FOUNDER_EMAIL, already: true, isAdmin: row.is_admin === true,
+    };
+  }
+
+  /* The same collision sweep @atwe uses -- case- and whitespace-insensitive,
+     deciding in JS rather than leaning on the UNIQUE index, which compares raw
+     bytes and would miss a padded duplicate entirely. */
+  const owners = await findEmailOwners(db, FOUNDER_EMAIL, row.id);
+  if (owners.length) {
+    const who = owners.map((o) => `@${o.username || `account ${o.id}`} ("${o.email}")`).join(', ');
+    throw new Error(`${FOUNDER_EMAIL} already belongs to ${who}. ` +
+      'Refusing: this never takes an address off another account, and it treats differences of case ' +
+      'or surrounding space as the same address. Free it first, then run this again.');
+  }
+
+  /* ONE COLUMN. Not the password, not the tag, not the username, not the name,
+     not the account type, not one admin column, not the verified seal, not the
+     headline. The WHERE re-asserts every one of those it can, including the
+     row's OWN admin state, so a row promoted or demoted mid-flight is missed
+     rather than written to. */
+  let r;
+  try {
+    r = await db.query(
+      `UPDATE users
+          SET email = $1
+        WHERE id = $2
+          AND lower(username) = $3
+          AND lower(trim(email)) = $4
+          AND seed_tag        = $5
+          AND is_demo  IS NOT TRUE
+          AND is_admin IS NOT DISTINCT FROM $6
+          AND jsonb_array_length(COALESCE(admin_perms, '[]'::jsonb)) = 0
+        RETURNING id, username, email`,
+      [normalizeEmail(FOUNDER_EMAIL), row.id, FOUNDER_USERNAME, normalizeEmail(row.email),
+       TAG, row.is_admin === true]);
+  } catch (err) {
+    if (err && err.code === '23505') {
+      throw new Error(`${FOUNDER_EMAIL} was claimed by another account while this was running. Nothing was written.`);
+    }
+    throw err;
+  }
+  if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
+  return {
+    id: r.rows[0].id, username: r.rows[0].username, email: r.rows[0].email,
+    from: row.email, to: FOUNDER_EMAIL, already: false, isAdmin: row.is_admin === true,
+  };
+}
+
+/* Does this deployment's ADMIN_EMAIL name the founder's address? Reported, never
+   acted on: see the section header. The comparison is trim+lower on both sides,
+   a superset of what `db.init()` does, so it never claims a promotion will
+   happen that would not. */
+function founderIsAdminEmail(env) {
+  const e = env || process.env;
+  return normalizeEmail(e.ADMIN_EMAIL) === normalizeEmail(FOUNDER_EMAIL);
+}
+
 /* ---- 6. RESET AN ORDINARY BETA ACCOUNT'S PASSWORD -------------------- */
 
 /* The admin-side counterpart to createBetaAccount, and deliberately the same
@@ -862,6 +1040,7 @@ module.exports = {
   OFFICIAL_USERNAME, KEEP_TAG, officialIdentity, officialMismatch,
   OFFICIAL_EMAIL_ACTIVATED, officialEmails, officialEmailState, setOfficialEmail,
   normalizeEmail, findEmailOwners,
+  FOUNDER_USERNAME, FOUNDER_EMAIL, findFounder, founderMismatch, setFounderEmail, founderIsAdminEmail,
   findOfficial, activateOfficial, resetBetaPassword,
   officialAccessPolicy, officialAdminAllowed, officialLoginAllowed,
   assertOfficialAccessAllowed, promoteOfficialAdmin,
