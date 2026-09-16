@@ -22988,7 +22988,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1862'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1863'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -26038,6 +26038,12 @@ async function suFinish(withAvatar) {
       r = await API.req('POST', '/api/auth/signup/finish', body);
     }
     SU._token = r.token; SU._user = r.user;
+    // Confirmed success ONLY. A body-level .auth-step is position:fixed at z-index 1001,
+    // i.e. above every .overlay (1000) — so leaving the finished step standing buries the
+    // splash and strands the new member on a dead screen until they reload. Take the wizard
+    // down here, before anything else opens. A throw never reaches this line, so a failed
+    // signup leaves the wizard exactly where it was.
+    suHideAll();
     suShowSplash();
   } catch (e) {
     setBtnLoading(btn, false);
@@ -26048,11 +26054,14 @@ async function suFinish(withAvatar) {
     else showNotif(msg || 'Could not create your account.');
   }
 }
-/* Post-signup: splash → animated premium → app */
+/* Post-signup: splash → onboarding, in the SAME session (no reload).
+   The Atwe Pro pitch (#suPremium) is deliberately not on this path: a new member's first
+   act is onboarding, not a price. The sheet and suPremiumUpgrade/suPremiumSkip are left
+   intact for a placement decided elsewhere. */
 function suShowSplash() {
   showOverlay('suSplash');
   onAuthSuccess(SU._token, SU._user);  // log in + load app behind the splash
-  setTimeout(() => { closeOverlay('suSplash'); showOverlay('suPremium'); }, 2200);
+  setTimeout(() => { closeOverlay('suSplash'); suShowProfileSetup(); }, 2200);
 }
 function suPremiumUpgrade() { closeOverlay('suPremium'); suShowProfileSetup(); upgradeToPro(); }
 function suPremiumSkip() { closeOverlay('suPremium'); suShowProfileSetup(); }

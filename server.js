@@ -5901,7 +5901,13 @@ async function sendResetCode(email, name, code) {
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, business_verify_status, business_verify_tier, dm_connections_only, otw_visibility, has_password';
+/* `onboarded` is read on purpose and is NOT decoration. publicUser maps an absent
+   column to TRUE (a legacy row that predates the column really has finished), so a
+   brand-new account created by /api/auth/signup/finish was handed back as already
+   onboarded -- and maybeStartOnboarding() returned on the spot. The first run of a
+   new member therefore NEVER started onboarding in-session on any width; only a
+   reload did, because boot() asks /api/auth/me, whose row does carry the column. */
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, business_verify_status, business_verify_tier, dm_connections_only, otw_visibility, has_password, onboarded';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -6500,7 +6506,7 @@ app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => 
   if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
   try {
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
-    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password';
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password, onboarded'; // onboarded: see RESET_USER_COLS
     const ins = await db.query(
       `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type, oauth_provider)
        VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10, 'google') RETURNING ${cols}`,
@@ -6581,7 +6587,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
   if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
   try {
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
-    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password';
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password, onboarded'; // onboarded: see RESET_USER_COLS
     const ins = await db.query(
       `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type, oauth_provider)
        VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10, 'apple') RETURNING ${cols}`,

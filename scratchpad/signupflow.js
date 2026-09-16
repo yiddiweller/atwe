@@ -162,6 +162,11 @@ const waitUp = async () => {
   for (let i = 0; i < 10; i++) {
     const at = await p.evaluate(step);
     if (!at) break;
+    /* The LAST step is checked here, BEFORE it is pressed. It used to be checked after,
+       which quietly turned into an assertion that the finished wizard step was still
+       standing over the splash -- i.e. the very stranding bug build 1863 fixed. A probe
+       that outlives its own decision is the trap this repo has now recorded seven times. */
+    if (at === 'suPhotoStep') await seen('the last step');
     await p.evaluate(([h, e]) => {
       const cur = [...document.querySelectorAll('.auth-step')].find((s) => getComputedStyle(s).display !== 'none');
       if (!cur) return;
@@ -191,7 +196,11 @@ const waitUp = async () => {
      is legitimately null for a moment — an earlier version read it there and reported a
      failure on an account that had genuinely been created. The token is the proof, and
      what it proves is settled by the server. */
-  await seen('the last step');
+  /* And once the account exists, the wizard must be GONE. A body-level .auth-step is
+     position:fixed at z-index 1001, above every overlay, so one left standing strands
+     the new member on a dead screen until they reload. */
+  ok((await p.evaluate(step)) === '', 'and once the account exists the wizard is gone, not left on top',
+    await p.evaluate(step));
   const token = await p.evaluate(() => localStorage.getItem('atwe_token'));
   ok(!!token, 'the stranger ends up holding a real session');
   let me = null;
