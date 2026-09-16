@@ -111,13 +111,24 @@ const OWNED_ARGS = [TAG, KEEP_TAG, OFFICIAL_USERNAME];
    what the built-in account IS. A protected row that fails it keeps
    `protected: true` (it carries the tag) but loses `verified`, and every action
    refuses -- see assertManageable. */
-function safeAccount(row) {
+function safeAccount(row, opts = {}) {
   if (!row) return null;
+  /* Beta only, and the caller must have proved it -- `listAccounts`/`getAccount`
+     ask `officialAdminAllowed(process.env)` once per call and pass the answer
+     down. A caller that passes nothing gets production behaviour, where an
+     @atwe carrying admin rights fails the identity check and every action on it
+     is refused. See seed/beta-account.js section 5a. */
+  const allowAdmin = opts.allowAdmin === true;
   const official = row.seed_tag === KEEP_TAG
     && String(row.username || '').toLowerCase() === OFFICIAL_USERNAME;
-  const mismatch = official ? account.officialMismatch(row, OFFICIAL_USERNAME) : null;
+  const mismatch = official ? account.officialMismatch(row, OFFICIAL_USERNAME, { allowAdmin }) : null;
   const perms = Array.isArray(row.admin_perms) ? row.admin_perms : [];
   const follows = row.demo_follows || 0;
+  /* The protected beta superadmin: the built-in account, provably itself, and
+     carrying admin rights on an environment where that is the agreed state. It
+     is what lets the ONE password action below past the staff refusal, and
+     nothing else -- delete does not exist, and revoke/immerse are 'ordinary'. */
+  const protectedAdmin = official && mismatch === null && row.is_admin === true && allowAdmin;
   return {
     id: row.id,
     username: row.username || null,
@@ -131,6 +142,9 @@ function safeAccount(row) {
     betaStatus: official ? 'protected' : 'beta',
     betaLabel: official ? 'Protected beta account' : 'Beta account',
     official,
+    /* Drawn as its own pill beside "Protected", never as a toggle: this is a
+       deliberate beta configuration, not an ordinary privilege control. */
+    protectedAdmin,
     /* Only meaningful for the official row: does it still match the identity
        the app itself creates? null for an ordinary beta account. */
     officialVerified: official ? mismatch === null : null,
@@ -158,20 +172,22 @@ function safeAccount(row) {
 /* ---- 4. READS ---------------------------------------------------------- */
 
 async function listAccounts(db) {
+  const allowAdmin = account.officialAdminAllowed(process.env);
   const { rows } = await db.query(
     `SELECT ${ACCOUNT_COLS} FROM users u
       WHERE ${OWNED_BY_BETA}
       ORDER BY (u.seed_tag = $2) DESC, lower(u.username)`, OWNED_ARGS);
-  return rows.map(safeAccount);
+  return rows.map((r) => safeAccount(r, { allowAdmin }));
 }
 
 async function getAccount(db, id) {
   const n = parseInt(id, 10);
   if (!Number.isInteger(n)) return null;
+  const allowAdmin = account.officialAdminAllowed(process.env);
   const { rows } = await db.query(
     `SELECT ${ACCOUNT_COLS} FROM users u
       WHERE u.id = $4 AND ${OWNED_BY_BETA}`, OWNED_ARGS.concat([n]));
-  return rows[0] ? safeAccount(rows[0]) : null;
+  return rows[0] ? safeAccount(rows[0], { allowAdmin }) : null;
 }
 
 /* ---- 5. THE ONE GATE EVERY WRITE GOES THROUGH -------------------------- */
@@ -201,7 +217,15 @@ async function assertManageable(db, id, allow) {
   } else if (allow === 'official') {
     throw new Error('That is not the official Atwe account.');
   }
-  if (acct.staff) {
+  /* THE STAFF REFUSAL, with exactly one carve-out. It exists so this screen can
+     never re-password somebody else's staff login, and that still holds for
+     every ordinary account. The protected beta @atwe is the deliberate
+     exception: on beta it is MEANT to be a superadmin, and refusing here would
+     take away the one action the screen offers it. Everything else it is
+     protected from -- delete (which does not exist), revoke and joining the
+     test world -- is refused above by `allow === 'ordinary'`, not by this line,
+     so the carve-out cannot widen any of them. */
+  if (acct.staff && !acct.protectedAdmin) {
     throw new Error('That account carries staff access. Beta Access never changes a staff login.');
   }
   return acct;
@@ -241,7 +265,10 @@ async function resetPassword(db, { id, passwordHash } = {}) {
        It writes password_hash, email_verified and seed_tag = 'beta-keep' --
        the tag it already holds, so this can never move it onto the tag reset
        deletes. */
-    const done = await account.activateOfficial(db, { passwordHash, username: OFFICIAL_USERNAME });
+    const done = await account.activateOfficial(db, {
+      passwordHash, username: OFFICIAL_USERNAME,
+      allowAdmin: account.officialAdminAllowed(process.env),
+    });
     return { id: done.id, username: done.username, official: true, seedTag: done.seedTag };
   }
   const done = await account.resetBetaPassword(db, { userId: acct.id, passwordHash, tag: TAG });

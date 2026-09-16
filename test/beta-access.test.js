@@ -210,9 +210,12 @@ test('3b. no route hands back a password or a hash', () => {
 });
 
 test('3c. the shape leaving the module is safeAccount, everywhere', () => {
-  /* Every read path funnels through it, so a new field cannot be returned raw. */
-  assert.match(SVC_CODE, /rows\.map\(safeAccount\)/);
-  assert.match(SVC_CODE, /rows\[0\] \? safeAccount\(rows\[0\]\) : null/);
+  /* Every read path funnels through it, so a new field cannot be returned raw.
+     Matched loosely around the call because safeAccount now takes a second
+     argument (the beta-only allowAdmin flag); what must hold is that no read
+     path returns a database row without passing it through. */
+  assert.match(SVC_CODE, /rows\.map\(.{0,40}?safeAccount\(/);
+  assert.match(SVC_CODE, /rows\[0\] \? safeAccount\(rows\[0\]/);
 });
 
 /* ═══ 4. ADDING AN ACCOUNT ═══════════════════════════════════════════════ */
@@ -378,7 +381,14 @@ test('5e. the official reset goes through activateOfficial and re-writes beta-ke
   assert.match(upd.text, /SET password_hash = \$1, email_verified = true, seed_tag = \$2/);
   assert.match(upd.text, /AND lower\(username\) = \$4/);
   assert.match(upd.text, /AND lower\(email\)\s*= \$5/);
-  assert.match(upd.text, /AND is_admin IS NOT TRUE/);
+  /* The admin state is RE-ASSERTED against what was inspected rather than
+     pinned to one value, because on beta the protected @atwe is allowed to be
+     a superadmin. That is strictly stronger: a row promoted or demoted between
+     the check and this write matches nothing and reports it. And the SET clause
+     still writes no admin column, so this can neither promote nor demote. */
+  assert.match(upd.text, /AND is_admin IS NOT DISTINCT FROM \$\d+/);
+  const setClause = upd.text.split('WHERE')[0];
+  assert.doesNotMatch(setClause, /is_admin|admin_perms|admin_role/);
 });
 
 /* ═══ 6. RESETTING AN ORDINARY PASSWORD ══════════════════════════════════ */
