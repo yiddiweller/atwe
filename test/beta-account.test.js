@@ -373,7 +373,15 @@ test('20. the real built-in row is accepted, and only three columns are written'
      is missed rather than written to. */
   const where = up.split('WHERE')[1];
   assert.match(where, /lower\(username\)/);
-  assert.match(where, /lower\(email\)/);
+  /* Normalised, not raw: `lower(email)` or `lower(trim(email))` both satisfy
+     this, and what matters is that the WHERE normalises the SAME way
+     `officialEmailState` does -- otherwise a padded stored value is classified
+     canonical and then matched by nothing. Written as a shape rather than a
+     literal because that normalisation has already changed once (a tab-padded
+     row slipped through `lower(trim(...))`, since Postgres trims spaces only),
+     and a literal here goes stale the next time it does. The behaviour itself
+     is proved live, against a real database, in the collision tests. */
+  assert.match(where, /lower\((?:trim\()?email/);
   assert.match(where, /account_type\s*=\s*'business'/);
   /* The row's OWN admin state is re-asserted (see beta-access 5e): on beta the
      protected @atwe may be a superadmin, so demanding one fixed value would be

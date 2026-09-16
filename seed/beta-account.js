@@ -115,6 +115,57 @@ async function findByEmail(db, email) {
   return r.rows[0] || null;
 }
 
+/* THE ONE NORMALISATION, so nothing can disagree about what "the same address"
+   means. Trim THEN lower, matching what `db.init()` already does to
+   ADMIN_EMAIL (`(process.env.ADMIN_EMAIL || '').trim().toLowerCase()`). */
+function normalizeEmail(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+
+/* EVERY account that logically holds this address, minus one id.
+
+   `findByEmail` above is NOT good enough for a collision check and this was
+   proved against a real database rather than argued: it compares
+   `lower(email) = lower($1)`, which catches CEO@ATWE.COM but NOT a stored
+   "  ceo@atwe.com  ". Postgres' UNIQUE on a TEXT column compares raw bytes, so
+   the padded value is a DIFFERENT key -- the constraint does not fire either,
+   and both the check and the database wave it through. Two accounts then hold
+   what every human and every lower()-based lookup in the app reads as one
+   address.
+
+   IT NARROWS IN SQL AND DECIDES IN JS, and that split is not fastidiousness --
+   `lower(trim(email))` was written first and a padded row STILL got through,
+   because POSTGRES' `trim()` STRIPS SPACES ONLY while JavaScript's `.trim()`
+   strips every whitespace character. A value padded with a tab or a newline
+   compared equal to nobody in SQL and equal to the target in JS, so the two
+   sides of one check disagreed about what "the same address" means. Rather than
+   chase Postgres and JavaScript into agreeing across Unicode, the ILIKE finds
+   every row that CONTAINS the address in any case, and `normalizeEmail` -- the
+   one normaliser, the same function the rest of this file uses -- says which of
+   them really is it. A superstring like "xceo@atwe.comy" is found and then
+   correctly rejected.
+
+   It returns ALL matches rather than `rows[0]`. Taking the first row is its own
+   hazard: with several colliding rows the one that comes back is arbitrary, and
+   if it happened to be the caller's own row the check would pass and hand the
+   decision straight back to the constraint this exists to not rely on.
+
+   The ILIKE cannot use an index, so this is a sequential scan of `users`. That
+   is the right trade: it runs once, from an operator's terminal, on a beta
+   database, and being certain matters more than being quick. */
+async function findEmailOwners(db, email, exceptId = null) {
+  const target = normalizeEmail(email);
+  if (!target) return [];
+  const except = exceptId == null ? null : parseInt(exceptId, 10);
+  /* The address is ours, but escape anyway: a `%` or `_` reaching a LIKE
+     pattern is how a check quietly starts matching everything. */
+  const like = `%${target.replace(/([\\%_])/g, '\\$1')}%`;
+  const r = await db.query(
+    `SELECT id, username, email, seed_tag FROM users
+      WHERE email ILIKE $1 ESCAPE '\\'
+      ORDER BY id`, [like]);
+  return r.rows.filter((row) => normalizeEmail(row.email) === target
+    && (except == null || row.id !== except));
+}
+
 /* Atwe LOCKS a list of names (routes.js SYSTEM_ROUTES, seeded into
    reserved_usernames on every boot) so nobody can register a name that would
    impersonate the company or shadow a route -- "atwe" is on that list. This
@@ -237,11 +288,79 @@ const OFFICIAL_USERNAME = (process.env.ATWE_OFFICIAL_USERNAME || 'atwe').toLower
    being invisible to a predicate that tests for equality with "beta". */
 const KEEP_TAG = 'beta-keep';
 
-/* Exactly what `ensureOfficialAccount` writes. */
+/* ---- 5-EMAIL. THE OFFICIAL ACCOUNT HAS TWO LEGITIMATE EMAILS ---------
+
+   PRODUCT DECISION (16 Sep 2026, the founder): the ACTIVATED official account
+   signs in as ceo@atwe.com, in both environments. The row is still CREATED by
+   the app with an internal address, so a genuine @atwe is in one of exactly two
+   states, and both are canonical:
+
+     DORMANT    no-reply+atwe@atwe.internal   as `ensureOfficialAccount` writes it
+     ACTIVATED  ceo@atwe.com                  after the transition in section 5c
+
+   THIS IS AN ALLOWLIST OF TWO, NOT A LOOSENING. Every other address refuses
+   exactly as it always did -- a real person's, a typo, a hijacked row. What
+   changed is that the set has a second member, not that the check became a
+   shrug. There is deliberately no pattern, no domain rule and no environment
+   variable here: two exact strings, or no.
+
+   IT IS A ONE-WAY DOOR, and the transition is what makes it one. Nothing in
+   this tree ever writes the internal address, so a row cannot be walked
+   backwards to re-acquire provenance it has already spent; `setOfficialEmail`
+   only ever writes the activated address, and only over the dormant one.
+
+   WHAT THE MOVE COSTS, said plainly rather than glossed. "@atwe.internal" is
+   not a deliverable domain and signup demands a code that really arrives, so
+   the dormant address was on its own proof that no person could hold the row.
+   ceo@atwe.com is a real mailbox, so that particular proof is spent. What
+   carries the weight afterwards is the rest of the set, and it is not thin:
+   `users.email` is UNIQUE and `users` holds a unique index on lower(username),
+   so exactly one row can ever be @atwe and exactly one row can ever hold that
+   address; the app itself created it; and `officialMismatch` still demands the
+   name, the business account type, no demo flag, no staff scopes, no
+   two-factor, no Stripe or OAuth attachment, an active status and the beta
+   keep-tag. The transition additionally refuses if any other account already
+   holds ceo@atwe.com.
+
+   Whoever controls that mailbox can start a password reset for @atwe. That is
+   inherent in giving the account a real address at all; it is the founder's own
+   company domain; and it is exactly why the address is a constant in this file
+   rather than anything a caller, a flag or an identity file can supply. */
+
+/* The activated login identity. Deliberately NOT derived from the username the
+   way the dormant one is: it is a real mailbox on the company's own domain, not
+   a pattern, and it must not move if ATWE_OFFICIAL_USERNAME ever does. */
+const OFFICIAL_EMAIL_ACTIVATED = 'ceo@atwe.com';
+
+/* The two, together. The dormant one is built the way server.js builds it. */
+function officialEmails(username = OFFICIAL_USERNAME) {
+  return {
+    dormant: `no-reply+${String(username).toLowerCase()}@atwe.internal`,
+    activated: OFFICIAL_EMAIL_ACTIVATED,
+  };
+}
+
+/* Which state is this row's email in -- 'dormant', 'activated', or null for
+   "neither, so this is not the official account". The ONE place the two
+   addresses are compared, so nothing else can invent a third answer. */
+function officialEmailState(email, username = OFFICIAL_USERNAME) {
+  const e = normalizeEmail(email);
+  const want = officialEmails(username);
+  if (e === normalizeEmail(want.dormant)) return 'dormant';
+  if (e === normalizeEmail(want.activated)) return 'activated';
+  return null;
+}
+
+/* Exactly what `ensureOfficialAccount` writes, i.e. the DORMANT state. `.email`
+   stays the created address on purpose: this function documents what the app
+   itself produces, and test 19 reads it against server.js's own literal. The
+   activated address is offered beside it rather than replacing it. */
 function officialIdentity(username = OFFICIAL_USERNAME) {
   return {
     username,
     email: `no-reply+${username}@atwe.internal`,
+    emailActivated: OFFICIAL_EMAIL_ACTIVATED,
+    emails: officialEmails(username),
     name: 'Atwe',
     accountType: 'business',
     headline: 'Product news and tips from Atwe',
@@ -348,9 +467,13 @@ function assertOfficialAccessAllowed(env, what) {
    the account server.js made. Split into two kinds of check on purpose.
 
    PROVENANCE -- things a human signup could not have produced, so matching them
-   proves where the row came from. The email is the strongest of the four:
-   "@atwe.internal" is not a deliverable domain and signup requires a code that
-   really arrives, so no person could hold this address.
+   proves where the row came from. The email must be one of the two canonical
+   addresses in section 5-EMAIL and nothing else. While it is the DORMANT one it
+   is the strongest single signal there is, because "@atwe.internal" is not a
+   deliverable domain and signup demands a code that really arrives, so no
+   person could hold it. Once it is the ACTIVATED one that particular proof is
+   spent and the weight sits on the rest of this function plus the two unique
+   indexes; section 5-EMAIL sets out that trade in full.
 
    SAFETY -- this hands somebody a working password, so it also refuses any row
    that would make that password more powerful than an ordinary member's, or
@@ -366,9 +489,15 @@ function officialMismatch(row, username = OFFICIAL_USERNAME, opts = {}) {
 
   const s = (v) => String(v == null ? '' : v).trim().toLowerCase();
   if (s(row.username) !== want.username) return `its username is "${row.username}", not "${want.username}"`;
-  if (s(row.email) !== want.email) {
-    return `its email is "${row.email}", but the built-in account is created with "${want.email}". ` +
-           'Refusing: this row was not made by the app itself.';
+  /* TWO legitimate addresses and nothing else -- section 5-EMAIL. The message
+     names both, so a person reading a refusal can tell "this row was never
+     ours" apart from "somebody moved the address by hand". */
+  if (officialEmailState(row.email, username) === null) {
+    const em = officialEmails(username);
+    return `its email is "${row.email}", but the built-in account holds either "${em.dormant}" ` +
+           `(as the app creates it) or "${em.activated}" (once activated). ` +
+           'Refusing: this row was not made by the app itself, or its address was changed by ' +
+           'something other than the official email transition.';
   }
   if (s(row.name) !== want.name.toLowerCase()) return `its name is "${row.name}", not "${want.name}"`;
   if (s(row.account_type) !== want.accountType) return `its account type is "${row.account_type}", not "${want.accountType}"`;
@@ -442,18 +571,25 @@ async function activateOfficial(db, { passwordHash, username = OFFICIAL_USERNAME
      and since `users.is_admin` is BOOLEAN NOT NULL DEFAULT false (db.js) that
      is EXACTLY equivalent to the `IS NOT TRUE` this replaced -- the equivalence
      depends on the NOT NULL, so check it before relaxing that column. It also writes NO admin column,
-     so this can still neither promote nor demote anybody. */
+     so this can still neither promote nor demote anybody.
+
+     `lower(email) = $5` re-asserts the row's OWN address for the same reason,
+     and since section 5-EMAIL it has to: there are now TWO canonical addresses,
+     so naming a fixed one here would make this refuse the account the moment it
+     moved to its activated email. `officialMismatch` has already proved the
+     value is one of the two, so this narrows the write to the row that was
+     actually inspected rather than widening anything. */
   const r = await db.query(
     `UPDATE users
         SET password_hash = $1, email_verified = true, seed_tag = $2
       WHERE id = $3
         AND lower(username) = $4
-        AND lower(email)    = $5
+        AND lower(trim(email)) = $5
         AND account_type    = 'business'
         AND is_demo  IS NOT TRUE
         AND is_admin IS NOT DISTINCT FROM $6
       RETURNING id, username`,
-    [passwordHash, KEEP_TAG, row.id, uname, officialIdentity(uname).email, row.is_admin === true]);
+    [passwordHash, KEEP_TAG, row.id, uname, normalizeEmail(row.email), row.is_admin === true]);
   if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
   return {
     id: r.rows[0].id, username: r.rows[0].username, seedTag: KEEP_TAG,
@@ -477,8 +613,10 @@ async function activateOfficial(db, { passwordHash, username = OFFICIAL_USERNAME
        app `is_admin` alone IS superadmin (auth.requireAdmin re-reads exactly
        that column and never consults scopes), so inventing more would widen the
        change without widening what it buys,
-     * and the WHERE re-asserts the whole identity, so a row that changed
-       underneath is missed rather than promoted.
+     * and the WHERE re-asserts the whole identity -- including the row's own
+       already-validated email, so promoting still works after the account has
+       moved to ceo@atwe.com -- so a row that changed underneath is missed
+       rather than promoted.
 
    There is no matching "promote anybody" helper and there must never be one:
    ordinary staff access is granted through the dashboard's own Staff tab. */
@@ -502,16 +640,167 @@ async function promoteOfficialAdmin(db, { username = OFFICIAL_USERNAME, env = nu
         SET is_admin = true
       WHERE id = $1
         AND lower(username) = $2
-        AND lower(email)    = $3
+        AND lower(trim(email)) = $3
         AND account_type    = 'business'
         AND seed_tag        = $4
         AND is_demo  IS NOT TRUE
         AND is_admin IS NOT TRUE
         AND jsonb_array_length(COALESCE(admin_perms, '[]'::jsonb)) = 0
       RETURNING id, username`,
-    [row.id, uname, officialIdentity(uname).email, KEEP_TAG]);
+    [row.id, uname, normalizeEmail(row.email), KEEP_TAG]);
   if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
   return { id: r.rows[0].id, username: r.rows[0].username, seedTag: KEEP_TAG, already: false };
+}
+
+/* ---- 5c. MOVE THE BUILT-IN ACCOUNT TO ITS ACTIVATED LOGIN EMAIL ------
+
+   The founder's final identity model (16 Sep 2026) is that @atwe signs in as
+   ceo@atwe.com. The app still CREATES the row with an internal address, so
+   something has to carry it across, and that something is deliberately one
+   narrow operation rather than a relaxed check somewhere.
+
+   ONE ACCOUNT, ONE DIRECTION, ONE COLUMN.
+
+     * ONE ACCOUNT. It resolves @atwe itself; the CLI passes no username, and a
+       row that is not provably the built-in account is refused by the same
+       `officialMismatch` every other official action uses.
+     * ONE DIRECTION. It writes only the ACTIVATED address, and only over the
+       DORMANT one. Being handed the activated address already is a no-op that
+       writes nothing, so re-running it is safe. Nothing anywhere writes the
+       internal address back.
+     * ONE COLUMN, `email`. Not the password, not `seed_tag`, not the account
+       type, not one admin column, not the verified seal, not the headline. The
+       WHERE re-asserts every one of those, so a row that changed underneath is
+       missed rather than written to.
+
+   IT IS THE `login` POWER, NOT A NEW ONE. The activated address IS the login
+   identity, so it goes through `assertOfficialAccessAllowed(env, 'login')` --
+   the same gate `activate-official` passes. Beta permits it today; production's
+   lane is shut, so the identical command against production changes nothing and
+   says why. No third policy, no separate switch to remember.
+
+   `email_verified` IS DELIBERATELY LEFT ALONE, and the reason is worth stating
+   because the app's own change-email route does the opposite. That route serves
+   a MEMBER moving to an address they must prove they control, so it clears the
+   flag and mails a link. This is an OPERATOR moving the company's own account
+   to the company's own domain, from a CLI that already required a beta
+   deployment, the canonical identity and the keep-tag. Clearing the flag here
+   would buy no proof at all -- there is no inbox in this loop -- and on a
+   deployment with REQUIRE_EMAIL_VERIFICATION it would lock the account out of
+   the login this whole exercise exists to give it. The honest reading is that
+   the column was never a proof for this row: `ensureOfficialAccount` writes it
+   true at creation for an address that can never receive anything.
+
+   THE ADDRESS MUST BE FREE. `users.email` is UNIQUE, so a duplicate would fail
+   the UPDATE anyway -- the explicit check is what turns a constraint violation
+   into a sentence naming who holds it. The unique violation is still caught, in
+   case somebody claims the address between the check and the write. */
+async function setOfficialEmail(db, { username = OFFICIAL_USERNAME, env = null,
+                                    allowAdminEmailMatch = false } = {}) {
+  const e = env || process.env;
+  assertOfficialAccessAllowed(e, 'login');
+
+  const uname = String(username).toLowerCase();
+  const { row, count } = await findOfficial(db, uname);
+  if (count > 1) throw new Error(`${count} accounts hold @${uname}. Refusing to touch any of them.`);
+
+  /* The full canonical test, relaxed in exactly one place and only where the
+     policy says so: an already-promoted @atwe must not be refused here, or the
+     address could never be moved after a promotion. Everything else -- the
+     name, the type, the demo flag, staff scopes, two-factor, status, Stripe,
+     OAuth, the tag -- refuses exactly as it always has. */
+  const problem = officialMismatch(row, uname, { allowAdmin: officialAdminAllowed(e) });
+  if (problem) throw new Error(`@${uname} is not the built-in Atwe account: ${problem}`);
+
+  /* Beta tooling must already own this row. A dormant @atwe nobody can sign
+     into has no use for a login address, and moving it would spend the
+     strongest provenance signal there is for nothing. */
+  if (row.seed_tag !== KEEP_TAG) {
+    throw new Error(`@${uname} is not yet a protected beta account (seed_tag is ` +
+      `${row.seed_tag == null ? 'unset' : `"${row.seed_tag}"`}, not "${KEEP_TAG}"). ` +
+      'Run activate-official first so it has a beta password, then move its email.');
+  }
+
+  const want = officialEmails(uname);
+  const state = officialEmailState(row.email, uname);
+  if (state === 'activated') {
+    return {
+      id: row.id, username: row.username, email: row.email,
+      from: row.email, to: want.activated, already: true, isAdmin: row.is_admin === true,
+    };
+  }
+  /* `officialMismatch` has already refused anything that is neither state, so
+     this can only be 'dormant'. Asserted rather than assumed, because a silent
+     fall-through here would be an unguarded write. */
+  if (state !== 'dormant') {
+    throw new Error(`@${uname} holds "${row.email}", which is neither canonical address. Nothing was written.`);
+  }
+
+  /* NOBODY ELSE MAY HOLD THIS ADDRESS, case- and whitespace-insensitively, and
+     this check must stand on its own rather than leaning on the UNIQUE index --
+     see `findEmailOwners`, where the reason is a real hole proved against a real
+     database. It reports EVERY holder, so a tidy-up is done once rather than
+     discovered one row at a time. */
+  const owners = await findEmailOwners(db, want.activated, row.id);
+  if (owners.length) {
+    const who = owners.map((o) => `@${o.username || `account ${o.id}`} ("${o.email}")`).join(', ');
+    throw new Error(`${want.activated} already belongs to ${who}. ` +
+      'Refusing: this never takes an address off another account, and it treats ' +
+      'differences of case or surrounding space as the same address. Free it first, then run this again.');
+  }
+
+  /* ADMIN_EMAIL IS A THIRD, SILENT DOOR ONTO SUPERADMIN, and this transition is
+     what could open it. `db.init()` runs
+     `UPDATE users SET is_admin = true WHERE lower(email) = <ADMIN_EMAIL>` on
+     EVERY boot, so moving @atwe onto an address that matches it would promote
+     the account on the next restart -- bypassing promoteOfficialAdmin and every
+     check inside it, without anybody deciding to.
+
+     Refused rather than warned, because the promotion would happen later, on a
+     restart nobody is watching. The comparison is trim+lower on both sides,
+     which is a SUPERSET of what db.init() does (it trims only its own side), so
+     this refuses in every case that would really promote and in a few that
+     would not -- the conservative direction.
+
+     `allowAdminEmailMatch` exists for an operator who genuinely wants the boot
+     promotion to be the admin path. It has no default, is never inferred, and
+     the CLI only sets it from a spelled-out flag. */
+  const adminEmail = normalizeEmail(e.ADMIN_EMAIL);
+  if (adminEmail && adminEmail === normalizeEmail(want.activated) && allowAdminEmailMatch !== true) {
+    throw new Error(
+      `this environment's ADMIN_EMAIL is "${e.ADMIN_EMAIL}", which is the same address @${uname} ` +
+      `would move to. db.init() promotes whatever account holds ADMIN_EMAIL to superadmin on every ` +
+      `boot, so this move would grant @${uname} staff access at the next restart on its own. ` +
+      'Refusing. Point ADMIN_EMAIL at a person\'s own address instead, then run this again, and ' +
+      'grant staff access deliberately with "node tools/seed-beta.js promote-official-admin".');
+  }
+
+  let r;
+  try {
+    r = await db.query(
+      `UPDATE users
+          SET email = $1
+        WHERE id = $2
+          AND lower(username) = $3
+          AND lower(trim(email)) = $4
+          AND account_type    = 'business'
+          AND seed_tag        = $5
+          AND is_demo  IS NOT TRUE
+          AND is_admin IS NOT DISTINCT FROM $6
+        RETURNING id, username, email`,
+      [normalizeEmail(want.activated), row.id, uname, normalizeEmail(want.dormant),
+       KEEP_TAG, row.is_admin === true]);
+  } catch (err) {
+    if (err && err.code === '23505') {
+      throw new Error(`${want.activated} was claimed by another account while this was running. Nothing was written.`);
+    }
+    throw err;
+  }
+  if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
+  return {
+    id: r.rows[0].id, username: r.rows[0].username, email: r.rows[0].email,
+    from: want.dormant, to: want.activated, already: false, isAdmin: row.is_admin === true,
+  };
 }
 
 /* ---- 6. RESET AN ORDINARY BETA ACCOUNT'S PASSWORD -------------------- */
@@ -571,6 +860,8 @@ module.exports = {
   findByUsername, findByEmail, reservationFor,
   createBetaAccount, immerseAccount,
   OFFICIAL_USERNAME, KEEP_TAG, officialIdentity, officialMismatch,
+  OFFICIAL_EMAIL_ACTIVATED, officialEmails, officialEmailState, setOfficialEmail,
+  normalizeEmail, findEmailOwners,
   findOfficial, activateOfficial, resetBetaPassword,
   officialAccessPolicy, officialAdminAllowed, officialLoginAllowed,
   assertOfficialAccessAllowed, promoteOfficialAdmin,
