@@ -32,6 +32,24 @@ const progress = (token, body) => H.api('POST', '/api/onboarding/progress', { to
 const defer = (token, body) => H.api('POST', '/api/onboarding/defer', { token, body });
 const finish = (token, body) => H.api('POST', '/api/onboarding/finish', { token, body: body || {} });
 
+/* ONE function's body, found by matching its braces rather than by slicing to the next
+   `function` keyword. The lazy version was tried first and reported a fault in code it
+   had never been pointed at: obResume() is followed by the feature-intro registry, which
+   is a `const`, so "slice to the next function declaration" swallowed markIntroSeen()
+   and its perfectly legitimate localStorage. Braces are balanced inside this app's
+   strings and template literals, so counting them is exact here. */
+function fnBody(name) {
+  const m = APP.match(new RegExp('\\n(?:async )?function ' + name + '\\s*\\('));
+  assert.ok(m, name + '() should exist in public/index.html');
+  const open = APP.indexOf('{', m.index);
+  let depth = 0;
+  for (let i = open; i < APP.length; i++) {
+    if (APP[i] === '{') depth++;
+    else if (APP[i] === '}' && --depth === 0) return APP.slice(m.index, i + 1);
+  }
+  assert.fail(name + '() body is unbalanced');
+}
+
 /* ── source invariants: true with or without a database ──────────────────────── */
 
 test('S1. there is exactly one onboarding implementation', () => {
@@ -70,6 +88,36 @@ test('S5. a deferred member is left alone by the automatic start', () => {
   assert.match(gate, /if \(user\.onboardDeferred\) return;/,
     'boot/navigation/refresh/login must not force the overlay open after "Skip for now"');
   assert.match(gate, /obStart\(user\.onboardStep\)/, 'and a non-deferred resume opens at the recorded step');
+});
+
+test('S6. a REFUSED "Skip for now" is never reported as saved', () => {
+  const body = APP.slice(APP.indexOf('async function obDefer()'), APP.indexOf('function obPickGoal('));
+  /* "Later" is a durable decision, so only the server can grant it. Mirroring it
+     locally on a failed write closed the overlay, told the member it was saved, and
+     then let onboarding reappear on the next load because nothing had been written. */
+  assert.doesNotMatch(body, /onboardDeferred\s*=/, 'a failed defer must not set the flag locally');
+  assert.doesNotMatch(body, /onboardStep\s*=/, 'nor the step');
+  const fail = body.indexOf('if (!r)');
+  const close = body.indexOf("closeOverlay('onboardingFlow')");
+  const done = body.indexOf('OB._active = false');
+  assert.ok(fail > -1 && close > fail, 'the failure branch must come BEFORE the close');
+  assert.match(body.slice(fail, close), /return;/, 'and it must return rather than fall through');
+  assert.ok(done > fail, 'the flow stays active until the write is confirmed, so a retry works');
+  assert.match(body.slice(fail, close), /btn\.disabled = false/, 'the control must come back');
+  assert.match(body.slice(fail, close), /showNotif\(/, 'and the member must be told');
+});
+
+test('S6b. the client keeps no durable copy of its own', () => {
+  /* The server is the source of truth; browser storage would be a second one that can
+     disagree with it. Scoped to the ONBOARDING functions by name, not to a slice of the
+     file: the feature-intro registry sits between them and legitimately mirrors itself
+     in localStorage, so a range scan reports a fault in code it was never asked about. */
+  for (const fn of ['obStart', 'obStep', 'obBack', 'obAdvance', 'obSaveProgress', 'obSyncUser',
+                    'obDefer', 'obResume', 'obFinish', 'maybeStartOnboarding',
+                    'obStepsDone', 'acOnboardCard', 'acSyncOnboardCard']) {
+    assert.doesNotMatch(fnBody(fn), /localStorage|sessionStorage/,
+      fn + '() must keep no onboarding state in browser storage');
+  }
 });
 
 /* ── live: the state machine itself ──────────────────────────────────────────── */
@@ -185,6 +233,51 @@ test('onboarding resume', { skip: H.SKIP ? 'no database' : false }, async (t) =>
         WHERE onboard_deferred IS NULL OR (onboarded = true AND onboard_step IS NOT NULL)`);
     assert.strictEqual(rows[0].bad, 0,
       'no row may be NULL-deferred, and no completed row may carry a resume step');
+  });
+
+  /* ── a refused "Skip for now" ───────────────────────────────────────────── */
+
+  await t.test('8c. a refused defer leaves the server exactly as it was', async () => {
+    const u = await H.seedUser();
+    const token = await H.login(u);
+    await progress(token, { step: 'people', intent: 'sell' });
+    const bad = await defer(token, { step: 'nonsense' });   // a real, refused defer
+    assert.strictEqual(bad.status, 400);
+    const r = await me(token);
+    assert.strictEqual(r.body.user.onboardDeferred, false, 'a refused defer must NOT defer anybody');
+    assert.strictEqual(r.body.user.onboarded, false, 'and must not complete anything either');
+    assert.strictEqual(r.body.user.onboardStep, 'people', 'progress already saved is untouched');
+    assert.strictEqual(r.body.user.intent, 'sell', 'and so is the goal');
+  });
+
+  await t.test('8d. and the member can simply try again', async () => {
+    const u = await H.seedUser();
+    const token = await H.login(u);
+    await progress(token, { step: 'topics', intent: 'job' });
+    assert.strictEqual((await defer(token, { step: 'nope' })).status, 400);
+    const retry = await defer(token, { step: 'topics' });
+    assert.strictEqual(retry.status, 200);
+    assert.strictEqual(retry.body.deferred, true);
+    const t2 = await H.login(u);   // a fresh session: server truth wins
+    const r = await me(t2);
+    assert.strictEqual(r.body.user.onboardDeferred, true);
+    assert.strictEqual(r.body.user.onboarded, false);
+    assert.strictEqual(r.body.user.onboardStep, 'topics');
+    assert.strictEqual(r.body.user.intent, 'job');
+  });
+
+  await t.test('8e. and finishing after all that still completes, unchanged', async () => {
+    const u = await H.seedUser();
+    const token = await H.login(u);
+    await progress(token, { step: 'people', intent: 'network' });
+    await defer(token, { step: 'bogus' });     // refused
+    await defer(token, { step: 'people' });    // accepted
+    await finish(token, {});
+    const r = await me(token);
+    assert.strictEqual(r.body.user.onboarded, true);
+    assert.strictEqual(r.body.user.onboardStep, null);
+    assert.strictEqual(r.body.user.onboardDeferred, false);
+    assert.strictEqual(r.body.user.intent, 'network');
   });
 
   /* ── security ───────────────────────────────────────────────────────────── */

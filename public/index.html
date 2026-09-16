@@ -4603,6 +4603,9 @@ body.light .overlay.ob-screen{background:var(--bg);backdrop-filter:none;-webkit-
 .ob-skip{background:none;border:none;font-size:14.5px;font-weight:600;color:var(--t3);
   padding:6px 8px;min-height:44px;display:flex;align-items:center;cursor:pointer;}
 .ob-skip:active{opacity:.55;}
+/* While the deferral is being written. It comes back on a failure, so this is a busy
+   state rather than a dead end. */
+.ob-skip:disabled{opacity:.5;cursor:default;}
 .ob-body{width:100%;max-width:520px;margin:0 auto;padding:10px 20px 36px;}
 .ob-ai{width:60px;height:60px;border-radius:18px;background:linear-gradient(140deg,var(--accent-fill),var(--accent-fill));display:flex;align-items:center;justify-content:center;margin:8px 0 16px;box-shadow:0 8px 24px rgba(var(--accent-rgb),.3);}
 .ob-ai img{width:34px;height:34px;}
@@ -23008,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1864'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1865'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -26101,7 +26104,7 @@ function suGoHomeFromSetup() { closeOverlay('suProfilePrompt'); appTab('home'); 
 /* `intent` is the chosen goal, `_view` the step ON SCREEN and `_reached` the furthest
    step recorded on the server. The last two are different on purpose: Back moves the
    view and never the record, so going back cannot un-complete anything. */
-const OB = { intent: null, _active: false, _view: null, _reached: null, _sentIntent: null };
+const OB = { intent: null, _active: false, _view: null, _reached: null, _sentIntent: null, _deferring: false, _err: null };
 /* Open the flow automatically for an account that has not finished it -- UNLESS they
    pressed "Skip for now". That is the whole point of the deferred state: they said
    later, so boot, navigation, a refresh and the next login all leave them alone and the
@@ -26390,12 +26393,13 @@ async function obAdvance(next, intent) {
 async function obSaveProgress(path, extra) {
   const body = Object.assign({ step: OB._reached || 'goal' }, extra || {});
   if (OB.intent) body.intent = OB.intent;
+  OB._err = null;
   try {
     const r = await API.req('POST', path, body);
     OB._sentIntent = OB.intent;
     obSyncUser(r);
     return r;
-  } catch (e) { return null; }
+  } catch (e) { OB._err = (e && e.message) || ''; return null; }
 }
 /* Mirror the server's answer onto S.user so every surface that reads it -- boot, the
    Account re-entry, maybeStartOnboarding -- agrees without another round trip. The
@@ -26410,16 +26414,30 @@ function obSyncUser(r) {
   acSyncOnboardCard();
 }
 /* "Skip for now". NOT the finish route: onboarded stays false, the progress so far is
-   recorded, and the deferred flag is what stops the overlay reopening by itself. */
+   recorded, and the deferred flag is what stops the overlay reopening by itself.
+
+   IT CLOSES ONLY ON A CONFIRMED WRITE, and that is the whole point of the state. "Later"
+   is a durable decision that has to survive a refresh, a logout and another browser, so
+   the SERVER is the only thing that can grant it. An earlier version mirrored the
+   deferral locally when the request failed -- the overlay closed, the member believed
+   their choice was saved, and onboarding reappeared at them on the next load because
+   nothing durable had been written. The UI may never report a preference as saved that
+   the server refused. So: nothing local is set, the flow stays open at the step they
+   were on, the control comes back, they are told, and they can try again. Progress
+   already written (the goal, the topics they followed) is untouched by a failure here. */
 async function obDefer() {
-  if (!OB._active) return;
-  OB._active = false;
+  if (!OB._active || OB._deferring) return;
+  OB._deferring = true;
+  const btn = document.getElementById('obSkip');
+  if (btn) btn.disabled = true;
   const r = await obSaveProgress('/api/onboarding/defer');
-  if (!r && S.user) {   // offline or refused: at least behave correctly this session
-    S.user.onboardDeferred = true;
-    S.user.onboardStep = OB._reached || 'goal';
-    acSyncOnboardCard();
+  OB._deferring = false;
+  if (!r) {
+    if (btn) btn.disabled = false;
+    showNotif(OB._err || 'Could not save that. Please try again.');
+    return;   // still _active, still on screen, still at the same step
   }
+  OB._active = false;
   closeOverlay('onboardingFlow');
 }
 function obPickGoal(intent) {

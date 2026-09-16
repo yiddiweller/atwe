@@ -87,6 +87,17 @@ const obState = () => {
     overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
   };
 };
+/* Is THIS element what a finger would actually hit at its own centre? .click() works
+   perfectly on a buried element, so "is it open" is never the same question as "is it
+   what you see". */
+const ownsItsCentre = (id) => {
+  const el = document.getElementById(id);
+  if (!el || el.classList.contains('hidden')) return { shown: false };
+  const r = el.getBoundingClientRect();
+  if (r.width < 10 || r.height < 10) return { shown: false };
+  const at = document.elementFromPoint(Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2));
+  return { shown: true, inside: !!(at && el.contains(at)), top: at ? (at.id || at.className || at.tagName) : null };
+};
 const cardState = () => {
   const el = document.getElementById('acOnboardCard');
   if (!el) return { present: false };
@@ -146,12 +157,12 @@ async function run(b, W) {
     return false;
   };
   const waitStep = (id) => waitFor((i) => { const e = document.getElementById(i); if (!e || e.classList.contains('hidden')) return false; const r = e.getBoundingClientRect(); return r.width > 10 && r.height > 10; }, id);
-  const waitOb = (step) => waitFor((s) => {
+  const waitOb = (step, ms) => waitFor((s) => {
     const el = document.getElementById('onboardingFlow');
     if (!el || el.classList.contains('hidden')) return false;
     const cur = [...document.querySelectorAll('#onboardingFlow .ob-step')].find((x) => !x.classList.contains('hidden'));
     return !!cur && cur.getAttribute('data-ob') === s;
-  }, step);
+  }, step, ms);
 
   /* A fresh account, all the way through the real wizard, ending with onboarding open. */
   async function newAccount(tag) {
@@ -349,11 +360,63 @@ async function run(b, W) {
   c = await p.evaluate(cardState);
   ok(c.present === false, L + 'E4. nor the re-entry', JSON.stringify(c));
 
-  const stale = await p.evaluate(() => [...document.querySelectorAll('.overlay')].filter((e) => !e.classList.contains('hidden') && ['onboardingFlow', 'suSplash', 'suPremium'].includes(e.id)).map((e) => e.id));
-  ok(stale.length === 0, L + 'F1. no stale onboarding or signup overlay is left behind', JSON.stringify(stale));
+  /* ── F. A REFUSED "Skip for now" ────────────────────────────────────────
+     "Later" is a durable decision, so only a confirmed server write may grant it. This
+     drives the real failure by refusing the real route in flight: the flow must stay
+     open where it was, the control must come back, nothing local may pretend, and a
+     REFRESH must show the server's answer (still not deferred) rather than the
+     client's wish. Then the retry succeeds and the same refresh says the opposite. */
+  await newAccount('f');
+  await p.evaluate(() => document.querySelector('#onboardingFlow .ob-goal').click());
+  await waitOb('topics');
+  st = await serverState();
+  ok(st.step === 'topics', L + 'F0. the goal is saved before the failure', JSON.stringify(st));
+
+  await p.route('**/api/onboarding/defer', (route) => route.fulfill({
+    status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Could not save.' }),
+  }));
+  await tap('#obSkip');
+  await p.waitForTimeout(2500);
   s = await p.evaluate(obState);
-  ok(!s.overflow, L + 'F2. still nothing spilling sideways at the end', String(s.overflow));
-  ok(errs.length === 0, L + 'F3. no JS errors anywhere in the journey', errs[0]);
+  st = await serverState();
+  ok(s.open && s.step === 'topics', L + 'F1. a refused skip leaves the member exactly where they were', JSON.stringify({ open: s.open, step: s.step }));
+  const owns = await p.evaluate(ownsItsCentre, 'onboardingFlow');
+  ok(owns.inside === true, L + 'F2. and onboarding is still the thing on screen', JSON.stringify(owns));
+  ok(!!s.skip && /skip for now/i.test(s.skip.t), L + 'F3. the control is back, so they can try again', JSON.stringify(s.skip));
+  /* VISIBLE and enabled. Asking only about `disabled` passed on the broken build, where
+     the overlay had closed and the button was merely hidden -- a control nobody can see
+     is not a control they can press. */
+  ok(!!s.skip && await p.evaluate(() => { const b2 = document.getElementById('obSkip'); return !!b2 && !b2.disabled; }),
+    L + 'F4. and it is enabled, not left dead', JSON.stringify(s.skip));
+  ok(st.deferred === false && st.onboarded === false, L + 'F5. the server did NOT defer or complete anything', JSON.stringify(st));
+  ok(st.step === 'topics' && st.intent, L + 'F6. and progress already saved is intact', JSON.stringify(st));
+
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(6500);
+  ok(await waitOb('topics', 8000) || (await p.evaluate(obState)).open,
+    L + 'F7. after a refresh the SERVER wins: onboarding is offered again', JSON.stringify(await p.evaluate(obState)));
+
+  await p.unroute('**/api/onboarding/defer');
+  await tap('#obSkip');
+  await p.waitForTimeout(2500);
+  s = await p.evaluate(obState);
+  st = await serverState();
+  ok(!s.open, L + 'F8. the retry closes onboarding', String(s.open));
+  ok(st.deferred === true && st.onboarded === false && st.step === 'topics',
+    L + 'F9. and this time the deferral is really saved', JSON.stringify(st));
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(6500);
+  s = await p.evaluate(obState);
+  ok(!s.open, L + 'F10. so a refresh now leaves them alone', JSON.stringify({ open: s.open }));
+  await goAccount();
+  c = await p.evaluate(cardState);
+  ok(c.present && /continue setup/i.test(c.label), L + 'F11. and the Account re-entry is there', JSON.stringify(c));
+
+  const stale = await p.evaluate(() => [...document.querySelectorAll('.overlay')].filter((e) => !e.classList.contains('hidden') && ['onboardingFlow', 'suSplash', 'suPremium'].includes(e.id)).map((e) => e.id));
+  ok(stale.length === 0, L + 'Z1. no stale onboarding or signup overlay is left behind', JSON.stringify(stale));
+  s = await p.evaluate(obState);
+  ok(!s.overflow, L + 'Z2. still nothing spilling sideways at the end', String(s.overflow));
+  ok(errs.length === 0, L + 'Z3. no JS errors anywhere in the journey', errs[0]);
 
   try { require('fs').mkdirSync(path.join(__dirname, 'out'), { recursive: true }); } catch (e) {}
   await p.screenshot({ path: path.join(__dirname, 'out', 'obresume-' + W.name + '.png') }).catch(() => {});
