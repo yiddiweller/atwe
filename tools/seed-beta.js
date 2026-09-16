@@ -8,6 +8,11 @@
  *                                    add ONE account to the world already there
  *   node tools/seed-beta.js activate-official
  *                                    give the app's OWN @atwe account a beta password
+ *   node tools/seed-beta.js set-official-email
+ *                                    move that same @atwe account from the address the app
+ *                                    creates it with to its activated login email. Refuses if
+ *                                    ADMIN_EMAIL is that same address, since db.init() would
+ *                                    then promote it on the next boot by itself
  *   node tools/seed-beta.js promote-official-admin
  *                                    make that same @atwe account a superadmin, where the
  *                                    official-account access policy permits it (beta today)
@@ -579,7 +584,7 @@ async function doActivateOfficial(db, opts) {
   console.log('\nTHE ACCOUNT THIS WILL ACTIVATE');
   console.log(`  id                        ${row.id}`);
   console.log(`  username                  @${row.username}`);
-  console.log(`  email                     ${row.email}`);
+  console.log(`  email                     ${row.email}   [${account.officialEmailState(row.email, uname) || 'not canonical'}]`);
   console.log(`  name                      ${row.name}`);
   console.log(`  account type              ${row.account_type}`);
   console.log(`  staff access              ${row.is_admin ? 'superadmin (a protected, permitted state here)' : 'none (is_admin false, no scopes)'}`
@@ -669,7 +674,7 @@ async function doPromoteOfficialAdmin(db, opts) {
   console.log('\nTHE ACCOUNT THIS WILL PROMOTE');
   console.log(`  id                        ${row.id}`);
   console.log(`  username                  @${row.username}`);
-  console.log(`  email                     ${row.email}`);
+  console.log(`  email                     ${row.email}   [${account.officialEmailState(row.email, uname) || 'not canonical'}]`);
   console.log(`  account type              ${row.account_type}`);
   console.log(`  seed_tag                  "${row.seed_tag}"`);
   console.log(`  staff access now          ${row.is_admin ? 'superadmin already' : 'none'}`);
@@ -703,6 +708,126 @@ async function doPromoteOfficialAdmin(db, opts) {
 
   console.log(`\n  promoted                  @${done.username} (id ${done.id}) is now a superadmin on this ${pol.environment} environment`);
   console.log('\nDONE. No account was created, renamed, re-passworded or deleted.');
+  return 0;
+}
+
+/* ------------------------------------ move the official account's email */
+
+/* Carries the app's own @atwe from the internal address it is created with to
+   its activated login email (seed/beta-account.js section 5c). It has no
+   username argument and no flag that widens it; every refusal lives in
+   account.setOfficialEmail, which this function only reports.
+
+   It never types a password, never reads one, and never grants anything. The
+   email move and the admin promotion are separate commands on purpose: two
+   different powers, decided one at a time. */
+async function doSetOfficialEmail(db, opts) {
+  const uname = account.OFFICIAL_USERNAME;
+  await ensureSeedTag(db);
+
+  const { row, count } = await account.findOfficial(db, uname);
+  if (count > 1) {
+    console.error(`\nREFUSED. ${count} accounts hold @${uname}. Not touching any of them.`);
+    return 1;
+  }
+  if (!row) {
+    console.error(`\nREFUSED. There is no @${uname} account in this database.`);
+    return 1;
+  }
+
+  /* The policy first, before any identity work, exactly as activate-official
+     does: the activated address IS the login identity, so this is the `login`
+     power and nothing new. */
+  const policy = account.officialAccessPolicy(process.env);
+  try { account.assertOfficialAccessAllowed(process.env, 'login'); }
+  catch (e) { console.error(`\nREFUSED. ${e.message}`); return 1; }
+
+  const problem = account.officialMismatch(row, uname, { allowAdmin: policy.allowAdmin });
+  if (problem) {
+    console.error(`\nREFUSED. @${uname} exists, but it is not provably the account the app created:`);
+    console.error(`  ${problem}`);
+    return 1;
+  }
+  if (row.seed_tag !== account.KEEP_TAG) {
+    console.error(`\nREFUSED. @${uname} is not a protected beta account yet.`);
+    console.error(`  seed_tag is ${row.seed_tag == null ? 'unset' : `"${row.seed_tag}"`}, not "${account.KEEP_TAG}".`);
+    console.error('  Run "node tools/seed-beta.js activate-official" first, so it has a beta password,');
+    console.error('  then move its email. A login address on an account nobody can sign into buys nothing.');
+    return 1;
+  }
+
+  const want = account.officialEmails(uname);
+  const state = account.officialEmailState(row.email, uname);
+
+  console.log('\nTHE ACCOUNT THIS WILL MOVE');
+  console.log(`  id                        ${row.id}`);
+  console.log(`  username                  @${row.username}`);
+  console.log(`  email now                 ${row.email}   [${state}]`);
+  console.log(`  account type              ${row.account_type}`);
+  console.log(`  seed_tag                  "${row.seed_tag}"`);
+  console.log(`  staff access now          ${row.is_admin ? 'superadmin' : 'none'}  <-- and this command changes neither it nor the password`);
+
+  if (state === 'activated') {
+    console.log(`\nNothing to do: it already signs in as ${want.activated}. Nothing was written.`);
+    return 0;
+  }
+
+  /* ADMIN_EMAIL IS SHOWN WHETHER OR NOT IT CLASHES. An operator deciding
+     whether to run this should be able to see the variable that could turn it
+     into a staff grant, not discover it in a refusal. */
+  const adminEmail = account.normalizeEmail(process.env.ADMIN_EMAIL);
+  const clash = adminEmail && adminEmail === account.normalizeEmail(want.activated);
+  console.log(`  ADMIN_EMAIL here          ${process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL : '(not set)'}`
+            + (clash ? '   <-- SAME ADDRESS. See below.' : '   (a different address, so this move grants nothing)'));
+
+  if (clash) {
+    console.log(`\nSTOP. ADMIN_EMAIL on this service is the very address @${uname} would move to.`);
+    console.log('  db.init() promotes whatever account holds ADMIN_EMAIL to superadmin on EVERY boot,');
+    console.log(`  so this move would hand @${uname} staff access at the next restart, on its own, with`);
+    console.log('  nobody deciding to and none of the checks in promote-official-admin running.');
+    console.log('\n  Point ADMIN_EMAIL at a person\'s own address instead, then run this again, and grant');
+    console.log('  staff access deliberately with "node tools/seed-beta.js promote-official-admin".');
+    if (!opts.allowAdminEmailMatch) {
+      console.error('\nREFUSED. Nothing was written.');
+      console.error('  If you genuinely want the boot promotion to be the admin path, re-run with');
+      console.error('  --allow-admin-email-match. There is no default that does this for you.');
+      return 1;
+    }
+    console.log('\n  --allow-admin-email-match was supplied, so this will go ahead. You are choosing to let');
+    console.log(`  the next restart promote @${uname}.`);
+  }
+
+  console.log('\nWHAT WILL CHANGE, and nothing else');
+  console.log(`  email                     ${want.dormant}`);
+  console.log(`                            -> ${want.activated}`);
+  console.log('\n  NOT touched: password_hash, email_verified, seed_tag, username, name, account type,');
+  console.log('  every admin column, the verified seal, the headline, and every Stripe / OAuth / 2FA column.');
+  console.log(`\n  ENVIRONMENT               ${policy.environment}  (the access policy permits a login identity here)`);
+  console.log('  Production is a separate, deliberate activation and is switched off today, so the');
+  console.log('  same command against production refuses and changes nothing.');
+  console.log(`\n  ONE WAY. Nothing in this tool writes ${want.dormant} back.`);
+  console.log(`  To undo it by hand, set email = '${want.dormant}' on user ${row.id} in this beta database.`);
+
+  if (opts.dryRun) { console.log('\n--dry-run: nothing was written.'); return 0; }
+
+  if (!opts.yes) {
+    const a = await promptVisible(`\nType "move ${uname}" to change its email, anything else to stop: `);
+    if (a !== `move ${uname}`) { console.log('Stopped. Nothing was changed.'); return 1; }
+  }
+
+  let done;
+  try {
+    done = await account.setOfficialEmail(db, {
+      username: uname, env: process.env,
+      /* Never inferred, never defaulted: it is this flag or nothing. */
+      allowAdminEmailMatch: opts.allowAdminEmailMatch === true,
+    });
+  }
+  catch (e) { console.error(`\nREFUSED. ${e.message}`); return 1; }
+
+  console.log(`\n  moved                     @${done.username} (id ${done.id}) now signs in as ${done.email}`);
+  console.log(`\nDONE. Sign in at ${process.env.APP_URL} as @${done.username} (or ${done.email}) with the SAME password as before.`);
+  console.log('No password was changed, no staff access was granted, and no account was created or deleted.');
   return 0;
 }
 
@@ -781,11 +906,17 @@ async function main() {
     immerse: !argv.includes('--no-immerse'),
     claimReserved: argv.includes('--claim-reserved'),
     dryRun: argv.includes('--dry-run'),
+    /* Spelled out in full on purpose. It lets set-official-email proceed when
+       ADMIN_EMAIL is the address being moved to, i.e. when the next boot would
+       promote @atwe by itself. Nothing else sets it and there is no default. */
+    allowAdminEmailMatch: argv.includes('--allow-admin-email-match'),
     identity: (argv.find((a) => a.startsWith('--identity=')) || '').split('=')[1] || positional[1] || null,
   };
 
-  if (!['check', 'status', 'seed', 'reset', 'add-account', 'activate-official', 'promote-official-admin'].includes(cmd)) {
-    console.error(`Unknown command "${cmd}". Use: check | status | seed | add-account | activate-official | promote-official-admin | reset`);
+  if (!['check', 'status', 'seed', 'reset', 'add-account', 'activate-official',
+        'set-official-email', 'promote-official-admin'].includes(cmd)) {
+    console.error(`Unknown command "${cmd}". Use: check | status | seed | add-account | ` +
+                  'activate-official | set-official-email | promote-official-admin | reset');
     return 2;
   }
 
@@ -818,6 +949,7 @@ async function main() {
     }
     if (cmd === 'add-account') return await doAddAccount(db, opts);
     if (cmd === 'activate-official') return await doActivateOfficial(db, opts);
+    if (cmd === 'set-official-email') return await doSetOfficialEmail(db, opts);
     if (cmd === 'promote-official-admin') return await doPromoteOfficialAdmin(db, opts);
     return cmd === 'seed' ? await doSeed(db, opts) : await doReset(db, opts);
   } finally {
