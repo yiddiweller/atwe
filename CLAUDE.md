@@ -2612,6 +2612,107 @@ so the live half is confirmation rather than coverage. **Run it before any promo
 (24 checks: a scoped staffer refused on all six routes on an honest token AND on one
 claiming admin, a superadmin served on beta, every route refused off beta).
 
+### THE OFFICIAL @atwe ACCOUNT MAY HOLD A LOGIN AND SUPERADMIN — and WHERE is a policy
+
+**The founder's decision, 16 Sep 2026: the app's own `@atwe` account is meant to have a
+real login AND superadmin access in BOTH environments.** Beta is switched on; production
+follows later through its own deliberate activation. The two environments stay completely
+separate — separate databases, passwords, sessions and JWT state — so "both" means the same
+CAPABILITY, never shared account data.
+
+**THIS RETIRES AN ASSUMPTION THE CODE USED TO STATE ABSOLUTELY.** `server.js`'s own comment
+still reads *"Nobody signs in as it … so there is no shared login to leak"*, and
+`officialMismatch` used to refuse an `is_admin` row outright, in every environment, for
+ever. Do not re-introduce that framing: what is permanent is that **every action refuses any
+row it cannot positively identify as the account `ensureOfficialAccount` created**, not that
+the account can never be signed into.
+
+**IT IS ONE NAMED POLICY — `seed/beta-account.js` section 5a — NOT A CONDITION SMEARED
+THROUGH THE CHECKS.** Two lanes, each answering two separate questions:
+
+| lane | `allowLogin` | `allowAdmin` |
+|---|---|---|
+| **beta** | true | true |
+| **production** | **false** | **false** — today |
+
+**PRODUCTION NEEDS TWO INDEPENDENT KEYS, and that shape is the whole safety argument.**
+Turning the production lane on is a **code change** (reviewed, committed, shipped through
+`main`), and it is still not enough on its own: the deployment must ALSO carry
+`ATWE_OFFICIAL_PROD_ACTIVATION="activate-official-account"`. So a stray environment variable
+cannot open production, and neither can a careless merge — it takes both, in two different
+places, by two different people's actions. **Self-tested: flipping the source lane alone
+while leaving the phrase unset changes nothing at runtime**, which is exactly what the two
+keys are for.
+
+**"Beta" is `checkEnvironment`, the SAME function the routes and the whole seed CLI gate
+on** — ATWE_ENV exactly `beta`, a beta `APP_URL` host, a non-production database, a Railway
+environment that does not say otherwise. Re-deriving a looser test would let the two
+disagree about what beta means. **Anything not provably beta falls to the PRODUCTION lane**,
+so a half-configured or unrecognised box gets the stricter answer, never the looser one.
+
+**EXACTLY ONE REFUSAL MOVED BEHIND THE POLICY.** `officialMismatch(row, username, opts)`
+relaxes `is_admin` when `opts.allowAdmin` is true and **nothing else**: the email, name,
+account type, `is_demo`, two-factor, status, deactivation, Stripe/Connect/OAuth and the
+seed-tag checks all refuse in every environment, and **staff SCOPES refuse everywhere too**
+(`is_admin` alone is this app's superadmin model — a scoped staffer is a different, weaker
+thing the protected account is not). **The default is the strict answer**, so a caller that
+forgets to ask the policy gets production behaviour.
+
+**GRANTING IT IS ONE FUNCTION AND ONE COMMAND.** `account.promoteOfficialAdmin` resolves
+`@atwe` itself (no username a caller controls), goes through
+`assertOfficialAccessAllowed(env, 'admin')` so no call site can re-decide the policy,
+requires `seed_tag = 'beta-keep'` (i.e. `activate-official` ran first — a superadmin nobody
+can sign into is of no use), and writes **one column, `is_admin`**. No `admin_perms`, no
+`admin_role`: `auth.requireAdmin` re-reads exactly that column and never consults scopes.
+The WHERE re-asserts the whole identity, so a row that changed underneath is missed rather
+than promoted. The console door is:
+
+```
+node tools/seed-beta.js promote-official-admin
+```
+
+**`activateOfficial`'s UPDATE now says `is_admin IS NOT DISTINCT FROM $6` rather than
+`IS NOT TRUE`, and that is STRICTER, not looser.** It re-asserts the row's OWN admin state
+as inspected, so a row promoted or demoted between the check and the write matches nothing
+and says so. Off beta `officialMismatch` has already refused an admin row, so the parameter
+is false there and it behaves exactly as it always did. It writes no admin column either
+way, so it can neither promote nor demote.
+
+**@atwe STAYS PROTECTED IN BOTH ENVIRONMENTS** — from deletion (which does not exist
+anywhere in Beta Access), revoke, joining the test world, rename and account-type change.
+Those are refused by `assertManageable`'s `allow === 'ordinary'` branch, which runs BEFORE
+the staff carve-out, so the carve-out cannot widen any of them. The **one** thing the
+carve-out buys is that a protected superadmin can still be given a beta password:
+`if (acct.staff && !acct.protectedAdmin)`. Every OTHER staff account is still refused by
+both doors.
+
+**The dashboard SHOWS the state and offers no control for it.** `safeAccount` exposes
+`protectedAdmin`, the Beta Access row and detail draw a **Superadmin** pill beside
+**Protected beta account**, and there is deliberately no toggle, button or request that
+could grant it from a browser — this is a deliberate configuration, not an ordinary
+privilege control. Guarded: the probe fails if `is_admin`/`promote`/`grantAdmin` ever
+appears inside the Beta Access view.
+
+**@yiddiweller AND EVERY OTHER HUMAN FOUNDER ACCOUNT NEED NO CODE AT ALL.** They become
+superadmins the ordinary way, through the dashboard's own **Staff** tab, identically in both
+environments. Naming a human account in this machinery would be a second, unaudited door —
+`test/beta-official-admin.test.js` fails if any of the three files ever mentions one.
+
+**Guarded by `test/beta-official-admin.test.js`** (25 always-on checks + 6 opt-in live ones,
+`ATWE_LIVE_BETA_AUTHZ=1`). Self-tested three ways, each caught by name: switching the
+production lane on fails the two "production is off today" checks; removing the staff
+carve-out fails the password door; accepting admin unconditionally fails six, including the
+canonical-identity suite. **The live half promotes a REAL `@atwe` row, calls the real Beta
+Access API as it, resets its password and confirms it is still a superadmin with the
+keep-tag intact — then puts the row back.**
+
+**WHAT A LATER PRODUCTION ACTIVATION TAKES**, written down so it is not improvised: flip
+`OFFICIAL_ACCESS.production` to true/true in `seed/beta-account.js`, ship that through
+`main`, set `ATWE_OFFICIAL_PROD_ACTIVATION` on the production service, then run
+`activate-official` followed by `promote-official-admin` against production. It is
+deliberately four separate acts, and **two of the tests above are written to go red the
+moment the first of them lands**, so the change cannot pass review unnoticed.
+
 ### Staff roles & scoped access (RBAC) — admin **Staff** tab
 
 Least-privilege staff access so a 100-person team doesn't all get the full dashboard.

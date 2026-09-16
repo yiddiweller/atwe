@@ -375,7 +375,11 @@ test('20. the real built-in row is accepted, and only three columns are written'
   assert.match(where, /lower\(username\)/);
   assert.match(where, /lower\(email\)/);
   assert.match(where, /account_type\s*=\s*'business'/);
-  assert.match(where, /is_admin\s+IS NOT TRUE/);
+  /* The row's OWN admin state is re-asserted (see beta-access 5e): on beta the
+     protected @atwe may be a superadmin, so demanding one fixed value would be
+     wrong, while re-asserting what was inspected is stricter than the literal
+     `IS NOT TRUE` this replaced. */
+  assert.match(where, /is_admin\s+IS NOT DISTINCT FROM \$\d+/);
 });
 
 test('21. the keep-tag is NOT the tag reset deletes', () => {
@@ -409,7 +413,7 @@ test('23. it refuses any account that is not provably the built-in one', () => {
     ['a renamed account', { name: 'Atwe Inc' }, /name/],
     ['a personal account', { account_type: 'personal' }, /account type/],
     ['seeded sample data', { is_demo: true }, /is_demo/],
-    ['an ADMIN account', { is_admin: true }, /never hand out a staff login/],
+    ['an ADMIN account', { is_admin: true }, /superadmin is not permitted for the official account/],
     ['a scoped staffer', { admin_perms: ['users', 'revenue'] }, /staff scopes/],
     ['two-factor enabled', { totp_enabled: true }, /two-factor/],
     ['a suspended account', { status: 'suspended' }, /status/],
@@ -502,8 +506,17 @@ test('27. activating grants no staff access and copies nothing from production',
     assert.doesNotMatch(writes.split('WHERE')[0], new RegExp(bad, 'i'),
       `no write may set ${bad}`);
   }
-  /* The module as a whole knows nothing about reading another database. */
-  assert.doesNotMatch(MOD_CODE, /production|PROD_DATABASE|pg\.Client|new Pool/i);
+  /* The module as a whole knows nothing about reading another database. It now
+     names a "production" ACCESS LANE (section 5a), so the bare word is no
+     longer the signal -- what must stay absent is any way to reach a second
+     database: a connection string, a client, a pool, a second db handle. */
+  assert.doesNotMatch(MOD_CODE, /PROD_DATABASE_URL|DATABASE_URL|pg\.Client|new Pool|require\(['"]pg['"]\)/i);
+  /* And the only thing it may say about production is the policy: no lane may
+     be on, and the switch must be the reviewed constant rather than a bare
+     environment read that a deploy could flip on its own. */
+  const lane = MOD_CODE.slice(MOD_CODE.indexOf('const OFFICIAL_ACCESS'), MOD_CODE.indexOf('PROD_ACTIVATION_PHRASE'));
+  assert.match(lane, /production:\s*\{\s*allowLogin:\s*false,\s*allowAdmin:\s*false\s*\}/,
+    'the production lane ships switched off');
 });
 
 test('28. activating reruns no global seed and adds no commerce', () => {
@@ -533,7 +546,18 @@ test('29. there is no broad UPDATE or DELETE anywhere in the new path', () => {
     /* And re-asserts who owns the row in the same statement, so a row that
        changed underneath is missed rather than written to. */
     assert.match(where, /seed_tag|lower\(username\)/, 'and re-asserts ownership in its own WHERE');
-    assert.match(where, /is_admin IS NOT TRUE/, 'and never writes to a staff account');
+    /* Every UPDATE constrains is_admin in its own WHERE, in one of three ways,
+       and which one is the whole point rather than a detail:
+         IS NOT TRUE              -- never touch a staff account (the ordinary
+                                     password reset, and the promote itself,
+                                     which may only promote a non-admin)
+         IS NOT DISTINCT FROM $n  -- re-assert whatever was inspected (the
+                                     official activation, because on beta the
+                                     protected @atwe may already be an admin)
+       A statement that mentions no admin column at all is the thing this
+       forbids, because that is the one that could write to a staff row blind. */
+    assert.match(where, /is_admin\s+(IS NOT TRUE|IS NOT DISTINCT FROM \$\d+)/,
+      'and constrains is_admin in its own WHERE');
   }
   assert.doesNotMatch(MOD_CODE, /\bDELETE\b|\bDROP\b|\bTRUNCATE\b/i);
 });

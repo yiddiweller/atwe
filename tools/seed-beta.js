@@ -8,6 +8,9 @@
  *                                    add ONE account to the world already there
  *   node tools/seed-beta.js activate-official
  *                                    give the app's OWN @atwe account a beta password
+ *   node tools/seed-beta.js promote-official-admin
+ *                                    make that same @atwe account a superadmin, where the
+ *                                    official-account access policy permits it (beta today)
  *   node tools/seed-beta.js reset    remove EXACTLY what this tool created, and nothing else
  *
  * THREE RULES THIS FILE EXISTS TO ENFORCE.
@@ -554,7 +557,16 @@ async function doActivateOfficial(db, opts) {
     console.log(`\n  identity file             ${opts.identity} (checked, never written)`);
   }
 
-  const problem = account.officialMismatch(row, uname);
+  /* THE POLICY DECIDES WHETHER A LOGIN MAY EXIST HERE AT ALL, before any
+     identity work. On beta it says yes; production is a separate, deliberate
+     activation that is switched off today. The tool is already refusing to run
+     off beta at all, so this is belt and braces -- and it is the line the future
+     production flow flips rather than a new one somebody has to remember. */
+  const policy = account.officialAccessPolicy(process.env);
+  try { account.assertOfficialAccessAllowed(process.env, 'login'); }
+  catch (e) { console.error(`\nREFUSED. ${e.message}`); return 1; }
+
+  const problem = account.officialMismatch(row, uname, { allowAdmin: policy.allowAdmin });
   if (problem) {
     console.error(`\nREFUSED. @${uname} exists, but it is not provably the account the app created:`);
     console.error(`  ${problem}`);
@@ -570,7 +582,8 @@ async function doActivateOfficial(db, opts) {
   console.log(`  email                     ${row.email}`);
   console.log(`  name                      ${row.name}`);
   console.log(`  account type              ${row.account_type}`);
-  console.log(`  staff access              none (is_admin false, no scopes)  <-- and this command cannot grant any`);
+  console.log(`  staff access              ${row.is_admin ? 'superadmin (a protected, permitted state here)' : 'none (is_admin false, no scopes)'}`
+            + '  <-- and this command changes neither');
   console.log(`  seed_tag now              ${row.seed_tag == null ? 'none' : `"${row.seed_tag}"`}`);
   console.log(`  headline                  ${row.headline || '(none)'}${row.headline === want.headline ? '' : '   [differs from the app default; not required]'}`);
   console.log(`  verified seal             ${row.verified ? 'yes' : 'no'}${row.verified ? '' : '   [app default is yes; not required]'}`);
@@ -601,7 +614,7 @@ async function doActivateOfficial(db, opts) {
   pw = null;
 
   let done;
-  try { done = await account.activateOfficial(db, { passwordHash: hash, username: uname }); }
+  try { done = await account.activateOfficial(db, { passwordHash: hash, username: uname, allowAdmin: policy.allowAdmin }); }
   catch (e) { console.error(`\nREFUSED. ${e.message}`); return 1; }
   console.log(`\n  activated                 @${done.username} (id ${done.id}), seed_tag "${done.seedTag}"`);
 
@@ -614,6 +627,82 @@ async function doActivateOfficial(db, opts) {
 
   console.log(`\nDONE. Sign in at ${process.env.APP_URL} as @${done.username} (or ${row.email}) with the password you supplied.`);
   console.log('No account was created, renamed, promoted or deleted.');
+  return 0;
+}
+
+/* ------------------------------------------- promote the official account */
+
+/* The one action in this tool that grants staff access, and it can grant it to
+   exactly one account: the app's own @atwe, already activated, on an environment
+   the official-account access policy permits (seed/beta-account.js section 5a --
+   beta today, production later by a separate deliberate step). Every refusal
+   lives in account.promoteOfficialAdmin, which this function only reports; there
+   is no username argument and no flag that widens it. */
+async function doPromoteOfficialAdmin(db, opts) {
+  const uname = account.OFFICIAL_USERNAME;
+  await ensureSeedTag(db);
+
+  const { row, count } = await account.findOfficial(db, uname);
+  if (count > 1) {
+    console.error(`\nREFUSED. ${count} accounts hold @${uname}. Not touching any of them.`);
+    return 1;
+  }
+  if (!row) {
+    console.error(`\nREFUSED. There is no @${uname} account in this database.`);
+    return 1;
+  }
+
+  const problem = account.officialMismatch(row, uname, { allowAdmin: true });
+  if (problem) {
+    console.error(`\nREFUSED. @${uname} exists, but it is not provably the account the app created:`);
+    console.error(`  ${problem}`);
+    return 1;
+  }
+  if (row.seed_tag !== account.KEEP_TAG) {
+    console.error(`\nREFUSED. @${uname} is not a protected beta account yet.`);
+    console.error(`  seed_tag is ${row.seed_tag == null ? 'unset' : `"${row.seed_tag}"`}, not "${account.KEEP_TAG}".`);
+    console.error('  Run "node tools/seed-beta.js activate-official" first, so it has a beta password,');
+    console.error('  then promote it. A superadmin nobody can sign into is of no use.');
+    return 1;
+  }
+
+  console.log('\nTHE ACCOUNT THIS WILL PROMOTE');
+  console.log(`  id                        ${row.id}`);
+  console.log(`  username                  @${row.username}`);
+  console.log(`  email                     ${row.email}`);
+  console.log(`  account type              ${row.account_type}`);
+  console.log(`  seed_tag                  "${row.seed_tag}"`);
+  console.log(`  staff access now          ${row.is_admin ? 'superadmin already' : 'none'}`);
+
+  if (row.is_admin === true) {
+    console.log('\nNothing to do: it is already a superadmin. Nothing was written.');
+    return 0;
+  }
+
+  console.log('\nWHAT WILL CHANGE, and nothing else');
+  console.log('  is_admin                  true   <-- this app\'s whole superadmin model');
+  console.log('\n  NOT touched: admin_perms, admin_role, the password, username, email, name,');
+  console.log('  account type, seed_tag, the verified seal, and every Stripe / OAuth / 2FA column.');
+  const pol = account.officialAccessPolicy(process.env);
+  console.log(`\n  ENVIRONMENT               ${pol.environment}  (the access policy permits this here)`);
+  console.log('  Production is a separate, deliberate activation and is switched off today, so the');
+  console.log('  same command against production refuses and changes nothing.');
+  console.log(`\n  To undo it, set is_admin = false on user ${row.id} in this beta database.`);
+
+  if (opts.dryRun) { console.log('\n--dry-run: nothing was written.'); return 0; }
+
+  if (!opts.yes) {
+    const a = await promptVisible(`\nType "promote ${uname}" to make it a beta superadmin, anything else to stop: `);
+    if (a !== `promote ${uname}`) { console.log('Stopped. Nothing was changed.'); return 1; }
+  }
+
+  let done;
+  try {
+    done = await account.promoteOfficialAdmin(db, { username: uname, env: process.env });
+  } catch (e) { console.error(`\nREFUSED. ${e.message}`); return 1; }
+
+  console.log(`\n  promoted                  @${done.username} (id ${done.id}) is now a superadmin on this ${pol.environment} environment`);
+  console.log('\nDONE. No account was created, renamed, re-passworded or deleted.');
   return 0;
 }
 
@@ -695,8 +784,8 @@ async function main() {
     identity: (argv.find((a) => a.startsWith('--identity=')) || '').split('=')[1] || positional[1] || null,
   };
 
-  if (!['check', 'status', 'seed', 'reset', 'add-account', 'activate-official'].includes(cmd)) {
-    console.error(`Unknown command "${cmd}". Use: check | status | seed | add-account | activate-official | reset`);
+  if (!['check', 'status', 'seed', 'reset', 'add-account', 'activate-official', 'promote-official-admin'].includes(cmd)) {
+    console.error(`Unknown command "${cmd}". Use: check | status | seed | add-account | activate-official | promote-official-admin | reset`);
     return 2;
   }
 
@@ -729,6 +818,7 @@ async function main() {
     }
     if (cmd === 'add-account') return await doAddAccount(db, opts);
     if (cmd === 'activate-official') return await doActivateOfficial(db, opts);
+    if (cmd === 'promote-official-admin') return await doPromoteOfficialAdmin(db, opts);
     return cmd === 'seed' ? await doSeed(db, opts) : await doReset(db, opts);
   } finally {
     try { await db.getPool().end(); } catch (e) { /* nothing to close */ }

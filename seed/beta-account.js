@@ -18,6 +18,7 @@
 'use strict';
 
 const path = require('path');
+const guard = require(path.join(__dirname, '..', 'tools', 'seed-guard.js'));
 
 const TAG = 'beta';
 
@@ -212,13 +213,18 @@ async function immerseAccount(db, userId) {
    invented, so if the app's own definition changes this stops matching and
    refuses instead of guessing.
 
-   WHY IT CANNOT BE SIGNED INTO TODAY, and this is deliberate rather than an
-   oversight: the account is created with a password of 48 random bytes that is
-   hashed immediately and never shown to anybody. server.js says so in its own
-   words -- "Nobody signs in as it ... so there is no shared login to leak."
-   Staff post as it through an admin route instead. Activating a login for it is
-   therefore a REAL, if small, widening of that posture, which is why this is
-   beta-only, narrow, and refuses anything it cannot positively identify. */
+   WHY IT CANNOT BE SIGNED INTO AS CREATED: the account is made with a password
+   of 48 random bytes that is hashed immediately and never shown to anybody.
+   server.js says so in its own words -- "Nobody signs in as it ... so there is
+   no shared login to leak." Staff post as it through an admin route instead.
+
+   Giving it a login, and separately giving it superadmin, is therefore a REAL
+   widening of that posture. It is a widening the founder now wants in BOTH
+   environments -- beta first, production later by an explicit controlled step --
+   so which environment may do what is a POLICY, stated once in section 5a, and
+   not an assumption scattered through these checks. What never changes is that
+   every action refuses any row it cannot positively identify as the account the
+   app itself created. */
 
 const OFFICIAL_USERNAME = (process.env.ATWE_OFFICIAL_USERNAME || 'atwe').toLowerCase();
 
@@ -242,6 +248,102 @@ function officialIdentity(username = OFFICIAL_USERNAME) {
   };
 }
 
+/* ---- 5a. THE OFFICIAL-ACCOUNT ACCESS POLICY ---------------------------
+
+   PRODUCT DECISION (16 Sep 2026, the founder): the built-in @atwe account is
+   meant to have a real login and superadmin access in BOTH environments, not
+   only beta. Beta is simply the one that is switched on first.
+
+   So this is a POLICY WITH TWO LANES, not a beta-only escape hatch. Writing it
+   as "beta may, production may never" would bake in an assumption the founder
+   has explicitly retired, and the production lane would then have to be
+   invented under time pressure on the day it is wanted.
+
+   Each lane answers two separate questions, because they are separate powers:
+
+     allowLogin   may @atwe be given a password somebody can sign in with?
+     allowAdmin   may @atwe hold superadmin (is_admin) at the same time?
+
+   TODAY, and this is the whole of what ships: beta allows both, production
+   allows neither. Production therefore behaves EXACTLY as it always has, and
+   `PRODUCTION` below is the one line a later, deliberate production activation
+   changes.
+
+   PRODUCTION NEEDS TWO INDEPENDENT KEYS, and that is the point of the shape.
+   Flipping the table is a code change: reviewed, committed, and shipped through
+   main like anything else. It is still not enough on its own -- the deployment
+   must ALSO carry the approval phrase below. So a stray environment variable
+   cannot open production, and neither can a careless merge; it takes both, by
+   two different people's actions, in two different places.
+
+   WHAT IS NOT IN HERE. Nothing about which HUMAN accounts may be staff:
+   @yiddiweller or anybody else becomes a superadmin through the dashboard's own
+   Staff tab, in either environment, exactly as they always have. This file is
+   only ever about the app's own built-in @atwe row, which no signup can create
+   and no ordinary tool may touch. */
+
+/* The two lanes. `beta` is live; `production` is the future, switched off. */
+const OFFICIAL_ACCESS = {
+  beta:       { allowLogin: true,  allowAdmin: true  },
+  /* PRODUCTION ACTIVATION CHANGES THESE TWO VALUES AND NOTHING ELSE. Until
+     then, every production answer below is false whatever the environment says,
+     which is what makes "production is unchanged today" a fact rather than a
+     promise -- and it is asserted that way in test/beta-official-admin.test.js,
+     including with the approval phrase deliberately present. */
+  production: { allowLogin: false, allowAdmin: false },
+};
+
+/* The second key. Deliberately a phrase rather than a truthy flag: nothing sets
+   a variable to this by accident, and it reads as a decision in a deploy log. */
+const PROD_ACTIVATION_PHRASE = 'activate-official-account';
+
+/* Which lane is this, and what does it permit?
+
+   "Beta" is `checkEnvironment` -- the SAME function the Beta Access routes and
+   the whole seed CLI gate on, which demands ATWE_ENV exactly "beta", a beta
+   APP_URL host, a database that is not production, and a Railway environment
+   that does not say otherwise. Re-deriving a looser test here would let the two
+   disagree about what beta means, which is the one thing this file exists to
+   prevent. Anything that is not provably beta is treated as production, so an
+   unrecognised or half-configured box gets the STRICTER lane, never the looser
+   one. */
+function officialAccessPolicy(env) {
+  const e = env || process.env;
+  if (guard.checkEnvironment(e).ok) {
+    return Object.assign({ environment: 'beta', approved: true }, OFFICIAL_ACCESS.beta);
+  }
+  const approved = String(e.ATWE_OFFICIAL_PROD_ACTIVATION || '').trim() === PROD_ACTIVATION_PHRASE;
+  const lane = OFFICIAL_ACCESS.production;
+  return {
+    environment: 'production',
+    approved,
+    /* BOTH keys, always. Neither alone opens anything. */
+    allowLogin: lane.allowLogin === true && approved,
+    allowAdmin: lane.allowAdmin === true && approved,
+  };
+}
+
+/* Thin readers, so a call site says what it is asking about. */
+function officialAdminAllowed(env) { return officialAccessPolicy(env).allowAdmin === true; }
+function officialLoginAllowed(env) { return officialAccessPolicy(env).allowLogin === true; }
+
+/* The gate every action that GRANTS one of these powers must pass through, so a
+   new command cannot quietly skip the policy. `what` is 'login' or 'admin'. */
+function assertOfficialAccessAllowed(env, what) {
+  const p = officialAccessPolicy(env);
+  const ok = what === 'admin' ? p.allowAdmin : p.allowLogin;
+  if (ok) return p;
+  const power = what === 'admin' ? 'superadmin access' : 'a sign-in password';
+  if (p.environment === 'beta') {
+    throw new Error(`giving @${OFFICIAL_USERNAME} ${power} is not permitted on this beta environment.`);
+  }
+  throw new Error(
+    `giving @${OFFICIAL_USERNAME} ${power} is not switched on for production yet, so nothing was changed. ` +
+    'It takes two separate, deliberate steps: the production lane in ' +
+    'seed/beta-account.js OFFICIAL_ACCESS must be turned on and shipped, AND the deployment must carry ' +
+    `ATWE_OFFICIAL_PROD_ACTIVATION="${PROD_ACTIVATION_PHRASE}". Neither one alone does anything.`);
+}
+
 /* Returns a plain-English reason to REFUSE, or null when this row is provably
    the account server.js made. Split into two kinds of check on purpose.
 
@@ -258,7 +360,7 @@ function officialIdentity(username = OFFICIAL_USERNAME) {
    product copy and a badge; staff changing either does not make the row a
    different account, and refusing over them would be a false alarm on the real
    one. They are reported instead. */
-function officialMismatch(row, username = OFFICIAL_USERNAME) {
+function officialMismatch(row, username = OFFICIAL_USERNAME, opts = {}) {
   const want = officialIdentity(username);
   if (!row) return `no @${username} account exists in this database`;
 
@@ -272,9 +374,16 @@ function officialMismatch(row, username = OFFICIAL_USERNAME) {
   if (s(row.account_type) !== want.accountType) return `its account type is "${row.account_type}", not "${want.accountType}"`;
   if (row.is_demo === true) return 'it is flagged is_demo, so it is seeded sample data rather than the built-in account';
 
-  if (row.is_admin === true) {
-    return 'it carries ADMIN rights. Refusing: this command hands out a password, and it will never hand out a staff login.';
+  /* The ONE thing the access policy can relax, and only when the caller has
+     asked the policy and been told yes. Left alone it is the original refusal,
+     so every caller that does not opt in gets the stricter answer. */
+  if (row.is_admin === true && opts.allowAdmin !== true) {
+    return 'it carries ADMIN rights, and superadmin is not permitted for the official account in this environment. ' +
+           'Refusing: an action that hands out a password will not hand out a staff login it was not told to expect.';
   }
+  /* Scopes are refused in EVERY environment. `is_admin` alone is this app's
+     superadmin model; a scoped staffer is a separate, weaker thing that the
+     protected account is not and was never asked to be. */
   const perms = Array.isArray(row.admin_perms) ? row.admin_perms : [];
   if (perms.length) return `it carries staff scopes (${perms.join(', ')}). Refusing for the same reason as admin.`;
   if (row.totp_enabled === true) return 'it has two-factor enabled, so a password alone would not sign in. Refusing rather than disabling it.';
@@ -314,16 +423,26 @@ async function findOfficial(db, username = OFFICIAL_USERNAME) {
    beforehand, so if anything changed the row between the check and the write it
    affects zero rows and reports that instead of writing to a row it never
    inspected. */
-async function activateOfficial(db, { passwordHash, username = OFFICIAL_USERNAME } = {}) {
+async function activateOfficial(db, { passwordHash, username = OFFICIAL_USERNAME, allowAdmin = false } = {}) {
   if (!passwordHash || typeof passwordHash !== 'string' || !passwordHash.startsWith('$2')) {
     throw new Error('activateOfficial needs a bcrypt hash from auth.hashPassword');
   }
   const uname = String(username).toLowerCase();
   const { row, count } = await findOfficial(db, uname);
   if (count > 1) throw new Error(`${count} accounts hold @${uname}. Refusing to touch any of them.`);
-  const problem = officialMismatch(row, uname);
+  const problem = officialMismatch(row, uname, { allowAdmin: allowAdmin === true });
   if (problem) throw new Error(`@${uname} is not the built-in Atwe account: ${problem}`);
 
+  /* `is_admin IS NOT DISTINCT FROM $6` re-asserts the row's OWN admin state
+     rather than demanding a fixed one, which is strictly stronger than the
+     hardcoded `IS NOT TRUE` it replaces: if anything promotes or demotes the
+     account between the check above and this write, the statement affects zero
+     rows and says so instead of writing to a row it never inspected. Off beta
+     `officialMismatch` has already refused an admin row, so $6 is false there,
+     and since `users.is_admin` is BOOLEAN NOT NULL DEFAULT false (db.js) that
+     is EXACTLY equivalent to the `IS NOT TRUE` this replaced -- the equivalence
+     depends on the NOT NULL, so check it before relaxing that column. It also writes NO admin column,
+     so this can still neither promote nor demote anybody. */
   const r = await db.query(
     `UPDATE users
         SET password_hash = $1, email_verified = true, seed_tag = $2
@@ -332,11 +451,67 @@ async function activateOfficial(db, { passwordHash, username = OFFICIAL_USERNAME
         AND lower(email)    = $5
         AND account_type    = 'business'
         AND is_demo  IS NOT TRUE
-        AND is_admin IS NOT TRUE
+        AND is_admin IS NOT DISTINCT FROM $6
       RETURNING id, username`,
-    [passwordHash, KEEP_TAG, row.id, uname, officialIdentity(uname).email]);
+    [passwordHash, KEEP_TAG, row.id, uname, officialIdentity(uname).email, row.is_admin === true]);
   if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
-  return { id: r.rows[0].id, username: r.rows[0].username, seedTag: KEEP_TAG, wasTagged: row.seed_tag != null };
+  return {
+    id: r.rows[0].id, username: r.rows[0].username, seedTag: KEEP_TAG,
+    wasTagged: row.seed_tag != null, isAdmin: row.is_admin === true,
+  };
+}
+
+/* ---- 5b. PROMOTE THE BUILT-IN ACCOUNT, BETA ONLY ---------------------
+
+   The ONE action that grants staff access anywhere in beta tooling, and it is
+   deliberately shaped so it can do nothing else:
+
+     * it takes no username from a caller that matters -- it resolves @atwe
+       itself and refuses any row that is not provably that account,
+     * it requires `allowAdmin`, which only `officialAdminAllowed(env)` returns
+       true for, i.e. a real beta environment,
+     * it requires seed_tag `beta-keep`, so beta tooling must already own this
+       row (activate-official runs first). An account nobody can sign into has
+       no use for staff access,
+     * it writes ONE column, `is_admin`. No admin_perms, no admin_role: in this
+       app `is_admin` alone IS superadmin (auth.requireAdmin re-reads exactly
+       that column and never consults scopes), so inventing more would widen the
+       change without widening what it buys,
+     * and the WHERE re-asserts the whole identity, so a row that changed
+       underneath is missed rather than promoted.
+
+   There is no matching "promote anybody" helper and there must never be one:
+   ordinary staff access is granted through the dashboard's own Staff tab. */
+async function promoteOfficialAdmin(db, { username = OFFICIAL_USERNAME, env = null } = {}) {
+  /* The policy decides, not the caller: there is no flag a call site can pass
+     to skip this, which is what stops a future command from re-deciding it. */
+  assertOfficialAccessAllowed(env || process.env, 'admin');
+  const uname = String(username).toLowerCase();
+  const { row, count } = await findOfficial(db, uname);
+  if (count > 1) throw new Error(`${count} accounts hold @${uname}. Refusing to touch any of them.`);
+  const problem = officialMismatch(row, uname, { allowAdmin: true });
+  if (problem) throw new Error(`@${uname} is not the built-in Atwe account: ${problem}`);
+  if (row.seed_tag !== KEEP_TAG) {
+    throw new Error(`@${uname} is not yet a protected beta account (seed_tag is ${row.seed_tag == null ? 'unset' : `"${row.seed_tag}"`}, ` +
+                    `not "${KEEP_TAG}"). Run activate-official first so it has a beta password, then promote it.`);
+  }
+  if (row.is_admin === true) return { id: row.id, username: row.username, seedTag: KEEP_TAG, already: true };
+
+  const r = await db.query(
+    `UPDATE users
+        SET is_admin = true
+      WHERE id = $1
+        AND lower(username) = $2
+        AND lower(email)    = $3
+        AND account_type    = 'business'
+        AND seed_tag        = $4
+        AND is_demo  IS NOT TRUE
+        AND is_admin IS NOT TRUE
+        AND jsonb_array_length(COALESCE(admin_perms, '[]'::jsonb)) = 0
+      RETURNING id, username`,
+    [row.id, uname, officialIdentity(uname).email, KEEP_TAG]);
+  if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
+  return { id: r.rows[0].id, username: r.rows[0].username, seedTag: KEEP_TAG, already: false };
 }
 
 /* ---- 6. RESET AN ORDINARY BETA ACCOUNT'S PASSWORD -------------------- */
@@ -397,4 +572,7 @@ module.exports = {
   createBetaAccount, immerseAccount,
   OFFICIAL_USERNAME, KEEP_TAG, officialIdentity, officialMismatch,
   findOfficial, activateOfficial, resetBetaPassword,
+  officialAccessPolicy, officialAdminAllowed, officialLoginAllowed,
+  assertOfficialAccessAllowed, promoteOfficialAdmin,
+  OFFICIAL_ACCESS, PROD_ACTIVATION_PHRASE,
 };
