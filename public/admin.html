@@ -8741,6 +8741,16 @@ function baPill(a){
   if (a.official) return `<span class="pill pro">Protected beta account</span>`;
   return `<span class="pill free">Beta account</span>`;
 }
+/* Two different facts wearing one pill style, so they are never confused.
+   SUPERADMIN is the built-in @atwe being what beta means it to be -- a
+   deliberate configuration, which is why it is a label and not a toggle; there
+   is no "make @atwe admin" control on this screen and there must not be one.
+   STAFF ACCESS on anything else is a warning: it is shown because it is true,
+   and every action here refuses that account. */
+function baAdminPill(a){
+  if (a.protectedAdmin) return `<span class="pill admin">Superadmin</span>`;
+  return a.staff ? `<span class="pill admin">Staff access</span>` : '';
+}
 function baAccessPill(a){
   if (a.accountStatus === 'active') return `<span class="pill free">Can sign in</span>`;
   return `<span class="pill susp">Access revoked</span>`;
@@ -8758,8 +8768,7 @@ function renderBetaList(){
       <div class="ba-main">
         <div class="ba-name">${esc(a.name || '-')} <span class="muted">@${esc(a.username || '')}</span></div>
         <div class="ba-sub">${esc(a.email || '')} · ${a.accountType === 'business' ? 'Business' : 'Personal'}</div>
-        <div class="ba-tags">${baPill(a)}${baAccessPill(a)}${baWorldPill(a)}${
-          a.staff ? '<span class="pill admin">Staff access</span>' : ''}${
+        <div class="ba-tags">${baPill(a)}${baAccessPill(a)}${baWorldPill(a)}${baAdminPill(a)}${
           a.official && !a.officialVerified ? '<span class="pill ban">Not recognised</span>' : ''}</div>
       </div>
       <div class="ba-acts"><button class="act" onclick="baOpen(${a.id})">Open</button></div>
@@ -8846,6 +8855,7 @@ function renderBetaDetail(){
     platform can post as itself, and it is kept out of the way of the beta reset on purpose.
     It can be given a beta password here and nothing else: it cannot be renamed, changed,
     given staff access, or removed from this screen.
+    ${a.protectedAdmin ? '<br><br>On this environment the account is also a <b>superadmin</b>, by design, so the founder can sign in as Atwe itself and use this dashboard. That is granted from the console under the official-account access policy, never from this screen.' : ''}
     ${a.officialVerified ? '' : `<br><br><b>It no longer matches the account the app creates:</b> ${esc(a.officialProblem || '')} Every action on it is refused until that is understood.`}
   </div>` : '';
 
@@ -8854,15 +8864,16 @@ function renderBetaDetail(){
     ${officialNote}
     <div class="panel">
       <h3>${esc(a.name || '-')} <span class="muted" style="font-weight:600;">@${esc(a.username || '')}</span></h3>
-      <div class="ba-tags" style="margin:-2px 0 16px;">${baPill(a)}${baAccessPill(a)}${baWorldPill(a)}${
-        a.staff ? '<span class="pill admin">Staff access</span>' : ''}</div>
+      <div class="ba-tags" style="margin:-2px 0 16px;">${baPill(a)}${baAccessPill(a)}${baWorldPill(a)}${baAdminPill(a)}</div>
       <div class="ba-fields">
         ${baField('Email', esc(a.email || '-'))}
         ${baField('Account type', a.accountType === 'business' ? 'Business' : 'Personal')}
         ${baField('Headline', a.headline ? esc(a.headline) : '<span class="muted">none</span>')}
         ${baField('Beta status', a.official ? 'Protected beta account' : 'Beta account')}
         ${baField('Can sign in', a.accountStatus === 'active' ? yes : `${no} <span class="muted">· ${esc(a.statusReason || 'access revoked')}</span>`)}
-        ${baField('Staff access', a.staff ? '<span class="pill admin">Yes</span>' : no)}
+        ${baField('Staff access', a.protectedAdmin
+          ? '<span class="pill admin">Superadmin</span> <span class="muted">· protected beta configuration</span>'
+          : (a.staff ? '<span class="pill admin">Yes</span>' : no))}
         ${baField('In the test world', a.inTestWorld ? yes : no)}
         ${baField('Two-factor', a.twoFactor ? yes : no)}
         ${baField('Added', created)}
