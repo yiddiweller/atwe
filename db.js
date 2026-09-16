@@ -495,6 +495,21 @@ async function initSchema() {
   // the goal they picked (hiring|job|network|sell|explore) — used to tailor it.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS intent TEXT;`);
+  /* RESUMABLE ONBOARDING. There are THREE states, not two, and the third is what
+     these two columns exist for:
+       complete   onboarded = true                  (the Done action, and nothing else)
+       incomplete onboarded = false                 (started, never finished)
+       deferred   onboarded = false + deferred true ("Skip for now" -- use Atwe now,
+                                                     finish setup later)
+     `onboard_step` is the FURTHEST unfinished step ('topics' means goal is done), so a
+     member comes back to where they stopped rather than to step 1. It never moves
+     backwards: Back is navigation, not un-completing something.
+     BOTH DEFAULTS ARE THE SAFE ONES FOR EVERY EXISTING ROW. NULL step reads as "start
+     at the beginning" and is only ever consulted for an account that is already
+     onboarded = false, so a legacy completed account is untouched; deferred false
+     means "they have not asked to be left alone", which is exactly today's behaviour. */
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS onboard_step TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS onboard_deferred BOOLEAN NOT NULL DEFAULT false;`);
   // Feature-intro sheets already shown to this account (array of sheet ids, e.g.
   // ["beam","circles"]). Per-account so a sheet never reappears across sessions,
   // devices or reinstalls; extensible — a new sheet just adds its id here.
