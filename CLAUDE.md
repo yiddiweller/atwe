@@ -2778,6 +2778,76 @@ row's OWN already-validated address, the same reasoning as `is_admin IS NOT DIST
 it narrows the write to the row that was actually inspected. **Promoting still works after the
 move**, and the live suite proves it in that order.
 
+**THE COLLISION CHECK NARROWS IN SQL AND DECIDES IN JS, and that split is not
+fastidiousness — it was written the obvious way first and a real duplicate went straight
+through.** `users.email` is `TEXT UNIQUE`, which compares **raw bytes**, so
+`"  ceo@atwe.com  "` is a DIFFERENT key from `"ceo@atwe.com"` and the constraint never
+fires. The first version compared `lower(trim(email))` on both sides and **a tab-padded
+row still got through**, because **Postgres' `trim()` strips SPACES ONLY while
+JavaScript's `.trim()` strips every whitespace character** — the two halves of one check
+disagreed about what "the same address" means. Proved against a real database, twice, before
+and after.
+
+So `findEmailOwners(db, email, exceptId)` does this instead:
+
+```sql
+SELECT id, username, email, seed_tag FROM users
+ WHERE email ILIKE $1 ESCAPE '\'          -- '%' + target + '%', wildcards escaped
+ ORDER BY id
+```
+
+then filters in JS with **`normalizeEmail`** — `String(v ?? '').trim().toLowerCase()`, the
+ONE normaliser this file uses everywhere, which is also exactly what `db.init()` does to
+`ADMIN_EMAIL`. The ILIKE deliberately over-fetches (a superstring contains the target) and
+JS rejects the near-misses, so `xceo@atwe.com` is found and then correctly allowed. **It
+returns ALL matches, never `rows[0]`**: with several colliding rows the first is arbitrary,
+and if it happened to be the caller's own row the check would pass and hand the decision
+straight back to the constraint this exists not to rely on. The ILIKE cannot use an index,
+so this is a sequential scan of `users` — the right trade for something that runs once,
+from a terminal, on a beta database.
+
+**Proved refused, against a real database, for all eight of:** `ceo@atwe.com` ·
+`CEO@ATWE.COM` · `Ceo@Atwe.com` · `"  ceo@atwe.com  "` · tab+newline · CRLF+case ·
+non-breaking spaces (U+00A0) · em space + BOM (U+2003, U+FEFF). And proved NOT to block
+`xceo@atwe.com` · `ceo@atwe.comm` · `ceo@atwe.co` · `other@atwe.com`.
+
+**The stored value is byte-exact `ceo@atwe.com`** — lowercase, no surrounding whitespace —
+because the write itself goes through `normalizeEmail(want.activated)`. All three official
+UPDATEs compare `lower(trim(email))` rather than `lower(email)`, so the WHERE normalises the
+same way the classifier does; a padded stored value is matched rather than silently missed.
+
+**`ADMIN_EMAIL` IS A THIRD, SILENT DOOR ONTO SUPERADMIN, AND THE TRANSITION REFUSES TO OPEN
+IT.** `db.init()` runs `UPDATE users SET is_admin = true WHERE lower(email) = <ADMIN_EMAIL>`
+on **every boot**. So moving `@atwe` onto an address that matches `ADMIN_EMAIL` would promote
+it at the next restart — bypassing `promote-official-admin` and every check inside it, with
+nobody deciding to and nothing in the logs to read. `setOfficialEmail` refuses on that clash,
+comparing trim+lower on **both** sides (a superset of what `db.init()` does, which trims only
+its own side — the conservative direction). It is a **refusal, not a warning**, because the
+promotion would happen later, on a restart nobody is watching.
+
+**The override has no default and is never inferred.** `allowAdminEmailMatch` defaults to
+`false` in the signature, only an exact `true` opens it (`'yes'`, `1`, `{}` all still
+refuse), and the CLI sets it from one flag somebody has to type in full:
+`--allow-admin-email-match`. The CLI also **prints `ADMIN_EMAIL` on every run**, clash or
+not, so an operator can see the variable before deciding rather than discovering it in a
+refusal.
+
+**MANDATORY PRE-LIVE CHECK, before `set-official-email` is run on beta:** read `ADMIN_EMAIL`
+on the beta service. It **must not** be `ceo@atwe.com` in any spelling. Point it at a
+person's own address (`yiddiweller@gmail.com` is the obvious one — and that is also a
+legitimate, existing way for `@yiddiweller` to hold superadmin, since the boot promotion will
+grant it once that email change lands). **`promote-official-admin` remains the deliberate
+admin-grant path for `@atwe`**, and the email migration must never become an indirect grant.
+
+**THE FINAL ACCOUNT MAPPING, both environments, separate databases and separate passwords:**
+
+| account | login email | how it gets there | how it becomes superadmin |
+|---|---|---|---|
+| **`@atwe`** | **`ceo@atwe.com`** | `node tools/seed-beta.js set-official-email` | `node tools/seed-beta.js promote-official-admin` |
+| **`@yiddiweller`** | **`yiddiweller@gmail.com`** | Settings → Change email, in the app | the dashboard's Staff tab, or `ADMIN_EMAIL` at boot |
+
+Nothing live has been changed to match this table yet; it records the intent.
+
 **HOW @yiddiweller BECOMES `yiddiweller@gmail.com` — NO CODE NEEDED, and none was written.**
 The product already has the safe mechanism: **`POST /api/auth/change-email`** (Settings →
 Change email), `requireAuth` + `blockImpersonation` + rate-limited 5/min. It refuses BEFORE any
@@ -2799,7 +2869,7 @@ is a legitimate and existing route; and (b) **`ADMIN_EMAIL` must NOT be set to `
 or `@atwe` would be promoted on the next boot, bypassing `promote-official-admin` and every
 check in it. Neither is configured by this work; both are Railway variables the founder owns.
 
-**Guarded by `test/beta-official-email.test.js`** (22 always-on checks) plus five live ones
+**Guarded by `test/beta-official-email.test.js`** (33 always-on checks) plus eight live ones
 inside `test/beta-official-admin.test.js`. The live half lives THERE rather than in its own
 file for a measured reason: `node --test` runs FILES concurrently, and that file already owns
 the real `@atwe` row, so two files mutating one row in two processes would race. It squats

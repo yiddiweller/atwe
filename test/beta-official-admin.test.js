@@ -181,7 +181,15 @@ test('2. an exact official beta account is promoted, and ONE column is written',
      row that changed underneath is missed rather than promoted. */
   assert.match(where, /\bid = \$1/);
   assert.match(where, /lower\(username\)/);
-  assert.match(where, /lower\(email\)/);
+  /* Normalised, not raw: `lower(email)` or `lower(trim(email))` both satisfy
+     this, and what matters is that the WHERE normalises the SAME way
+     `officialEmailState` does -- otherwise a padded stored value is classified
+     canonical and then matched by nothing. Written as a shape rather than a
+     literal because that normalisation has already changed once (a tab-padded
+     row slipped through `lower(trim(...))`, since Postgres trims spaces only),
+     and a literal here goes stale the next time it does. The behaviour itself
+     is proved live, against a real database, in the collision tests. */
+  assert.match(where, /lower\((?:trim\()?email/);
   assert.match(where, /account_type\s*=\s*'business'/);
   assert.match(where, /seed_tag\s*= \$4/);
   assert.match(where, /is_demo\s+IS NOT TRUE/);
@@ -251,7 +259,15 @@ test('2g. there is no "promote anybody" helper, and no username a caller control
   const ups = [...MOD_CODE.matchAll(/UPDATE\s+users[\s\S]*?RETURNING/g)].map((m) => m[0]);
   const admins = ups.filter((u) => /SET\s+is_admin/.test(u));
   assert.equal(admins.length, 1, 'exactly one statement in the module grants admin');
-  assert.match(admins[0].split('WHERE')[1], /lower\(email\)/);
+  /* Normalised, not raw: `lower(email)` or `lower(trim(email))` both satisfy
+     this, and what matters is that the WHERE normalises the SAME way
+     `officialEmailState` does -- otherwise a padded stored value is classified
+     canonical and then matched by nothing. Written as a shape rather than a
+     literal because that normalisation has already changed once (a tab-padded
+     row slipped through `lower(trim(...))`, since Postgres trims spaces only),
+     and a literal here goes stale the next time it does. The behaviour itself
+     is proved live, against a real database, in the collision tests. */
+  assert.match(admins[0].split('WHERE')[1], /lower\((?:trim\()?email/);
 });
 
 /* ═══ 3. THE IDENTITY CHECKS WERE NOT WEAKENED ═══════════════════════════ */
@@ -435,19 +451,63 @@ if (!h.SKIP && process.env.ATWE_LIVE_BETA_AUTHZ === '1') {
     assert.equal(out.isAdmin, false, 'not an admin yet — that is a separate act');
   });
 
-  test('live: it refuses to take ceo@atwe.com off another account', async () => {
-    /* The squatter is a throwaway, and it is deleted again below. This is the
-       one refusal that cannot be proved with a fake db alone, because the whole
-       point is what a real UNIQUE index would otherwise do to us. */
+  test('live: EVERY case and whitespace variant collides, against a real UNIQUE index', async () => {
+    /* This cannot be proved with a fake db, and that is the point. `users.email`
+       is TEXT UNIQUE, which compares RAW BYTES, so "  ceo@atwe.com  " is a
+       different key and the constraint does not fire. An earlier version of this
+       check used `lower(trim(email))` and a tab-padded row went straight through
+       BOTH the check and the database, moving @atwe and leaving two accounts on
+       what every human reads as one address. Proved here rather than argued. */
+    const variants = [
+      ['exact', 'ceo@atwe.com'],
+      ['all upper', 'CEO@ATWE.COM'],
+      ['mixed case', 'Ceo@Atwe.com'],
+      ['spaces', '  ceo@atwe.com  '],
+      ['tab and newline', '\tceo@atwe.com\n'],
+      ['CRLF and case', '\r\nCEO@Atwe.Com\t'],
+      ['non-breaking spaces', ' ceo@atwe.com '],
+      ['em space and a BOM', ' Ceo@ATWE.com﻿'],
+    ];
+    for (const [what, stored] of variants) {
+      await pool.query(`DELETE FROM users WHERE lower(username) = 'emailsquatter'`);
+      await pool.query(
+        `INSERT INTO users (name, email, password_hash, username, account_type)
+         VALUES ('Squatter', $1, 'x', 'emailsquatter', 'personal')`, [stored]);
+      await assert.rejects(
+        () => account.setOfficialEmail(pool, { env: BETA_ENV }),
+        /already belongs to @emailsquatter/, `a duplicate stored as ${what} must refuse`);
+      const still = (await pool.query('SELECT email FROM users WHERE id = $1', [official.id])).rows[0];
+      assert.equal(still.email, 'no-reply+atwe@atwe.internal', `and @atwe was not moved for ${what}`);
+    }
+    await pool.query(`DELETE FROM users WHERE lower(username) = 'emailsquatter'`);
+  });
+
+  test('live: a near-miss address does NOT block the move', async () => {
+    /* The sweep over-fetches on purpose (a superstring contains the target), so
+       this is what stops it being a false refusal. */
     await pool.query(
       `INSERT INTO users (name, email, password_hash, username, account_type)
-       VALUES ('Squatter', 'ceo@atwe.com', 'x', 'emailsquatter', 'personal')`);
-    await assert.rejects(
-      () => account.setOfficialEmail(pool, { env: BETA_ENV }),
-      /already belongs to @emailsquatter/);
-    const still = (await pool.query('SELECT email FROM users WHERE id = $1', [official.id])).rows[0];
-    assert.equal(still.email, 'no-reply+atwe@atwe.internal', 'and @atwe was not moved');
+       VALUES ('Nearly', 'xceo@atwe.com', 'x', 'emailsquatter', 'personal')`);
+    const owners = await account.findEmailOwners(pool, 'ceo@atwe.com', official.id);
+    assert.deepEqual(owners, [], 'a superstring is found by the ILIKE and then correctly rejected');
     await pool.query(`DELETE FROM users WHERE lower(username) = 'emailsquatter'`);
+  });
+
+  test('live: it refuses when ADMIN_EMAIL is the address being moved to', async () => {
+    /* db.init() promotes whatever holds ADMIN_EMAIL on every boot, so this move
+       would grant @atwe superadmin at the next restart on its own. */
+    for (const adminEmail of ['ceo@atwe.com', ' CEO@ATWE.COM ', '\tCeo@Atwe.com\n']) {
+      await assert.rejects(
+        () => account.setOfficialEmail(pool, { env: { ...BETA_ENV, ADMIN_EMAIL: adminEmail } }),
+        /ADMIN_EMAIL/, `ADMIN_EMAIL spelled "${adminEmail}" must refuse`);
+      const still = (await pool.query('SELECT email, is_admin FROM users WHERE id = $1', [official.id])).rows[0];
+      assert.equal(still.email, 'no-reply+atwe@atwe.internal', 'nothing was moved');
+      assert.equal(still.is_admin, false, 'and nothing was granted');
+    }
+    /* An unrelated ADMIN_EMAIL is not a clash. Checked without writing, so the
+       move below is still the first one. */
+    const owners = await account.findEmailOwners(pool, 'ceo@atwe.com', official.id);
+    assert.deepEqual(owners, [], 'the address is free, so only ADMIN_EMAIL was refusing');
   });
 
   test('live: the email moves to ceo@atwe.com and NOTHING else changes', async () => {
@@ -467,6 +527,10 @@ if (!h.SKIP && process.env.ATWE_LIVE_BETA_AUTHZ === '1') {
               is_admin, admin_perms, admin_role, status, headline
          FROM users WHERE id = $1`, [official.id])).rows[0];
     assert.equal(after.email, 'ceo@atwe.com', 'the address moved');
+    /* Byte-exact, not merely equivalent: lowercase, no surrounding whitespace,
+       so every lower()-based lookup in the app and the UNIQUE index agree. */
+    assert.equal(after.email, account.normalizeEmail(after.email), 'and it is stored canonical');
+    assert.doesNotMatch(after.email, /\s/, 'with no whitespace anywhere in it');
     for (const col of Object.keys(before)) {
       assert.deepEqual(after[col], before[col], `${col} must be untouched by an email move`);
     }

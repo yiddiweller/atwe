@@ -10,7 +10,9 @@
  *                                    give the app's OWN @atwe account a beta password
  *   node tools/seed-beta.js set-official-email
  *                                    move that same @atwe account from the address the app
- *                                    creates it with to its activated login email
+ *                                    creates it with to its activated login email. Refuses if
+ *                                    ADMIN_EMAIL is that same address, since db.init() would
+ *                                    then promote it on the next boot by itself
  *   node tools/seed-beta.js promote-official-admin
  *                                    make that same @atwe account a superadmin, where the
  *                                    official-account access policy permits it (beta today)
@@ -770,6 +772,31 @@ async function doSetOfficialEmail(db, opts) {
     return 0;
   }
 
+  /* ADMIN_EMAIL IS SHOWN WHETHER OR NOT IT CLASHES. An operator deciding
+     whether to run this should be able to see the variable that could turn it
+     into a staff grant, not discover it in a refusal. */
+  const adminEmail = account.normalizeEmail(process.env.ADMIN_EMAIL);
+  const clash = adminEmail && adminEmail === account.normalizeEmail(want.activated);
+  console.log(`  ADMIN_EMAIL here          ${process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL : '(not set)'}`
+            + (clash ? '   <-- SAME ADDRESS. See below.' : '   (a different address, so this move grants nothing)'));
+
+  if (clash) {
+    console.log(`\nSTOP. ADMIN_EMAIL on this service is the very address @${uname} would move to.`);
+    console.log('  db.init() promotes whatever account holds ADMIN_EMAIL to superadmin on EVERY boot,');
+    console.log(`  so this move would hand @${uname} staff access at the next restart, on its own, with`);
+    console.log('  nobody deciding to and none of the checks in promote-official-admin running.');
+    console.log('\n  Point ADMIN_EMAIL at a person\'s own address instead, then run this again, and grant');
+    console.log('  staff access deliberately with "node tools/seed-beta.js promote-official-admin".');
+    if (!opts.allowAdminEmailMatch) {
+      console.error('\nREFUSED. Nothing was written.');
+      console.error('  If you genuinely want the boot promotion to be the admin path, re-run with');
+      console.error('  --allow-admin-email-match. There is no default that does this for you.');
+      return 1;
+    }
+    console.log('\n  --allow-admin-email-match was supplied, so this will go ahead. You are choosing to let');
+    console.log(`  the next restart promote @${uname}.`);
+  }
+
   console.log('\nWHAT WILL CHANGE, and nothing else');
   console.log(`  email                     ${want.dormant}`);
   console.log(`                            -> ${want.activated}`);
@@ -789,7 +816,13 @@ async function doSetOfficialEmail(db, opts) {
   }
 
   let done;
-  try { done = await account.setOfficialEmail(db, { username: uname, env: process.env }); }
+  try {
+    done = await account.setOfficialEmail(db, {
+      username: uname, env: process.env,
+      /* Never inferred, never defaulted: it is this flag or nothing. */
+      allowAdminEmailMatch: opts.allowAdminEmailMatch === true,
+    });
+  }
   catch (e) { console.error(`\nREFUSED. ${e.message}`); return 1; }
 
   console.log(`\n  moved                     @${done.username} (id ${done.id}) now signs in as ${done.email}`);
@@ -873,6 +906,10 @@ async function main() {
     immerse: !argv.includes('--no-immerse'),
     claimReserved: argv.includes('--claim-reserved'),
     dryRun: argv.includes('--dry-run'),
+    /* Spelled out in full on purpose. It lets set-official-email proceed when
+       ADMIN_EMAIL is the address being moved to, i.e. when the next boot would
+       promote @atwe by itself. Nothing else sets it and there is no default. */
+    allowAdminEmailMatch: argv.includes('--allow-admin-email-match'),
     identity: (argv.find((a) => a.startsWith('--identity=')) || '').split('=')[1] || positional[1] || null,
   };
 

@@ -77,8 +77,10 @@ function officialDb(row, holder = null) {
       if (/^\s*UPDATE/i.test(text)) {
         return { rows: [{ id: row.id, username: row.username, email: params[0] }], rowCount: 1 };
       }
-      if (/lower\(email\) = lower\(/.test(text)) {
-        return holder ? { rows: [holder], rowCount: 1 } : { rows: [], rowCount: 0 };
+      /* findEmailOwners' collision sweep. `holder` may be one row or several. */
+      if (/email ILIKE/.test(text)) {
+        const rows = holder ? (Array.isArray(holder) ? holder : [holder]) : [];
+        return { rows, rowCount: rows.length };
       }
       return row ? { rows: [row], rowCount: 1 } : { rows: [], rowCount: 0 };
     },
@@ -187,7 +189,10 @@ test('6. the UPDATE re-asserts the whole identity, so a changed row is missed', 
   const db = officialDb(DORMANT);
   await account.setOfficialEmail(db, { env: BETA_ENV });
   const where = writes(db)[0].text.split('WHERE')[1];
-  for (const clause of [/id = \$2/, /lower\(username\) = \$3/, /lower\(email\)\s*= \$4/,
+  /* `lower(trim(email))`, not `lower(email)`: the classifier normalises, so the
+     write must normalise identically or a padded stored value is classified
+     dormant and then matched by nothing. */
+  for (const clause of [/id = \$2/, /lower\(username\) = \$3/, /lower\(trim\(email\)\)\s*= \$4/,
                         /account_type\s*= 'business'/, /seed_tag\s*= \$5/,
                         /is_demo\s+IS NOT TRUE/, /is_admin IS NOT DISTINCT FROM \$6/]) {
     assert.match(where, clause, `the WHERE must carry ${clause}`);
@@ -243,7 +248,172 @@ test('10. it refuses when another account already holds ceo@atwe.com', async () 
   await assert.rejects(() => account.setOfficialEmail(db, { env: BETA_ENV }),
     /already belongs to @someoneelse/);
   assert.equal(writes(db).length, 0, 'it never takes an address off another account');
-  assert.match(joined(db), /lower\(email\) = lower\(/, 'and it really did look');
+  assert.match(joined(db), /email ILIKE/, 'and it really did look');
+});
+
+test('10a. one normaliser decides what "the same address" means', () => {
+  assert.equal(account.normalizeEmail('  CEO@ATWE.COM  '), ACTIVE_EMAIL);
+  assert.equal(account.normalizeEmail('\tCeo@Atwe.com\n'), ACTIVE_EMAIL);
+  assert.equal(account.normalizeEmail(' ceo@atwe.com﻿'), ACTIVE_EMAIL, 'unicode padding too');
+  assert.equal(account.normalizeEmail(null), '');
+  assert.equal(account.normalizeEmail(undefined), '');
+  /* The stored canonical value must already BE canonical, or the transition
+     would write something it then does not recognise. */
+  assert.equal(account.normalizeEmail(account.OFFICIAL_EMAIL_ACTIVATED), account.OFFICIAL_EMAIL_ACTIVATED);
+  assert.equal(account.OFFICIAL_EMAIL_ACTIVATED, 'ceo@atwe.com', 'lowercase, no surrounding space');
+});
+
+/* Every way one address can be spelled differently and still be one address.
+   The tab and newline cases are not hypothetical: `lower(trim(email))` was
+   written first, and both slipped through it AND through the UNIQUE index,
+   because Postgres' trim() strips spaces only while JavaScript's strips all
+   whitespace. Proved against a real database before this was rewritten. */
+const SAME_ADDRESS = [
+  ['exact', 'ceo@atwe.com'],
+  ['all upper', 'CEO@ATWE.COM'],
+  ['mixed case', 'Ceo@Atwe.com'],
+  ['leading and trailing spaces', '  ceo@atwe.com  '],
+  ['tab and newline', '\tceo@atwe.com\n'],
+  ['CRLF and case together', '\r\nCEO@Atwe.Com\t'],
+  ['non-breaking spaces', ' ceo@atwe.com '],
+  ['em space and a BOM', ' Ceo@ATWE.com﻿'],
+];
+
+test('10b. EVERY case and whitespace variant is one address, and each one refuses', async () => {
+  for (const [what, stored] of SAME_ADDRESS) {
+    assert.equal(account.normalizeEmail(stored), ACTIVE_EMAIL, `${what} normalises to the target`);
+    const db = officialDb(DORMANT, { id: 42, username: 'squatter', email: stored, seed_tag: null });
+    await assert.rejects(() => account.setOfficialEmail(db, { env: BETA_ENV }),
+      /already belongs to @squatter/, `a duplicate stored as ${what} must refuse`);
+    assert.equal(writes(db).length, 0, `and write nothing for ${what}`);
+  }
+});
+
+test('10c. the check does NOT lean on the UNIQUE index, and cannot', () => {
+  /* The point of 10b: users.email is TEXT UNIQUE, which compares raw bytes, so
+     "  ceo@atwe.com  " is a DIFFERENT key from "ceo@atwe.com". The constraint
+     would not fire on most of those variants. Anything that refuses them has to
+     be our own check, which is why the SQL narrows and JS decides. */
+  const distinctKeys = new Set(SAME_ADDRESS.map(([, v]) => v));
+  assert.equal(distinctKeys.size, SAME_ADDRESS.length,
+    'every variant is a distinct byte string, i.e. a distinct UNIQUE key');
+  const fn = MOD_CODE.slice(MOD_CODE.indexOf('async function findEmailOwners'));
+  const body = fn.slice(0, fn.indexOf('\n}\n') + 1);
+  assert.match(body, /ILIKE/, 'SQL narrows');
+  assert.match(body, /normalizeEmail\(row\.email\) === target/, 'and JS decides');
+  assert.match(body, /replace\(/, 'with LIKE wildcards escaped');
+});
+
+test('10d. a near-miss is NOT the same address and must not block the move', async () => {
+  for (const other of ['xceo@atwe.com', 'ceo@atwe.comm', 'ceo@atwe.co', 'other@atwe.com', 'ceo@atwe.com.evil.net']) {
+    assert.notEqual(account.normalizeEmail(other), ACTIVE_EMAIL);
+    /* The ILIKE deliberately over-fetches (a superstring contains the target),
+       so the JS filter is what keeps this from being a false refusal. */
+    const db = officialDb(DORMANT, { id: 42, username: 'notit', email: other, seed_tag: null });
+    const out = await account.setOfficialEmail(db, { env: BETA_ENV });
+    assert.equal(out.already, false, `${other} must not block the move`);
+  }
+});
+
+test('10e. @atwe never collides with ITSELF', async () => {
+  /* Two ways this could go wrong: the sweep returning the caller's own row, and
+     a re-run finding the address it just wrote. Both must be silent. */
+  const dormantSelf = officialDb(DORMANT, { ...DORMANT, email: ACTIVE_EMAIL });
+  const out = await account.setOfficialEmail(dormantSelf, { env: BETA_ENV });
+  assert.equal(out.already, false, 'its own row is excluded from the collision sweep');
+
+  const already = officialDb(ACTIVATED, ACTIVATED);
+  const out2 = await account.setOfficialEmail(already, { env: BETA_ENV });
+  assert.equal(out2.already, true, 'and a re-run is a no-op, not a self-collision');
+  assert.equal(writes(already).length, 0);
+});
+
+test('10f. several holders are ALL named, not just the first one found', async () => {
+  const db = officialDb(DORMANT, [
+    { id: 42, username: 'squatterA', email: 'CEO@ATWE.COM', seed_tag: null },
+    { id: 43, username: 'squatterB', email: '  ceo@atwe.com ', seed_tag: null },
+  ]);
+  await assert.rejects(() => account.setOfficialEmail(db, { env: BETA_ENV }), (err) => {
+    assert.match(err.message, /@squatterA/);
+    assert.match(err.message, /@squatterB/, 'taking rows[0] would have hidden this one');
+    return true;
+  });
+  assert.equal(writes(db).length, 0);
+});
+
+test('10g. the transition writes EXACTLY the canonical value', async () => {
+  const db = officialDb(DORMANT);
+  const out = await account.setOfficialEmail(db, { env: BETA_ENV });
+  const written = writes(db)[0].params[0];
+  assert.equal(written, 'ceo@atwe.com');
+  assert.equal(written, account.normalizeEmail(written), 'lowercase, no surrounding whitespace');
+  assert.doesNotMatch(written, /\s/, 'no whitespace anywhere in the stored value');
+  assert.equal(out.email, 'ceo@atwe.com');
+  /* And the dormant side of the WHERE is normalised the same way, so a padded
+     stored value is still matched by the write rather than missed. */
+  assert.equal(writes(db)[0].params[3], 'no-reply+atwe@atwe.internal');
+  assert.match(writes(db)[0].text, /lower\(trim\(email\)\)\s*= \$4/);
+});
+
+/* ═══ 2b. ADMIN_EMAIL MUST NOT TURN THIS INTO A STAFF GRANT ══════════════ */
+
+test('10h. it refuses when ADMIN_EMAIL is the address being moved to', async () => {
+  /* db.init() promotes whatever holds ADMIN_EMAIL on EVERY boot, so this move
+     would grant @atwe superadmin at the next restart with nobody deciding to. */
+  for (const [what, adminEmail] of SAME_ADDRESS) {
+    const db = officialDb(DORMANT);
+    await assert.rejects(
+      () => account.setOfficialEmail(db, { env: { ...BETA_ENV, ADMIN_EMAIL: adminEmail } }),
+      /ADMIN_EMAIL/, `a clash spelled as ${what} must refuse`);
+    assert.equal(writes(db).length, 0, `and write nothing for ${what}`);
+  }
+  /* The refusal has to say what it costs and where the real door is. */
+  const db = officialDb(DORMANT);
+  await assert.rejects(() => account.setOfficialEmail(db, { env: { ...BETA_ENV, ADMIN_EMAIL: ACTIVE_EMAIL } }),
+    (err) => {
+      assert.match(err.message, /promotes whatever account holds ADMIN_EMAIL to superadmin on every boot/i);
+      assert.match(err.message, /promote-official-admin/, 'and points at the deliberate path');
+      return true;
+    });
+});
+
+test('10i. an unrelated ADMIN_EMAIL is not a clash', async () => {
+  for (const adminEmail of ['yiddiweller@gmail.com', 'ceo@atwe.co', '', undefined]) {
+    const db = officialDb(DORMANT);
+    const out = await account.setOfficialEmail(db, { env: { ...BETA_ENV, ADMIN_EMAIL: adminEmail } });
+    assert.equal(out.already, false, `ADMIN_EMAIL "${adminEmail}" must not block the move`);
+  }
+});
+
+test('10j. the override is explicit, has no default, and is never inferred', async () => {
+  const env = { ...BETA_ENV, ADMIN_EMAIL: ACTIVE_EMAIL };
+  /* Only the exact boolean true opens it. Nothing truthy-by-accident does. */
+  for (const bad of [undefined, null, false, 0, '', 'yes', 'true', 1, {}]) {
+    const db = officialDb(DORMANT);
+    await assert.rejects(() => account.setOfficialEmail(db, { env, allowAdminEmailMatch: bad }), /ADMIN_EMAIL/);
+  }
+  const db = officialDb(DORMANT);
+  const out = await account.setOfficialEmail(db, { env, allowAdminEmailMatch: true });
+  assert.equal(out.already, false, 'a deliberate override proceeds');
+
+  /* The default in the signature is false, and the CLI sets it from a flag
+     somebody has to type in full. */
+  assert.match(MOD_CODE, /allowAdminEmailMatch = false/, 'the default is off');
+  assert.match(CLI_CODE, /allowAdminEmailMatch: argv\.includes\('--allow-admin-email-match'\)/,
+    'and the CLI takes it from one spelled-out flag');
+  assert.match(CLI_CODE, /allowAdminEmailMatch: opts\.allowAdminEmailMatch === true/,
+    'passed on as an exact boolean, never inferred');
+  assert.doesNotMatch(CLI_CODE, /allowAdminEmailMatch:\s*true[,\s]*\}/, 'and never hardcoded true');
+});
+
+test('10k. promote-official-admin remains the deliberate admin path', () => {
+  /* The whole point of 10h: an email move must not become a staff grant. The
+     one statement that grants it is still somewhere else entirely. */
+  const fn = MOD_CODE.slice(MOD_CODE.indexOf('async function setOfficialEmail'));
+  const body = fn.slice(0, fn.indexOf('\n}\n') + 1);
+  assert.doesNotMatch(body, /SET\s+is_admin/, 'the transition grants nothing');
+  assert.match(CLI_CODE, /cmd === 'promote-official-admin'\) return await doPromoteOfficialAdmin/,
+    'and the deliberate command is still there');
 });
 
 test('10b. a unique violation at write time becomes a sentence, not a stack trace', async () => {
@@ -255,7 +425,7 @@ test('10b. a unique violation at write time becomes a sentence, not a stack trac
     query: async (text) => {
       db.sql.push({ text });
       if (/^\s*UPDATE/i.test(text)) { const e = new Error('duplicate key'); e.code = '23505'; throw e; }
-      if (/lower\(email\) = lower\(/.test(text)) return { rows: [], rowCount: 0 };
+      if (/email ILIKE/.test(text)) return { rows: [], rowCount: 0 };
       return { rows: [DORMANT], rowCount: 1 };
     },
   };
@@ -360,7 +530,8 @@ test('16. the CLI command takes no username and grants nothing', () => {
   assert.doesNotMatch(body, /opts\.(username|user|account)/, 'and no option can redirect it');
   assert.doesNotMatch(body, /readPassword|hashPassword|is_admin\s*=/, 'it neither passwords nor promotes');
   assert.match(body, /assertOfficialAccessAllowed\(process\.env, 'login'\)/);
-  assert.match(body, /account\.setOfficialEmail\(db, \{ username: uname, env: process\.env \}\)/);
+  assert.match(body, /account\.setOfficialEmail\(db, \{/);
+  assert.match(body, /username: uname, env: process\.env,/);
   /* And it is reachable: listed, dispatched, and documented. */
   assert.match(CLI_CODE, /'set-official-email'[\s\S]{0,200}?includes\(cmd\)/,
     'the command is in the allowed list');

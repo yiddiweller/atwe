@@ -115,6 +115,57 @@ async function findByEmail(db, email) {
   return r.rows[0] || null;
 }
 
+/* THE ONE NORMALISATION, so nothing can disagree about what "the same address"
+   means. Trim THEN lower, matching what `db.init()` already does to
+   ADMIN_EMAIL (`(process.env.ADMIN_EMAIL || '').trim().toLowerCase()`). */
+function normalizeEmail(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+
+/* EVERY account that logically holds this address, minus one id.
+
+   `findByEmail` above is NOT good enough for a collision check and this was
+   proved against a real database rather than argued: it compares
+   `lower(email) = lower($1)`, which catches CEO@ATWE.COM but NOT a stored
+   "  ceo@atwe.com  ". Postgres' UNIQUE on a TEXT column compares raw bytes, so
+   the padded value is a DIFFERENT key -- the constraint does not fire either,
+   and both the check and the database wave it through. Two accounts then hold
+   what every human and every lower()-based lookup in the app reads as one
+   address.
+
+   IT NARROWS IN SQL AND DECIDES IN JS, and that split is not fastidiousness --
+   `lower(trim(email))` was written first and a padded row STILL got through,
+   because POSTGRES' `trim()` STRIPS SPACES ONLY while JavaScript's `.trim()`
+   strips every whitespace character. A value padded with a tab or a newline
+   compared equal to nobody in SQL and equal to the target in JS, so the two
+   sides of one check disagreed about what "the same address" means. Rather than
+   chase Postgres and JavaScript into agreeing across Unicode, the ILIKE finds
+   every row that CONTAINS the address in any case, and `normalizeEmail` -- the
+   one normaliser, the same function the rest of this file uses -- says which of
+   them really is it. A superstring like "xceo@atwe.comy" is found and then
+   correctly rejected.
+
+   It returns ALL matches rather than `rows[0]`. Taking the first row is its own
+   hazard: with several colliding rows the one that comes back is arbitrary, and
+   if it happened to be the caller's own row the check would pass and hand the
+   decision straight back to the constraint this exists to not rely on.
+
+   The ILIKE cannot use an index, so this is a sequential scan of `users`. That
+   is the right trade: it runs once, from an operator's terminal, on a beta
+   database, and being certain matters more than being quick. */
+async function findEmailOwners(db, email, exceptId = null) {
+  const target = normalizeEmail(email);
+  if (!target) return [];
+  const except = exceptId == null ? null : parseInt(exceptId, 10);
+  /* The address is ours, but escape anyway: a `%` or `_` reaching a LIKE
+     pattern is how a check quietly starts matching everything. */
+  const like = `%${target.replace(/([\\%_])/g, '\\$1')}%`;
+  const r = await db.query(
+    `SELECT id, username, email, seed_tag FROM users
+      WHERE email ILIKE $1 ESCAPE '\\'
+      ORDER BY id`, [like]);
+  return r.rows.filter((row) => normalizeEmail(row.email) === target
+    && (except == null || row.id !== except));
+}
+
 /* Atwe LOCKS a list of names (routes.js SYSTEM_ROUTES, seeded into
    reserved_usernames on every boot) so nobody can register a name that would
    impersonate the company or shadow a route -- "atwe" is on that list. This
@@ -293,10 +344,10 @@ function officialEmails(username = OFFICIAL_USERNAME) {
    "neither, so this is not the official account". The ONE place the two
    addresses are compared, so nothing else can invent a third answer. */
 function officialEmailState(email, username = OFFICIAL_USERNAME) {
-  const e = String(email == null ? '' : email).trim().toLowerCase();
+  const e = normalizeEmail(email);
   const want = officialEmails(username);
-  if (e === want.dormant.toLowerCase()) return 'dormant';
-  if (e === want.activated.toLowerCase()) return 'activated';
+  if (e === normalizeEmail(want.dormant)) return 'dormant';
+  if (e === normalizeEmail(want.activated)) return 'activated';
   return null;
 }
 
@@ -533,12 +584,12 @@ async function activateOfficial(db, { passwordHash, username = OFFICIAL_USERNAME
         SET password_hash = $1, email_verified = true, seed_tag = $2
       WHERE id = $3
         AND lower(username) = $4
-        AND lower(email)    = $5
+        AND lower(trim(email)) = $5
         AND account_type    = 'business'
         AND is_demo  IS NOT TRUE
         AND is_admin IS NOT DISTINCT FROM $6
       RETURNING id, username`,
-    [passwordHash, KEEP_TAG, row.id, uname, String(row.email).trim().toLowerCase(), row.is_admin === true]);
+    [passwordHash, KEEP_TAG, row.id, uname, normalizeEmail(row.email), row.is_admin === true]);
   if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
   return {
     id: r.rows[0].id, username: r.rows[0].username, seedTag: KEEP_TAG,
@@ -589,14 +640,14 @@ async function promoteOfficialAdmin(db, { username = OFFICIAL_USERNAME, env = nu
         SET is_admin = true
       WHERE id = $1
         AND lower(username) = $2
-        AND lower(email)    = $3
+        AND lower(trim(email)) = $3
         AND account_type    = 'business'
         AND seed_tag        = $4
         AND is_demo  IS NOT TRUE
         AND is_admin IS NOT TRUE
         AND jsonb_array_length(COALESCE(admin_perms, '[]'::jsonb)) = 0
       RETURNING id, username`,
-    [row.id, uname, String(row.email).trim().toLowerCase(), KEEP_TAG]);
+    [row.id, uname, normalizeEmail(row.email), KEEP_TAG]);
   if (!r.rowCount) throw new Error('the account changed while this was running. Nothing was written.');
   return { id: r.rows[0].id, username: r.rows[0].username, seedTag: KEEP_TAG, already: false };
 }
@@ -644,7 +695,8 @@ async function promoteOfficialAdmin(db, { username = OFFICIAL_USERNAME, env = nu
    the UPDATE anyway -- the explicit check is what turns a constraint violation
    into a sentence naming who holds it. The unique violation is still caught, in
    case somebody claims the address between the check and the write. */
-async function setOfficialEmail(db, { username = OFFICIAL_USERNAME, env = null } = {}) {
+async function setOfficialEmail(db, { username = OFFICIAL_USERNAME, env = null,
+                                    allowAdminEmailMatch = false } = {}) {
   const e = env || process.env;
   assertOfficialAccessAllowed(e, 'login');
 
@@ -684,10 +736,43 @@ async function setOfficialEmail(db, { username = OFFICIAL_USERNAME, env = null }
     throw new Error(`@${uname} holds "${row.email}", which is neither canonical address. Nothing was written.`);
   }
 
-  const other = await findByEmail(db, want.activated);
-  if (other && other.id !== row.id) {
-    throw new Error(`${want.activated} already belongs to @${other.username || `account ${other.id}`}. ` +
-      'Refusing: this never takes an address off another account. Free it first, then run this again.');
+  /* NOBODY ELSE MAY HOLD THIS ADDRESS, case- and whitespace-insensitively, and
+     this check must stand on its own rather than leaning on the UNIQUE index --
+     see `findEmailOwners`, where the reason is a real hole proved against a real
+     database. It reports EVERY holder, so a tidy-up is done once rather than
+     discovered one row at a time. */
+  const owners = await findEmailOwners(db, want.activated, row.id);
+  if (owners.length) {
+    const who = owners.map((o) => `@${o.username || `account ${o.id}`} ("${o.email}")`).join(', ');
+    throw new Error(`${want.activated} already belongs to ${who}. ` +
+      'Refusing: this never takes an address off another account, and it treats ' +
+      'differences of case or surrounding space as the same address. Free it first, then run this again.');
+  }
+
+  /* ADMIN_EMAIL IS A THIRD, SILENT DOOR ONTO SUPERADMIN, and this transition is
+     what could open it. `db.init()` runs
+     `UPDATE users SET is_admin = true WHERE lower(email) = <ADMIN_EMAIL>` on
+     EVERY boot, so moving @atwe onto an address that matches it would promote
+     the account on the next restart -- bypassing promoteOfficialAdmin and every
+     check inside it, without anybody deciding to.
+
+     Refused rather than warned, because the promotion would happen later, on a
+     restart nobody is watching. The comparison is trim+lower on both sides,
+     which is a SUPERSET of what db.init() does (it trims only its own side), so
+     this refuses in every case that would really promote and in a few that
+     would not -- the conservative direction.
+
+     `allowAdminEmailMatch` exists for an operator who genuinely wants the boot
+     promotion to be the admin path. It has no default, is never inferred, and
+     the CLI only sets it from a spelled-out flag. */
+  const adminEmail = normalizeEmail(e.ADMIN_EMAIL);
+  if (adminEmail && adminEmail === normalizeEmail(want.activated) && allowAdminEmailMatch !== true) {
+    throw new Error(
+      `this environment's ADMIN_EMAIL is "${e.ADMIN_EMAIL}", which is the same address @${uname} ` +
+      `would move to. db.init() promotes whatever account holds ADMIN_EMAIL to superadmin on every ` +
+      `boot, so this move would grant @${uname} staff access at the next restart on its own. ` +
+      'Refusing. Point ADMIN_EMAIL at a person\'s own address instead, then run this again, and ' +
+      'grant staff access deliberately with "node tools/seed-beta.js promote-official-admin".');
   }
 
   let r;
@@ -697,13 +782,14 @@ async function setOfficialEmail(db, { username = OFFICIAL_USERNAME, env = null }
           SET email = $1
         WHERE id = $2
           AND lower(username) = $3
-          AND lower(email)    = $4
+          AND lower(trim(email)) = $4
           AND account_type    = 'business'
           AND seed_tag        = $5
           AND is_demo  IS NOT TRUE
           AND is_admin IS NOT DISTINCT FROM $6
         RETURNING id, username, email`,
-      [want.activated, row.id, uname, want.dormant.toLowerCase(), KEEP_TAG, row.is_admin === true]);
+      [normalizeEmail(want.activated), row.id, uname, normalizeEmail(want.dormant),
+       KEEP_TAG, row.is_admin === true]);
   } catch (err) {
     if (err && err.code === '23505') {
       throw new Error(`${want.activated} was claimed by another account while this was running. Nothing was written.`);
@@ -775,6 +861,7 @@ module.exports = {
   createBetaAccount, immerseAccount,
   OFFICIAL_USERNAME, KEEP_TAG, officialIdentity, officialMismatch,
   OFFICIAL_EMAIL_ACTIVATED, officialEmails, officialEmailState, setOfficialEmail,
+  normalizeEmail, findEmailOwners,
   findOfficial, activateOfficial, resetBetaPassword,
   officialAccessPolicy, officialAdminAllowed, officialLoginAllowed,
   assertOfficialAccessAllowed, promoteOfficialAdmin,
