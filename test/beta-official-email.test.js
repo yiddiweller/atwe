@@ -554,9 +554,24 @@ test('18. the module exports the new pieces, and nothing that widens them', () =
   for (const k of ['officialEmails', 'officialEmailState', 'setOfficialEmail', 'OFFICIAL_EMAIL_ACTIVATED']) {
     assert.ok(k in account, `${k} must be exported`);
   }
-  /* There is no "set any account's email" helper, and there must never be one:
+  /* THERE IS NO "SET ANY ACCOUNT'S EMAIL" HELPER, AND THERE MUST NEVER BE ONE:
      an ordinary member changes their address through the app's own
-     password-gated change-email route. */
-  const granters = Object.keys(account).filter((k) => /^set[A-Z]/.test(k));
-  assert.deepEqual(granters, ['setOfficialEmail'], `only the official transition may exist: ${granters}`);
+     password-gated change-email route.
+
+     This used to assert the list was exactly ['setOfficialEmail'] and went red
+     the moment a SECOND narrow migration arrived (the founder's own beta
+     account). Counting names was never the guarantee -- what makes each of
+     these safe is that its target is HARDCODED, so it asserts that instead, for
+     every one of them. A general helper cannot pass. */
+  const setters = Object.keys(account).filter((k) => /^set[A-Z]/.test(k)).sort();
+  assert.deepEqual(setters, ['setFounderEmail', 'setOfficialEmail'],
+    `each of these must be individually justified: ${setters}`);
+  for (const name of setters) {
+    const at = MOD_CODE.indexOf(`async function ${name}`);
+    const sig = MOD_CODE.slice(at, MOD_CODE.indexOf(')', at) + 1);
+    assert.doesNotMatch(sig, /\bemail\s*[,=)]/, `${name} must take no email parameter: ${sig}`);
+    const body = MOD_CODE.slice(at, MOD_CODE.indexOf('\n}\n', at) + 1);
+    assert.match(body, /OFFICIAL_USERNAME|FOUNDER_USERNAME/,
+      `${name} must resolve its account from a hardcoded handle`);
+  }
 });

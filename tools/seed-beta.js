@@ -13,6 +13,10 @@
  *                                    creates it with to its activated login email. Refuses if
  *                                    ADMIN_EMAIL is that same address, since db.init() would
  *                                    then promote it on the next boot by itself
+ *   node tools/seed-beta.js set-founder-email
+ *                                    move the founder's OWN beta account (@yiddiweller, made by
+ *                                    add-account) to its final login email. Nothing else; it
+ *                                    grants no staff access
  *   node tools/seed-beta.js promote-official-admin
  *                                    make that same @atwe account a superadmin, where the
  *                                    official-account access policy permits it (beta today)
@@ -831,6 +835,108 @@ async function doSetOfficialEmail(db, opts) {
   return 0;
 }
 
+/* --------------------------------- the founder's own beta account's email */
+
+/* Corrects ONE beta-owned account's email, and that is the whole of it. No
+   username argument, no email argument, no flag that widens either: the only
+   pair this command knows is hardcoded in seed/beta-account.js section 5d.
+
+   IT IS NOT THE @atwe FLOW AND MUST NOT BE READ AS ONE. That account is the
+   app's own, is being given powers it never had, and is governed by the
+   official-account access policy. This is an ordinary account a person created
+   with add-account, and this writes one column.
+
+   The app's own Settings -> Change email is the right door and stays it. It
+   cannot be used on beta today because SMTP is off there, so it refuses before
+   changing anything rather than stranding somebody on an address they can never
+   verify. Correct behaviour, and the reason this exists. */
+async function doSetFounderEmail(db, opts) {
+  const uname = account.FOUNDER_USERNAME;
+  const target = account.FOUNDER_EMAIL;
+  await ensureSeedTag(db);
+
+  const { row, count } = await account.findFounder(db);
+  if (count > 1) {
+    console.error(`\nREFUSED. ${count} accounts hold @${uname}. Not touching any of them.`);
+    return 1;
+  }
+  const problem = account.founderMismatch(row);
+  if (problem) {
+    console.error(`\nREFUSED. @${uname} cannot be migrated:`);
+    console.error(`  ${problem}`);
+    return 1;
+  }
+
+  const already = account.normalizeEmail(row.email) === account.normalizeEmail(target);
+
+  console.log('\nTHE ACCOUNT THIS WILL MOVE');
+  console.log(`  id                        ${row.id}`);
+  console.log(`  username                  @${row.username}`);
+  console.log(`  name                      ${row.name}`);
+  console.log(`  email now                 ${row.email}`);
+  console.log(`  account type              ${row.account_type}`);
+  console.log(`  seed_tag                  "${row.seed_tag}"  (beta tooling made this account)`);
+  console.log(`  staff access now          ${row.is_admin ? 'superadmin' : 'none'}`
+            + '  <-- and this command changes neither it nor the password');
+
+  if (already) {
+    console.log(`\nNothing to do: it already signs in as ${target}. Nothing was written.`);
+    /* Still worth saying, because the promotion is a SEPARATE event that may not
+       have happened yet even though the email is already right. */
+    if (account.founderIsAdminEmail(process.env) && !row.is_admin) {
+      console.log('\n  NOTE. ADMIN_EMAIL on this service is this address, and this account is not a');
+      console.log('  superadmin yet. The next boot or deploy will promote it (db.js, db.init()).');
+    }
+    return 0;
+  }
+
+  console.log('\nWHAT WILL CHANGE, and nothing else');
+  console.log(`  email                     ${row.email}`);
+  console.log(`                            -> ${target}`);
+  console.log('\n  NOT touched: password_hash, username, name, account type, seed_tag, is_admin,');
+  console.log('  admin_perms, admin_role, status, the verified seal, the headline, the bio, and every');
+  console.log('  Stripe / OAuth / 2FA column. Posts, follows, messages and world immersion are rows in');
+  console.log('  other tables keyed on this account id, which does not change, so none of them move.');
+
+  /* THE ONE CONSEQUENCE THIS COMMAND DOES NOT CAUSE BUT MUST NOT HIDE. */
+  const isAdminEmail = account.founderIsAdminEmail(process.env);
+  console.log(`\n  ADMIN_EMAIL here          ${process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL : '(not set)'}`);
+  if (isAdminEmail) {
+    console.log('\n  THIS IS DELIBERATE FOR THIS ACCOUNT, and it is the opposite of the @atwe rule.');
+    console.log('  ADMIN_EMAIL on this service IS this address, on purpose, because the founder\'s own');
+    console.log('  account is meant to hold superadmin. So, plainly:');
+    console.log('    * this command does NOT write is_admin, and never will');
+    console.log('    * on the NEXT boot or deploy, db.init() runs');
+    console.log('      UPDATE users SET is_admin = true WHERE lower(email) = <ADMIN_EMAIL>');
+    console.log(`    * that will match this account and promote @${uname} to superadmin`);
+    console.log('  That existing mechanism is being reused on purpose. No new one was invented, and');
+    console.log('  there is no way to trigger it from here short of restarting the service.');
+    if (row.is_admin) console.log('  (It is already a superadmin, so the next boot will change nothing.)');
+  } else {
+    console.log('  That is NOT this address, so nothing will promote this account on the next boot.');
+    console.log(`  To give it staff access, use the dashboard's Staff tab.`);
+  }
+
+  if (opts.dryRun) { console.log('\n--dry-run: nothing was written.'); return 0; }
+
+  if (!opts.yes) {
+    const a = await promptVisible(`\nType "move ${uname}" to change its email, anything else to stop: `);
+    if (a !== `move ${uname}`) { console.log('Stopped. Nothing was changed.'); return 1; }
+  }
+
+  let done;
+  try { done = await account.setFounderEmail(db, { env: process.env }); }
+  catch (e) { console.error(`\nREFUSED. ${e.message}`); return 1; }
+
+  console.log(`\n  moved                     @${done.username} (id ${done.id}) now signs in as ${done.email}`);
+  console.log(`\nDONE. Sign in at ${process.env.APP_URL} as @${done.username} (or ${done.email}) with the SAME password as before.`);
+  console.log('No password was changed, no staff access was granted, and no account was created or deleted.');
+  if (isAdminEmail && !done.isAdmin) {
+    console.log(`\nNEXT BOOT: ADMIN_EMAIL matches, so db.init() will make @${done.username} a superadmin.`);
+  }
+  return 0;
+}
+
 /* ------------------------------------------------------------------- reset */
 
 async function doReset(db, opts) {
@@ -914,9 +1020,10 @@ async function main() {
   };
 
   if (!['check', 'status', 'seed', 'reset', 'add-account', 'activate-official',
-        'set-official-email', 'promote-official-admin'].includes(cmd)) {
+        'set-official-email', 'promote-official-admin', 'set-founder-email'].includes(cmd)) {
     console.error(`Unknown command "${cmd}". Use: check | status | seed | add-account | ` +
-                  'activate-official | set-official-email | promote-official-admin | reset');
+                  'activate-official | set-official-email | promote-official-admin | ' +
+                  'set-founder-email | reset');
     return 2;
   }
 
@@ -950,6 +1057,7 @@ async function main() {
     if (cmd === 'add-account') return await doAddAccount(db, opts);
     if (cmd === 'activate-official') return await doActivateOfficial(db, opts);
     if (cmd === 'set-official-email') return await doSetOfficialEmail(db, opts);
+    if (cmd === 'set-founder-email') return await doSetFounderEmail(db, opts);
     if (cmd === 'promote-official-admin') return await doPromoteOfficialAdmin(db, opts);
     return cmd === 'seed' ? await doSeed(db, opts) : await doReset(db, opts);
   } finally {

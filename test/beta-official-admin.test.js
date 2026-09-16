@@ -407,13 +407,44 @@ test('5b. activate-official asks the policy before it hands out a login', () => 
   assert.match(body, /assertOfficialAccessAllowed\(process\.env, 'login'\)/);
 });
 
-test('5c. @yiddiweller needs no special case anywhere', () => {
-  /* Founder accounts other than the built-in one become superadmins the ordinary
-     way, through the dashboard's Staff tab, identically in both environments.
-     Naming one in this machinery would be a second, unaudited door. */
-  for (const [name, code] of [['seed/beta-account.js', MOD_CODE], ['beta-access.js', SVC_CODE], ['tools/seed-beta.js', CLI_CODE]]) {
-    assert.doesNotMatch(code, /yiddiweller/i, `${name} must not name a human account`);
+test('5c. the @atwe machinery names no human account, and grants none one', () => {
+  /* THIS CHECK WAS REFRAMED, and the reason matters more than the check.
+     It used to assert that the three files never contain the string
+     "yiddiweller" at all. That was the right guard while the only thing in them
+     was @atwe's machinery, and it went stale the moment a SEPARATE, narrower
+     thing arrived: a beta-only email correction for the founder's own ordinary
+     account, which grants nothing and is governed by "is this beta", not by the
+     official-account access policy.
+
+     Deleting the assertion would have thrown away what it was protecting, so it
+     asserts that instead: the machinery that hands out @atwe's LOGIN and
+     SUPERADMIN must not know about any human account, because that would be a
+     second unaudited door onto those powers. The founder's own migration is held
+     to its own invariants in test/beta-founder-email.test.js. */
+  const officialFns = ['officialAccessPolicy', 'assertOfficialAccessAllowed', 'officialMismatch',
+                       'activateOfficial', 'promoteOfficialAdmin', 'setOfficialEmail'];
+  for (const name of officialFns) {
+    const at = MOD_CODE.indexOf(`function ${name}`);
+    assert.ok(at > -1, `${name} must exist`);
+    const fn = MOD_CODE.slice(at);
+    const body = fn.slice(0, fn.indexOf('\n}\n') + 1);
+    assert.doesNotMatch(body, /yiddiweller|FOUNDER_/i,
+      `${name} must not know about any human account`);
   }
+  /* Nor may the service layer or the two official CLI commands. */
+  assert.doesNotMatch(SVC_CODE, /yiddiweller|FOUNDER_/i, 'beta-access.js must not name a human account');
+  for (const cmd of ['doActivateOfficial', 'doSetOfficialEmail', 'doPromoteOfficialAdmin']) {
+    const at = CLI_CODE.indexOf(`async function ${cmd}`);
+    const body = CLI_CODE.slice(at, CLI_CODE.indexOf('\nasync function ', at + 1));
+    assert.doesNotMatch(body, /yiddiweller|FOUNDER_/i, `${cmd} must not name a human account`);
+  }
+  /* And the reverse: the founder's own migration must grant nothing. Exactly one
+     statement in the module grants superadmin, and it is @atwe's. */
+  const founder = MOD_CODE.slice(MOD_CODE.indexOf('async function setFounderEmail'));
+  const founderBody = founder.slice(0, founder.indexOf('\n}\n') + 1);
+  assert.doesNotMatch(founderBody, /SET\s+is_admin|admin_perms\s*=|admin_role\s*=/,
+    'the founder migration grants nothing');
+  assert.equal((MOD_CODE.match(/SET\s+is_admin\s*=\s*true/g) || []).length, 1);
 });
 
 /* ═══ 6. AGAINST A REAL DATABASE (opt-in) ════════════════════════════════ */
@@ -623,6 +654,102 @@ if (!h.SKIP && process.env.ATWE_LIVE_BETA_AUTHZ === '1') {
     assert.match(r.body.error || '', /official Atwe account\. It is protected/);
     const after = (await pool.query('SELECT status FROM users WHERE id = $1', [official.id])).rows[0];
     assert.equal(after.status, 'active', 'and it is still able to sign in');
+  });
+
+  /* ── THE FOUNDER'S OWN BETA ACCOUNT ───────────────────────────────────
+     A different account and a different feature, live in THIS file for a
+     measured reason: node --test runs FILES concurrently, and a third live
+     server against one Postgres is what tipped the fixed-delay money tests over
+     once already. Its fixtures are uniquely named so nothing here can collide
+     with the @atwe work above. Offline coverage is test/beta-founder-email.js. */
+
+  let founderId;
+
+  test('live founder setup: an ordinary beta account, as add-account leaves it', async () => {
+    await pool.query(`DELETE FROM users WHERE lower(username) IN ('yiddiweller', 'foundersquatter')`);
+    const { rows } = await pool.query(
+      `INSERT INTO users (name, email, password_hash, username, account_type, seed_tag,
+                          email_verified, headline, bio, verified)
+       VALUES ('Yiddi Weller', 'founder+beta@beta.atwe.com', '$2a$10$livefounderhashaaaaaa',
+               'yiddiweller', 'personal', 'beta', true, 'Building Atwe', 'Testing the beta build.', true)
+       RETURNING id`);
+    founderId = rows[0].id;
+  });
+
+  test('live founder: every case and whitespace variant collides, against a real UNIQUE index', async () => {
+    for (const stored of ['yiddiweller@gmail.com', 'YIDDIWELLER@GMAIL.COM', '  yiddiweller@gmail.com  ',
+                          '\tYiddiWeller@Gmail.com\n', ' yiddiweller@gmail.com﻿']) {
+      await pool.query(`DELETE FROM users WHERE lower(username) = 'foundersquatter'`);
+      await pool.query(
+        `INSERT INTO users (name, email, password_hash, username, account_type)
+         VALUES ('Squatter', $1, 'x', 'foundersquatter', 'personal')`, [stored]);
+      await assert.rejects(() => account.setFounderEmail(pool, { env: BETA_ENV }),
+        /already belongs to @foundersquatter/, `a duplicate stored as ${JSON.stringify(stored)} must refuse`);
+      const still = (await pool.query('SELECT email FROM users WHERE id = $1', [founderId])).rows[0];
+      assert.equal(still.email, 'founder+beta@beta.atwe.com', 'and nothing moved');
+    }
+    await pool.query(`DELETE FROM users WHERE lower(username) = 'foundersquatter'`);
+  });
+
+  test('live founder: the email moves and NOT ONE other column changes', async () => {
+    const before = (await pool.query('SELECT * FROM users WHERE id = $1', [founderId])).rows[0];
+    const out = await account.setFounderEmail(pool, { env: BETA_ENV });
+    assert.equal(out.already, false);
+    const after = (await pool.query('SELECT * FROM users WHERE id = $1', [founderId])).rows[0];
+
+    /* Every column in the table, not a list somebody remembered to write. */
+    const changed = Object.keys(before).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+    assert.deepEqual(changed, ['email'], `only email may change, but these did: ${changed}`);
+
+    assert.equal(after.email, 'yiddiweller@gmail.com', 'stored byte-exact');
+    assert.equal(after.email, account.normalizeEmail(after.email), 'lowercase, no surrounding whitespace');
+    assert.equal(after.password_hash, before.password_hash, 'the beta password is not rotated');
+    assert.equal(after.seed_tag, 'beta', 'still owned by beta tooling, so reset still knows it');
+    assert.equal(after.is_admin, false, 'and the migration itself grants nothing');
+    assert.deepEqual(after.admin_perms, before.admin_perms);
+  });
+
+  test('live founder: db.init()\'s OWN predicate now matches this account', async () => {
+    /* The migration exists so the EXISTING promotion can find it. If the stored
+       value did not satisfy db.init()'s own lower(email) test, the whole point
+       would be lost silently. Spelled exactly as db.js spells it. */
+    const adminEmail = ' YIDDIWELLER@Gmail.com '.trim().toLowerCase();
+    const m = await pool.query('SELECT id FROM users WHERE lower(email) = $1', [adminEmail]);
+    assert.equal(m.rowCount, 1, 'exactly one account matches ADMIN_EMAIL');
+    assert.equal(m.rows[0].id, founderId, 'and it is the founder\'s');
+    /* Still is_admin false: nothing has booted. */
+    const row = (await pool.query('SELECT is_admin FROM users WHERE id = $1', [founderId])).rows[0];
+    assert.equal(row.is_admin, false, 'the promotion happens on boot, not here');
+  });
+
+  test('live founder: running it again writes nothing', async () => {
+    const before = (await pool.query('SELECT * FROM users WHERE id = $1', [founderId])).rows[0];
+    const out = await account.setFounderEmail(pool, { env: BETA_ENV });
+    assert.equal(out.already, true);
+    const after = (await pool.query('SELECT * FROM users WHERE id = $1', [founderId])).rows[0];
+    assert.deepEqual(after, before);
+  });
+
+  test('live founder: production refuses, against the real database', async () => {
+    await assert.rejects(
+      () => account.setFounderEmail(pool, { env: { ATWE_ENV: 'production', APP_URL: 'https://atwe.com',
+                                                   DATABASE_URL: 'postgres://u:p@prod-db.internal:5432/atwe' } }),
+      /does not look like beta/);
+  });
+
+  test('live founder: it refuses a staff state the next boot would widen', async () => {
+    await pool.query(`UPDATE users SET email = 'founder+beta@beta.atwe.com',
+                             admin_perms = '["users"]'::jsonb WHERE id = $1`, [founderId]);
+    await assert.rejects(() => account.setFounderEmail(pool, { env: BETA_ENV }), /staff scopes/);
+    await pool.query(`UPDATE users SET admin_perms = '[]'::jsonb, status = 'suspended' WHERE id = $1`, [founderId]);
+    await assert.rejects(() => account.setFounderEmail(pool, { env: BETA_ENV }), /not active/);
+    const still = (await pool.query('SELECT email FROM users WHERE id = $1', [founderId])).rows[0];
+    assert.equal(still.email, 'founder+beta@beta.atwe.com', 'and neither refusal moved anything');
+    await pool.query(`UPDATE users SET status = 'active' WHERE id = $1`, [founderId]);
+  });
+
+  test('live founder teardown', async () => {
+    await pool.query(`DELETE FROM users WHERE lower(username) IN ('yiddiweller', 'foundersquatter')`);
   });
 
   test('live teardown', async () => {
