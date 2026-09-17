@@ -4587,8 +4587,25 @@ body.light .overlay.ob-screen{background:var(--bg);backdrop-filter:none;-webkit-
 .ob-dots{display:flex;gap:6px;}
 .ob-dot{width:7px;height:7px;border-radius:50%;background:var(--s4);transition:all var(--t-fast) var(--ease);}
 .ob-dot.on{background:var(--accent-fill);width:20px;border-radius:4px;}
-.ob-skip{background:none;border:none;font-size:14.5px;font-weight:600;color:var(--t3);padding:6px 8px;cursor:pointer;}
+.ob-lead{display:flex;align-items:center;gap:10px;min-width:0;}
+/* The same bare chevron every inside page uses to go back, at a real finger size. The
+   negative start margin cancels the button's own padding so the INK lands on the
+   overlay's gutter, not the button's box -- a centred 24px glyph in a 44px box
+   otherwise sits 10px further in than everything below it. */
+.ob-back{display:flex;align-items:center;justify-content:center;width:44px;height:44px;
+  margin-inline-start:-11px;flex-shrink:0;background:none;border:none;padding:0;cursor:pointer;
+  color:var(--t1);-webkit-tap-highlight-color:transparent;transition:opacity var(--t-fast) var(--ease);}
+.ob-back svg{width:24px;height:24px;display:block;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.ob-back:active{opacity:.55;}
+/* "Skip for now" is a quiet text action, never a second primary: the step's own white
+   .ob-next is the one loud button on the screen. min-height gives it the touch floor
+   without changing a pixel of how it reads. */
+.ob-skip{background:none;border:none;font-size:14.5px;font-weight:600;color:var(--t3);
+  padding:6px 8px;min-height:44px;display:flex;align-items:center;cursor:pointer;}
 .ob-skip:active{opacity:.55;}
+/* While the deferral is being written. It comes back on a failure, so this is a busy
+   state rather than a dead end. */
+.ob-skip:disabled{opacity:.5;cursor:default;}
 .ob-body{width:100%;max-width:520px;margin:0 auto;padding:10px 20px 36px;}
 .ob-ai{width:60px;height:60px;border-radius:18px;background:linear-gradient(140deg,var(--accent-fill),var(--accent-fill));display:flex;align-items:center;justify-content:center;margin:8px 0 16px;box-shadow:0 8px 24px rgba(var(--accent-rgb),.3);}
 .ob-ai img{width:34px;height:34px;}
@@ -15512,8 +15529,14 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
 <!-- New-user onboarding — guided first run (goal → topics → people → get started) -->
 <div class="overlay ob-screen hidden" id="onboardingFlow" aria-label="Get started">
   <div class="ob-top">
-    <div class="ob-dots" id="obDots"></div>
-    <button class="ob-skip" id="obSkip" onclick="obFinish(true)">Skip</button>
+    <!-- Back + dots share ONE flex child. .ob-top is justify-content:space-between, so a
+         third child would shove the dots into the middle -- the same trap .tb-brand-lead
+         was created for on the brand row. -->
+    <div class="ob-lead">
+      <button class="ob-back hidden" id="obBack" onclick="obBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="ob-dots" id="obDots"></div>
+    </div>
+    <button class="ob-skip" id="obSkip" onclick="obDefer()">Skip for now</button>
   </div>
   <div class="ob-body">
     <div class="ob-step" data-ob="goal">
@@ -15532,13 +15555,13 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
       <h1 class="ob-h">Follow topics you care about</h1>
       <p class="ob-sub" id="obTopicSub">Pick a few. Your feed fills up with these.</p>
       <div class="ob-chips" id="obTopics"><div class="ob-load">Loading…</div></div>
-      <button class="ob-next" onclick="obStep('people')">Continue</button>
+      <button class="ob-next" onclick="obAdvance('people')">Continue</button>
     </div>
     <div class="ob-step hidden" data-ob="people">
       <h1 class="ob-h">Follow a few people</h1>
       <p class="ob-sub">People in your field. Following them personalizes your feed.</p>
       <div class="ob-people" id="obPeople"><div class="ob-load">Loading…</div></div>
-      <button class="ob-next" onclick="obStep('done')">Continue</button>
+      <button class="ob-next" onclick="obAdvance('done')">Continue</button>
     </div>
     <div class="ob-step hidden" data-ob="done">
       <div class="ob-ai"><img src="/logo-mark.png" alt=""/></div>
@@ -22988,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1863'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1865'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -23356,7 +23379,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, inquiryQuestions: Array.isArray(user.inquiryQuestions) ? user.inquiryQuestions : [], hiring: !!user.hiring, status: user.status || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, onboardStep: user.onboardStep || null, onboardDeferred: !!user.onboardDeferred, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, inquiryQuestions: Array.isArray(user.inquiryQuestions) ? user.inquiryQuestions : [], hiring: !!user.hiring, status: user.status || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -26078,12 +26101,62 @@ function suFinishProfile() { closeOverlay('suProfilePrompt'); openProfileEdit();
 function suGoHomeFromSetup() { closeOverlay('suProfilePrompt'); appTab('home'); }
 
 // ── New-user onboarding (guided first run) ──
-const OB = { intent: null, _active: false };
-// Show the onboarding flow once, for an account that hasn't completed it.
+/* `intent` is the chosen goal, `_view` the step ON SCREEN and `_reached` the furthest
+   step recorded on the server. The last two are different on purpose: Back moves the
+   view and never the record, so going back cannot un-complete anything. */
+const OB = { intent: null, _active: false, _view: null, _reached: null, _sentIntent: null, _deferring: false, _err: null };
+/* Open the flow automatically for an account that has not finished it -- UNLESS they
+   pressed "Skip for now". That is the whole point of the deferred state: they said
+   later, so boot, navigation, a refresh and the next login all leave them alone and the
+   Account re-entry is how they come back. */
 function maybeStartOnboarding(user) {
   user = user || S.user;
   if (!user || !user.username || user.onboarded !== false || OB._active) return;
-  obStart();
+  if (user.onboardDeferred) return;
+  obStart(user.onboardStep);
+}
+/* ── The Account re-entry ──────────────────────────────────────────────────────
+   ONE restrained row, in the Account page's own language (.me-group + .me-row + the
+   two-line .me-secmain the search results already use). Not a promotional card, not a
+   checklist spread across the app: somebody who said "later" needs one obvious way
+   back, and nothing more.
+   The count is DERIVED from the recorded step and is therefore true rather than
+   decorative: 'topics' means the goal is behind them, so one of four is done. */
+const OB_ICON = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+function obStepsDone(u) {
+  u = u || S.user || {};
+  if (u.onboarded !== false) return OB_STEPS.length;
+  const i = OB_STEPS.indexOf(u.onboardStep || 'goal');
+  return i < 0 ? 0 : i;
+}
+function acOnboardCard(u) {
+  u = u || S.user || {};
+  if (!u.username || u.onboarded !== false) return '';
+  const done = obStepsDone(u);
+  const sub = done ? done + ' of ' + OB_STEPS.length + ' steps complete' : 'Takes about a minute';
+  return `<div class="me-group" id="acOnboardCard"><button class="me-row" onclick="obResume()">
+      <span class="me-ic">${OB_ICON}</span>
+      <span class="me-secmain"><span class="me-lbl">Continue setup</span><span class="me-secsub">${escHtml(sub)}</span></span>
+      <svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button></div>`;
+}
+/* Keep a LIVE Account page honest without rebuilding it: finishing removes the row,
+   deferring or advancing updates the count. A no-op when that page is not on screen. */
+function acSyncOnboardCard() {
+  const el = document.getElementById('acOnboardCard');
+  if (!el) return;
+  const u = S.user || {};
+  if (!u.username || u.onboarded !== false) { el.remove(); return; }
+  const sub = el.querySelector('.me-secsub');
+  const done = obStepsDone(u);
+  if (sub) sub.textContent = done ? done + ' of ' + OB_STEPS.length + ' steps complete' : 'Takes about a minute';
+}
+/* The Account re-entry's opener. Deliberately ignores `onboardDeferred` -- this IS the
+   deliberate tap that says "carry on now". */
+function obResume() {
+  const u = S.user || {};
+  if (!u.username || u.onboarded !== false) return;
+  obStart(u.onboardStep);
 }
 
 /* ═══ Feature-intro sheets (Phase 4) ═══════════════════════════════════════
@@ -26269,22 +26342,109 @@ function markIntroSeen(id) {
     .catch(() => { _introRetry[id] = true; });
 }
 const OB_STEPS = ['goal', 'topics', 'people', 'done'];
-function obStart() { OB._active = true; OB.intent = null; OB._topicsLoaded = false; OB._peopleLoaded = false; obStep('goal'); showOverlay('onboardingFlow'); }
+/* Open at the step the server remembers, not blindly at the beginning. The GOAL is
+   restored from the account too, so the Done step's headline and the tips it lists are
+   still the ones that member chose, sessions later. */
+function obStart(step) {
+  const at = OB_STEPS.includes(step) ? step : 'goal';
+  OB._active = true;
+  OB.intent = (S.user && S.user.intent) || null;
+  OB._sentIntent = OB.intent;
+  OB._reached = at;
+  OB._topicsLoaded = false; OB._peopleLoaded = false;
+  obStep(at);
+  showOverlay('onboardingFlow');
+}
 function obStep(name) {
+  OB._view = name;
   document.querySelectorAll('#onboardingFlow .ob-step').forEach(s => s.classList.toggle('hidden', s.getAttribute('data-ob') !== name));
   const i = OB_STEPS.indexOf(name);
   document.getElementById('obDots').innerHTML = OB_STEPS.map((_, k) => `<span class="ob-dot${k === i ? ' on' : ''}"></span>`).join('');
   document.getElementById('obSkip').classList.toggle('hidden', name === 'done');
+  // Goal is the first step, so there is nowhere behind it to go.
+  const back = document.getElementById('obBack');
+  if (back) back.classList.toggle('hidden', i <= 0);
   document.getElementById('onboardingFlow').scrollTop = 0;
   if (name === 'topics') obLoadTopics();
   if (name === 'people') obLoadPeople();
   if (name === 'done') obRenderTips();
 }
+/* Back is NAVIGATION ONLY. It writes nothing, so it cannot duplicate an API call, it
+   cannot mark anything complete, and it cannot move recorded progress backwards. It
+   also does not undo a follow or a topic: those were real, deliberate actions the
+   moment they were tapped, and they stay. */
+function obBack() {
+  const i = OB_STEPS.indexOf(OB._view);
+  if (i <= 0) return;
+  obStep(OB_STEPS[i - 1]);
+}
+/* Move forward AND record it. The view moves first so the flow never waits on the
+   network; the write is best-effort, and a failed one simply means this member resumes
+   a step earlier than they got to, which is the safe direction to be wrong in. */
+async function obAdvance(next, intent) {
+  if (intent) OB.intent = intent;
+  obStep(next);
+  const moved = OB_STEPS.indexOf(next) > OB_STEPS.indexOf(OB._reached);
+  if (moved) OB._reached = next;
+  // Nothing new to say? Then say nothing -- Back and forth must not re-post.
+  if (!moved && OB.intent === OB._sentIntent) return;
+  await obSaveProgress('/api/onboarding/progress');
+}
+async function obSaveProgress(path, extra) {
+  const body = Object.assign({ step: OB._reached || 'goal' }, extra || {});
+  if (OB.intent) body.intent = OB.intent;
+  OB._err = null;
+  try {
+    const r = await API.req('POST', path, body);
+    OB._sentIntent = OB.intent;
+    obSyncUser(r);
+    return r;
+  } catch (e) { OB._err = (e && e.message) || ''; return null; }
+}
+/* Mirror the server's answer onto S.user so every surface that reads it -- boot, the
+   Account re-entry, maybeStartOnboarding -- agrees without another round trip. The
+   SERVER is the source of truth; this is only its echo. */
+function obSyncUser(r) {
+  if (!r || !S.user) return;
+  if (typeof r.onboarded === 'boolean') S.user.onboarded = r.onboarded;
+  if (r.step !== undefined) S.user.onboardStep = r.step || null;
+  if (typeof r.deferred === 'boolean') S.user.onboardDeferred = r.deferred;
+  if (r.intent) S.user.intent = r.intent;
+  try { Accounts.upsert(S.token, S.user); } catch (e) {}
+  acSyncOnboardCard();
+}
+/* "Skip for now". NOT the finish route: onboarded stays false, the progress so far is
+   recorded, and the deferred flag is what stops the overlay reopening by itself.
+
+   IT CLOSES ONLY ON A CONFIRMED WRITE, and that is the whole point of the state. "Later"
+   is a durable decision that has to survive a refresh, a logout and another browser, so
+   the SERVER is the only thing that can grant it. An earlier version mirrored the
+   deferral locally when the request failed -- the overlay closed, the member believed
+   their choice was saved, and onboarding reappeared at them on the next load because
+   nothing durable had been written. The UI may never report a preference as saved that
+   the server refused. So: nothing local is set, the flow stays open at the step they
+   were on, the control comes back, they are told, and they can try again. Progress
+   already written (the goal, the topics they followed) is untouched by a failure here. */
+async function obDefer() {
+  if (!OB._active || OB._deferring) return;
+  OB._deferring = true;
+  const btn = document.getElementById('obSkip');
+  if (btn) btn.disabled = true;
+  const r = await obSaveProgress('/api/onboarding/defer');
+  OB._deferring = false;
+  if (!r) {
+    if (btn) btn.disabled = false;
+    showNotif(OB._err || 'Could not save that. Please try again.');
+    return;   // still _active, still on screen, still at the same step
+  }
+  OB._active = false;
+  closeOverlay('onboardingFlow');
+}
 function obPickGoal(intent) {
   OB.intent = intent;
   const sub = { job: 'Topics in your field help us surface the right roles.', hiring: 'Follow topics to find talent and stay current.', network: 'Follow topics to meet the right people.', sell: 'Follow topics where your buyers hang out.', explore: 'Pick anything that interests you.' }[intent] || 'Pick a few. Your feed fills up with these.';
   const ts = document.getElementById('obTopicSub'); if (ts) ts.textContent = sub;
-  obStep('topics');
+  obAdvance('topics', intent);   // the goal is durable from the moment it is picked
 }
 async function obLoadTopics() {
   const el = document.getElementById('obTopics');
@@ -26342,11 +26502,15 @@ function obRenderTips() {
   rows.push(tip(I.feed, 'Go to your feed', "appTab('home')"));
   document.getElementById('obTips').innerHTML = rows.join('');
 }
-async function obFinish(skip) {
+/* THE ONLY path that completes onboarding. It retires the resume state with it, so the
+   Account re-entry disappears, boot stops offering the flow, and a deferral cannot
+   outlive the thing it deferred. */
+async function obFinish() {
   if (!OB._active) return;
   OB._active = false;
   try { await API.req('POST', '/api/onboarding/finish', OB.intent ? { intent: OB.intent } : {}); } catch (e) { /* best-effort */ }
-  if (S.user) S.user.onboarded = true;
+  if (S.user) { S.user.onboarded = true; S.user.onboardStep = null; S.user.onboardDeferred = false; try { Accounts.upsert(S.token, S.user); } catch (e2) {} }
+  acSyncOnboardCard();
   closeOverlay('onboardingFlow');
   // Refresh the home feed so the topics/people they just followed take effect.
   try { if (typeof acSetFeed === 'function' && document.getElementById('homeScreen')) acSetFeed('foryou'); } catch (e) {}
@@ -35600,6 +35764,11 @@ const PLACES_EXTRA = [
   { l: 'Engine',          sub: 'Discover',  kw: 'search discover explore find engine browse', run: "appTab('search')" },
   { l: 'Atwe AI',         sub: 'Assistant', kw: 'ai assistant ask chatbot help write', run: "appTab('ai')" },
   { l: 'Your profile',    sub: 'Account',   kw: 'profile me my page account', run: "appTab('profile')" },
+  /* Only for somebody who has not finished. The `when` gate is what lets a destination
+     that legitimately comes and goes be indexed at all -- without it, search would offer
+     "Continue setup" to an account with nothing left to set up. */
+  { l: 'Continue setup',  sub: 'Account',   kw: 'onboarding setup finish setting up get started continue welcome first run resume', run: 'obResume()',
+    when: (u) => !!(u && u.username && u.onboarded === false) },
   /* It left ME_HUB_FOOT for the hero's switcher; without this line it would vanish from
      app-wide search, which is exactly the trap the Account-page trim fell into once. */
   { l: 'Add account',     sub: 'Account',   kw: 'add account switch second another sign in accounts change user', run: "acOpenAccountSwitch()" },
@@ -38917,6 +39086,10 @@ function acGoProfileHub() {
         </button>
       </div>
       <div class="me-switch" id="meSwitch"></div>`;
+    /* Onboarding still unfinished? One quiet row, right under the hero -- near the top
+       where it can be seen, rather than buried in one of the section lists. It removes
+       itself the moment onboarding is complete. */
+    html += acOnboardCard(u);
     // Wallet card sits directly under the identity header (design blueprint).
     html += `<button class="me-wallet" onclick="acOpenWallet()">
         <div class="me-wallet-head"><span class="me-wallet-cap">Atwe Wallet</span><svg class="me-wallet-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
@@ -68581,7 +68754,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, inquiryQuestions: Array.isArray(user.inquiryQuestions) ? user.inquiryQuestions : [], hiring: !!user.hiring, status: user.status || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, onboardStep: user.onboardStep || null, onboardDeferred: !!user.onboardDeferred, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, inquiryQuestions: Array.isArray(user.inquiryQuestions) ? user.inquiryQuestions : [], hiring: !!user.hiring, status: user.status || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}

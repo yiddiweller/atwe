@@ -2792,6 +2792,12 @@ function publicUser(row) {
     hasPassword: row.has_password !== false, // false only for Google-only accounts
     onboarded: row.onboarded === undefined ? true : !!row.onboarded, // missing → don't force onboarding
     intent: row.intent || null,
+    /* Resumable onboarding. Both fall back to the SAFE answer when the column was not
+       selected: no step means "start at the beginning" (only ever read for an account
+       that is already onboarded:false), and not-deferred means "nobody asked to be left
+       alone", which is the behaviour that existed before this. */
+    onboardStep: row.onboard_step || null,
+    onboardDeferred: row.onboard_deferred === undefined ? false : !!row.onboard_deferred,
     introSeen: Array.isArray(row.intro_seen) ? row.intro_seen : [], // feature-intro sheets already shown (per-account, cross-device)
     twoFactorEnabled: !!row.totp_enabled,
     idVerified: !!row.id_verified,          // government-ID checked (fights impersonation)
@@ -5907,7 +5913,7 @@ async function sendResetCode(email, name, code) {
    onboarded -- and maybeStartOnboarding() returned on the spot. The first run of a
    new member therefore NEVER started onboarding in-session on any width; only a
    reload did, because boot() asks /api/auth/me, whose row does carry the column. */
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, business_verify_status, business_verify_tier, dm_connections_only, otw_visibility, has_password, onboarded';
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, business_verify_status, business_verify_tier, dm_connections_only, otw_visibility, has_password, onboarded, onboard_step, onboard_deferred';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -6375,7 +6381,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, id_verified, totp_recovery, status, status_reason, suspended_until, admin_perms, admin_role, wallet_frozen FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, id_verified, totp_recovery, status, status_reason, suspended_until, admin_perms, admin_role, wallet_frozen, onboarded, intent, onboard_step, onboard_deferred FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -6506,7 +6512,7 @@ app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => 
   if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
   try {
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
-    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password, onboarded'; // onboarded: see RESET_USER_COLS
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password, onboarded, onboard_step, onboard_deferred'; // onboarded: see RESET_USER_COLS
     const ins = await db.query(
       `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type, oauth_provider)
        VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10, 'google') RETURNING ${cols}`,
@@ -6587,7 +6593,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
   if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
   try {
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
-    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password, onboarded'; // onboarded: see RESET_USER_COLS
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password, onboarded, onboard_step, onboard_deferred'; // onboarded: see RESET_USER_COLS
     const ins = await db.query(
       `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type, oauth_provider)
        VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10, 'apple') RETURNING ${cols}`,
@@ -6612,7 +6618,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, sms_phone, phone_verified, sms_alerts, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, allow_remix, dm_connections_only, otw_visibility, has_password, totp_enabled, id_verified, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, inquiry_questions, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, sms_phone, phone_verified, sms_alerts, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, allow_remix, dm_connections_only, otw_visibility, has_password, totp_enabled, id_verified, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, onboard_step, onboard_deferred, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, inquiry_questions, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -7528,12 +7534,96 @@ app.get('/api/onboarding/people', auth.requireAuth, async (req, res) => {
     res.json({ people: rows.map((u) => ({ ...mapSuggestUser(u), sameIndustry: !!u.same_industry })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load suggestions.' }); }
 });
-// Mark onboarding complete (+ record the goal they picked).
-app.post('/api/onboarding/finish', auth.requireAuth, async (req, res) => {
+/* ─── Resumable onboarding ───────────────────────────────────────────────────
+   The four steps, in order. `onboard_step` holds the FURTHEST unfinished one, so
+   'topics' means the goal is chosen and 'done' means topics and people are behind
+   them. A completed account stores NULL and is never asked again.
+
+   WHAT WAS AND WAS NOT ALREADY DURABLE, because it decides what these routes need
+   to carry. Topics and People were ALREADY persistent and are untouched here: a
+   topic chip writes a real row to `hashtag_follows` the moment it is tapped, and a
+   Follow writes a real `follows` row. Neither is a draft. What had no home at all
+   was the STEP and, until the finish call, the GOAL -- both lived in one JS object
+   and died with the tab. That is the whole gap these two columns close, which is
+   why there is no onboarding-draft table here. */
+const ONBOARD_STEPS = ['goal', 'topics', 'people', 'done'];
+const obStepIndex = (s) => ONBOARD_STEPS.indexOf(String(s || ''));
+/* One statement, so the read and the write cannot race and no transaction is needed:
+   the CASE re-reads the row's OWN stored step inside the same UPDATE and keeps it
+   whenever it is already at or past the incoming one. Progress therefore never moves
+   backwards -- Back is navigation, not un-completing something.
+   `WHERE onboarded = false` is the other half: a member who has finished can never be
+   dragged back into the flow by a stale tab, a retry or anything else. */
+async function onboardAdvance(userId, step, intent, defer) {
+  const { rows } = await db.query(
+    `UPDATE users
+        SET intent = COALESCE($1, intent),
+            onboard_deferred = CASE WHEN $2 THEN true ELSE onboard_deferred END,
+            onboard_step = CASE
+              WHEN COALESCE(array_position($3::text[], onboard_step), 0) >= $4::int THEN onboard_step
+              ELSE $5 END
+      WHERE id = $6 AND onboarded = false
+      RETURNING onboarded, onboard_step, onboard_deferred, intent`,
+    [intent, !!defer, ONBOARD_STEPS, obStepIndex(step) + 1, step, userId]
+  );
+  if (rows[0]) return rows[0];
+  // Already finished: report the real state rather than inventing one.
+  const cur = await db.query('SELECT onboarded, onboard_step, onboard_deferred, intent FROM users WHERE id = $1', [userId]);
+  return cur.rows[0] || null;
+}
+const obStateBody = (r) => ({
+  ok: true,
+  onboarded: !!(r && r.onboarded),
+  step: (r && r.onboard_step) || null,
+  deferred: !!(r && r.onboard_deferred),
+  intent: (r && r.intent) || null,
+});
+/* Record how far they have got. Called as each step is completed, so leaving at any
+   point -- close, navigate, refresh, log out -- comes back to the right place. */
+app.post('/api/onboarding/progress', auth.requireAuth, async (req, res) => {
+  const step = String(req.body.step || '');
+  if (!ONBOARD_STEPS.includes(step)) return res.status(400).json({ error: 'Unknown onboarding step.' });
+  if (req.body.intent !== undefined && req.body.intent !== null && !ONBOARD_INTENTS.includes(req.body.intent)) {
+    return res.status(400).json({ error: 'Unknown goal.' });
+  }
   const intent = ONBOARD_INTENTS.includes(req.body.intent) ? req.body.intent : null;
   try {
-    await db.query('UPDATE users SET onboarded = true, intent = COALESCE($1, intent) WHERE id = $2', [intent, req.user.id]);
-    res.json({ ok: true });
+    const r = await onboardAdvance(req.user.id, step, intent, false);
+    if (!r) return res.status(404).json({ error: 'Account not found.' });
+    res.json(obStateBody(r));
+  } catch (err) { console.error(err); fault(res); }
+});
+/* "Skip for now" -- DELIBERATELY NOT the finish route. It keeps onboarded = false and
+   records that the member asked to be left alone, which is what stops boot reopening
+   the overlay at them while still showing the Account re-entry. Completion has exactly
+   one door, and this is not it. */
+app.post('/api/onboarding/defer', auth.requireAuth, async (req, res) => {
+  const step = req.body.step === undefined || req.body.step === null ? null : String(req.body.step);
+  if (step !== null && !ONBOARD_STEPS.includes(step)) return res.status(400).json({ error: 'Unknown onboarding step.' });
+  if (req.body.intent !== undefined && req.body.intent !== null && !ONBOARD_INTENTS.includes(req.body.intent)) {
+    return res.status(400).json({ error: 'Unknown goal.' });
+  }
+  const intent = ONBOARD_INTENTS.includes(req.body.intent) ? req.body.intent : null;
+  try {
+    const r = await onboardAdvance(req.user.id, step === null ? 'goal' : step, intent, true);
+    if (!r) return res.status(404).json({ error: 'Account not found.' });
+    res.json(obStateBody(r));
+  } catch (err) { console.error(err); fault(res); }
+});
+/* Mark onboarding complete (+ record the goal they picked). THE ONLY PLACE that sets
+   onboarded = true. It also retires the resume state in the same statement, so the
+   Account re-entry disappears and a deferral can never outlive the thing it deferred. */
+app.post('/api/onboarding/finish', auth.requireAuth, async (req, res) => {
+  if (req.body.intent !== undefined && req.body.intent !== null && !ONBOARD_INTENTS.includes(req.body.intent)) {
+    return res.status(400).json({ error: 'Unknown goal.' });
+  }
+  const intent = ONBOARD_INTENTS.includes(req.body.intent) ? req.body.intent : null;
+  try {
+    await db.query(
+      `UPDATE users SET onboarded = true, intent = COALESCE($1, intent),
+                        onboard_step = NULL, onboard_deferred = false
+        WHERE id = $2`, [intent, req.user.id]);
+    res.json({ ok: true, onboarded: true, step: null, deferred: false });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
 });
 
