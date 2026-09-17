@@ -61,14 +61,24 @@ function stripeSigned(body) {
   const v1 = crypto.createHmac('sha256', WH_SECRET).update(`${t}.${raw}`).digest('hex');
   return { raw, sig: `t=${t},v1=${v1}` };
 }
-async function fireWebhook(body) {
+// The shared bounded poller (helpers.js). A money side-effect that is deliberately
+// fire-and-forget must be waited FOR, not slept past.
+const waitFor = H.waitFor;
+
+async function fireWebhookFull(body) {
   const { raw, sig } = stripeSigned(body);
   const res = await fetch(`http://127.0.0.1:${H.port()}/api/billing/webhook`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'stripe-signature': sig },
     body: raw,
   });
-  return res.status;
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+// The webhook's own answer says whether it CLAIMED the event or recognised a
+// duplicate, which is the difference between "the guard fired" and "the balance
+// happened not to move". Most callers only want the status.
+async function fireWebhook(body) {
+  return (await fireWebhookFull(body)).status;
 }
 function invoicePaidEvent(invoiceId, eventId) {
   return {
@@ -129,22 +139,38 @@ test('the fee is booked under the invoice\'s own reference, never an order\'s', 
 test('a re-delivered webhook does not pay the issuer again', opts, async () => {
   const AMOUNT = 8_000;
   const { issuer, id } = await anInvoice(AMOUNT);
-  const evt = invoicePaidEvent(id, 'evt_dup_' + id);
+  // A Stripe event id is globally unique in processed_stripe_events, and `npm test`
+  // runs its FILES concurrently against ONE database. This used to be
+  // 'evt_dup_' + id keyed on an INVOICE id, and money-cardflows.test.js minted the
+  // same string keyed on an EVENT id — so invoice #7 and event #7 collided, whichever
+  // file fired second was answered {duplicate:true}, nobody was paid, and this test
+  // failed on "paid the first time". Nothing was wrong with the app. Mint an id that
+  // cannot collide; firing the SAME one twice is still what proves idempotency.
+  const evt = invoicePaidEvent(id, H.uniq('evt_inv_dup'));
 
-  await fireWebhook(evt);
-  await settle();
+  assert.equal(await fireWebhook(evt), 200, 'the first delivery was accepted');
+  // The webhook awaits recordInvoicePaid and settleInvoiceToIssuer (which awaits both
+  // the credit and the fee) before it answers, so the money is durable by the time
+  // this resolves. Poll anyway rather than sleep: it returns on the first tick when
+  // all is well, and it fails in bounded time rather than passing on a guess.
+  await waitFor(async () => (await balance(issuer.id)) > 0, 15000);
   const once = await balance(issuer.id);
   assert.ok(once > 0, 'paid the first time');
 
-  // Stripe delivers at-least-once: the very same event id arriving again.
-  await fireWebhook(evt);
-  await settle();
+  // Stripe delivers at-least-once: the very same event id arriving again. The claim
+  // is refused inside the request, so nothing is left in flight to wait for -- and
+  // asserting the refusal is stronger than watching a balance fail to move.
+  const again = await fireWebhookFull(evt);
+  assert.equal(again.status, 200);
+  assert.equal(again.body.duplicate, true, 'the second delivery was recognised as a duplicate');
   assert.equal(await balance(issuer.id), once, 'the same event twice pays once');
 
   // And a DIFFERENT event pointing at the same, already-paid invoice — the second
   // guard, recordInvoicePaid's own status check, which is what makes the settle safe.
-  await fireWebhook(invoicePaidEvent(id, 'evt_dup2_' + id));
-  await settle();
+  // That guard also runs inside the request, so there is nothing to wait for here.
+  const fresh = await fireWebhookFull(invoicePaidEvent(id, H.uniq('evt_inv_dup2')));
+  assert.equal(fresh.status, 200);
+  assert.ok(!fresh.body.duplicate, 'a new event id really was claimed, so the status guard is what stopped it');
   assert.equal(await balance(issuer.id), once, 'a fresh event on a paid invoice pays once');
 });
 
