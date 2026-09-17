@@ -4,32 +4,36 @@ const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scr
 const {chromium}=require(SP+'node_modules/playwright-core');
 const {Pool}=require('/home/user/atwe/node_modules/pg');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const QA=require('./qa-fixture');
+// The fixture and the server MUST share a database. This used to be hardcoded, so the
+// account was seeded somewhere the server could not see and the Account page measured
+// as "0 sections, 0 rows, 0px tall". See qa-fixture.js.
+const pool=QA.newPool();
 let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}else{fail++;console.log('  FAIL '+m+(x!==undefined?'\n         '+String(x).slice(0,400):''));}};
 /* The labels the flat list had, straight out of the source. They arrive with literal
    \uXXXX escapes because that is how they are written in the file; the DOM shows the real
    character, so decode before comparing or every curly apostrophe reads as a loss. */
-const ORIG = require('fs').readFileSync('/tmp/me_labels.txt','utf8').split('\n').filter(Boolean)
+const ORIG = require('fs').readFileSync(require('path').join(__dirname,'me-labels.txt'),'utf8').split('\n').filter(Boolean)
   .map(l => l.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16))));
 (async()=>{
-  const mk=async(biz)=>{const email=crypto.randomUUID().slice(0,8)+'@t.local',hash=await auth.hashPassword('x'.repeat(12));
-    const h='mh'+crypto.randomUUID().replace(/-/g,'').slice(0,9);
-    // The completeness pass runs as a BUSINESS ADMIN — the account that can see every
-    // row. A personal non-admin legitimately hides some, so it cannot prove nothing was lost.
-    const {rows}=await pool.query(`INSERT INTO users (name,email,password_hash,username,email_verified,onboarded,account_type,is_admin) VALUES ('M',$1,$2,$3,true,true,$4,$5) RETURNING id`,[email,hash,h,biz?'business':'personal',!!biz]);
-    const t=auth.signToken({id:rows[0].id,email,is_admin:!!biz});
-    await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",[crypto.createHash('sha256').update(t).digest('hex'),rows[0].id]);
-    return t;};
+  const mk=(biz)=>QA.seedAccount(pool,{business:!!biz,admin:!!biz,onboarded:true,prefix:'mh'});
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
   for (const [kind, biz] of [['business', true], ['personal', false]]) {
-    const token=await mk(biz);
+    const acct=await mk(biz);
     const errs=[]; const p=await b.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,hasTouch:true,isMobile:true});
     p.on('pageerror',e=>errs.push(String(e).slice(0,140)));
-    await p.goto('http://localhost:3262',{waitUntil:'domcontentloaded'});
-    await p.evaluate(t=>{localStorage.clear();localStorage.setItem('atwe_token',t);localStorage.setItem('atwe_intro_seen',JSON.stringify(['beam','circles','ai','wallet']));},token);
-    await p.goto('http://localhost:3262',{waitUntil:'domcontentloaded'});
-    await p.waitForTimeout(5200);
-    await p.evaluate(()=>appTab('profile')); await p.waitForTimeout(1800);
+    await QA.signIn(p, acct);                       // throws by name if the session is invisible to the server
+    await p.evaluate(()=>appTab('profile'));
+    // Wait for the Account page to REALLY render. Measuring it before it has rendered is
+    // how "not yet" got reported as "empty".
+    const rendered = await QA.waitUntil(p, ()=>{
+      const s=document.getElementById('acMeScreen'), b=document.getElementById('acMeBody');
+      if(!s||s.classList.contains('hidden')||getComputedStyle(s).display==='none') return false;
+      const r=s.getBoundingClientRect();
+      return r.width>100 && r.height>100 && !!b && b.querySelectorAll('.me-row').length>0;
+    }, null, 20000);
+    ok(rendered, 'the Account page renders before anything is measured on it');
+    if(!rendered) throw new Error('Account page never rendered for @'+acct.username+' - refusing to measure an unrendered page');
     console.log('\n── '+kind+' account ──');
 
     const hub = await p.evaluate(()=>({

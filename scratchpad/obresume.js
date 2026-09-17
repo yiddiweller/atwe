@@ -151,6 +151,21 @@ async function run(b, W) {
     const j = await r.json();
     return { onboarded: j.user.onboarded, step: j.user.onboardStep, deferred: j.user.onboardDeferred, intent: j.user.intent, username: j.user.username };
   };
+  /* The client shows the next step BEFORE the server has been told: obAdvance calls
+     obStep(next) and only then awaits obSaveProgress. So waiting on the UI and then
+     asserting server state is a race, and the first run after a cold start lost it
+     (F0 read step:null on a working app). Poll the server for the durable write, with
+     the same bounded shape as waitFor below. */
+  const waitServer = async (pred, ms) => {
+    const end = Date.now() + (ms || 15000);
+    let last;
+    for (;;) {
+      last = await serverState();
+      if (pred(last)) return last;
+      if (Date.now() > end) return last;
+      await p.waitForTimeout(150);
+    }
+  };
   const waitFor = async (fn, arg, ms) => {
     const end = Date.now() + (ms || 20000);
     while (Date.now() < end) { if (await p.evaluate(fn, arg)) return true; await p.waitForTimeout(200); }
@@ -244,7 +259,7 @@ async function run(b, W) {
   await p.evaluate(() => { const b2 = [...document.querySelectorAll('#onboardingFlow .ob-step')].find((x) => !x.classList.contains('hidden')).querySelector('.ob-next'); if (b2) b2.click(); });
   await p.waitForTimeout(2200);
   s = await p.evaluate(obState);
-  let st = await serverState();
+  let st = await waitServer((x) => x.onboarded === true);
   ok(!s.open && st.onboarded === true, L + 'A9. finishing completes onboarding and closes it', JSON.stringify(st));
   await goAccount();
   let c = await p.evaluate(cardState);
@@ -294,7 +309,7 @@ async function run(b, W) {
   await tap('#obSkip');
   await p.waitForTimeout(2200);
   s = await p.evaluate(obState);
-  st = await serverState();
+  st = await waitServer((x) => x.deferred === true && x.step === 'people');
   ok(!s.open && st.onboarded === false && st.deferred === true && st.step === 'people',
     L + 'C2. skipping during People defers at People', JSON.stringify(st));
 
@@ -346,7 +361,7 @@ async function run(b, W) {
   await p.evaluate(() => { const b2 = [...document.querySelectorAll('#onboardingFlow .ob-step')].find((x) => !x.classList.contains('hidden')).querySelector('.ob-next'); if (b2) b2.click(); });
   await p.waitForTimeout(2400);
   s = await p.evaluate(obState);
-  st = await serverState();
+  st = await waitServer((x) => x.onboarded === true && x.deferred === false && x.step === null);
   ok(!s.open && st.onboarded === true && st.deferred === false && st.step === null,
     L + 'E1. finishing after a resume completes it and retires the resume state', JSON.stringify(st));
   await goAccount();
@@ -369,7 +384,7 @@ async function run(b, W) {
   await newAccount('f');
   await p.evaluate(() => document.querySelector('#onboardingFlow .ob-goal').click());
   await waitOb('topics');
-  st = await serverState();
+  st = await waitServer((x) => x.step === 'topics');
   ok(st.step === 'topics', L + 'F0. the goal is saved before the failure', JSON.stringify(st));
 
   await p.route('**/api/onboarding/defer', (route) => route.fulfill({
