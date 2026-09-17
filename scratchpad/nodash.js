@@ -20,6 +20,7 @@
  * folder, and a relative path here is green standalone and CRASHED in the suite.
  */
 const path = require('path');
+const QA_DEFAULT_DB = require('./qa-fixture').DEFAULT_DB;  // the one place the fallback address lives
 const fs = require('fs');
 const http = require('http');
 const crypto = require('crypto');
@@ -124,7 +125,7 @@ const wait = (port, tries) => new Promise((resolve, reject) => {
 
   const { Pool } = require(ROOT + '/node_modules/pg');
   const auth = require(ROOT + '/auth.js');
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore' });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL || QA_DEFAULT_DB });
   const mkPort = 4700 + (process.pid % 90), srvPort = mkPort + 100;
   await new Promise((r) => mock.listen(mkPort, r));
 
@@ -141,7 +142,7 @@ const wait = (port, tries) => new Promise((resolve, reject) => {
   const srv = spawn('node', [ROOT + '/server.js'], { env: { ...process.env,
     PORT: String(srvPort), ANTHROPIC_API_KEY: 'test-key', ANTHROPIC_BASE_URL: 'http://localhost:' + mkPort,
     JWT_SECRET: process.env.JWT_SECRET,
-    DATABASE_URL: process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore' }, stdio: 'ignore' });
+    DATABASE_URL: process.env.DATABASE_URL || QA_DEFAULT_DB }, stdio: 'ignore' });
   try {
     await wait(srvPort, 80);
 

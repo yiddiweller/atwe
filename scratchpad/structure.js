@@ -2,21 +2,24 @@
 // child of <body>. One missing </div> silently nests dozens of them inside a hidden
 // container, and every button in them stops working with no error in the console.
 process.env.JWT_SECRET = 'scoresecret';
-const crypto = require('crypto');
-const { Pool } = require('/home/user/atwe/node_modules/pg');
-const auth = require('/home/user/atwe/auth');
+const QA = require('./qa-fixture');
 const SP = '/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const { chromium } = require(SP + 'node_modules/playwright-core');
-const pool = new Pool({ connectionString: 'postgres://atwe:atwe@localhost:5432/atwescore' });
+const pool = QA.newPool();
 const B = 'http://localhost:' + (process.env.PORT || 3262);
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ok   ' + m); } else { fail++; console.log('  FAIL ' + m); } };
 (async () => {
-  const { rows } = await pool.query("SELECT id,email FROM users WHERE name='Click Tester' ORDER BY id DESC LIMIT 1");
-  const me = rows[0];
-  const token = auth.signToken({ id: me.id, email: me.email, is_admin: false });
-  await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1') ON CONFLICT DO NOTHING",
-    [crypto.createHash('sha256').update(token).digest('hex'), me.id]);
+  // This used to borrow whatever account clicktest.js had left behind
+  // (SELECT ... WHERE name='Click Tester'), so on a database where that probe had not
+  // run it threw on `me.id` before reaching a single check - a probe silently depending
+  // on another probe having gone first. It seeds its own account now, which is the same
+  // scenario (a signed-in app) with nothing borrowed.
+  const me = await QA.seedAccount(pool, { prefix: 'st' });
+  const token = me.token;
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(token);
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
   const p = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   const errs = [];

@@ -9,9 +9,9 @@ process.env.JWT_SECRET='scoresecret';
 const crypto=require('crypto');
 const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const {chromium}=require(SP+'node_modules/playwright-core');
-const {Pool}=require('/home/user/atwe/node_modules/pg');
+const QA=require('./qa-fixture');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const pool=QA.newPool();
 let pass=0,fail=0; const problems=[];
 const ok=(c,m,d)=>{c?pass++:fail++;if(!c)problems.push(m+(d?' — '+d:''));
   console.log('  '+(c?'ok  ':'FAIL')+' '+m+(d?'   ('+d+')':''));};
@@ -63,6 +63,9 @@ const SURFACES = [
   const t=auth.signToken({id:me.id,email:me.e,is_admin:false});
   await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",
     [crypto.createHash('sha256').update(t).digest('hex'),me.id]);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(t);
   await pool.query('INSERT INTO follows (follower_id,following_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',[me.id,other.id]);
   await pool.query(`INSERT INTO posts (user_id,body,to_main,created_at) VALUES ($1,'A post to scan against.',true,now())`,[other.id]);
   await pool.query(`INSERT INTO at_messages (sender_id,recipient_id,body,created_at) VALUES ($1,$2,'hello',now())`,[other.id,me.id]);

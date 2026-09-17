@@ -9,13 +9,14 @@
  */
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'scoresecret';
 const http = require('http');
+const QA_DEFAULT_DB = require('./qa-fixture').DEFAULT_DB;  // the one place the fallback address lives
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const ROOT = path.resolve(__dirname, '..');
 const { Pool } = require(ROOT + '/node_modules/pg');
 const auth = require(ROOT + '/auth');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore' });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL || QA_DEFAULT_DB });
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ok   ' + m); } else { fail++; console.log('  FAIL ' + m); } };
@@ -87,7 +88,7 @@ const wait = (port, tries) => new Promise((resolve, reject) => {
   const srv = spawn('node', [ROOT + '/server.js'], { env: { ...process.env,
     PORT: String(srvPort), ANTHROPIC_API_KEY: 'test-key', ANTHROPIC_BASE_URL: 'http://localhost:' + mkPort,
     JWT_SECRET: process.env.JWT_SECRET,
-    DATABASE_URL: process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore' }, stdio: 'ignore' });
+    DATABASE_URL: process.env.DATABASE_URL || QA_DEFAULT_DB }, stdio: 'ignore' });
   try {
     await wait(srvPort, 60);
 

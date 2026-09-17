@@ -2,9 +2,9 @@ process.env.JWT_SECRET='scoresecret';
 const crypto=require('crypto');
 const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const {chromium}=require(SP+'node_modules/playwright-core');
-const {Pool}=require('/home/user/atwe/node_modules/pg');
+const QA=require('./qa-fixture');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const pool=QA.newPool();
 let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}else{fail++;console.log('  FAIL '+m+(x!==undefined?'\n         '+String(x).slice(0,420):''));}};
 
 /* Everything acShow() manages. The Atwe AI page is not an AC_SCREENS screen, so acShow
@@ -43,6 +43,9 @@ const FINGERPRINT = () => {
   const {rows}=await pool.query(`INSERT INTO users (name,email,password_hash,username,email_verified,onboarded) VALUES ('L',$1,$2,$3,true,true) RETURNING id`,[email,hash,h]);
   const token=auth.signToken({id:rows[0].id,email,is_admin:false});
   await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",[crypto.createHash('sha256').update(token).digest('hex'),rows[0].id]);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(token);
   for(let i=0;i<6;i++){const {rows:a}=await pool.query(`INSERT INTO users (name,email,password_hash,username,email_verified) VALUES ('A',$1,$2,$3,true) RETURNING id`,[crypto.randomUUID().slice(0,8)+'@t.local',hash,'lx'+crypto.randomUUID().replace(/-/g,'').slice(0,9)]);
     await pool.query("INSERT INTO notifications (user_id,actor_id,type,read) VALUES ($1,$2,$3,false)",[rows[0].id,a[0].id,['follow','like','reply','mention','repost','endorse'][i]]);}
 

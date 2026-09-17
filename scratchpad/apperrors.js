@@ -16,10 +16,12 @@
  */
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'scoresecret';
 const crypto = require('crypto');
+const QA = require('./qa-fixture');
+const QA_DEFAULT_DB = QA.DEFAULT_DB;  // the one place the fallback address lives
 const { chromium } = require(__dirname + '/node_modules/playwright-core');
 const { Pool } = require('/home/user/atwe/node_modules/pg');
 const auth = require('/home/user/atwe/auth');
-const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore' });
+const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || QA_DEFAULT_DB });
 const BASE = process.env.BASE || 'http://localhost:3262';
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) { pass++; console.log('  ok   ' + m); } else { fail++; console.log('  FAIL ' + m + (x !== undefined ? ' :: ' + String(x).slice(0, 200) : '')); } };
@@ -73,6 +75,9 @@ const ok = (c, m, x) => { if (c) { pass++; console.log('  ok   ' + m); } else { 
     const tok = auth.signToken({ id: a.rows[0].id, email: a.rows[0].email, is_admin: true });
     await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",
       [crypto.createHash('sha256').update(tok).digest('hex'), a.rows[0].id]);
+    // The session is only real if the SERVER can see it. Without this a probe on the
+    // wrong database measures a signed-out app and blames the product.
+    await QA.assertServerSees(tok);
     const H = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok };
     const list = await (await fetch(BASE + '/api/admin/client-errors', { headers: H })).json();
     ok(Array.isArray(list.errors) && list.errors.some(x => (x.message || '').includes(tag)), 'the dashboard can read it back');

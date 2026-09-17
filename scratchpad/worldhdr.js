@@ -22,11 +22,13 @@
    Self-tested: putting the 13px back fails 6 checks; freezing the retract fails 2. */
 process.env.JWT_SECRET=process.env.JWT_SECRET||'scoresecret';
 const crypto=require('crypto');
+const QA = require('./qa-fixture');
+const QA_DEFAULT_DB = QA.DEFAULT_DB;  // the one place the fallback address lives
 const SP=__dirname+'/';
 const {chromium}=require(SP+'node_modules/playwright-core');
 const {Pool}=require('/home/user/atwe/node_modules/pg');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:process.env.DATABASE_URL||'postgres://atwe:atwe@localhost:5432/atwescore'});
+const pool=new Pool({connectionString:process.env.DATABASE_URL || QA_DEFAULT_DB});
 let pass=0,fail=0;
 const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}else{fail++;console.log('  FAIL '+m+(x!==undefined?'   :: '+String(x).slice(0,220):''));}};
 const W=['Home','Beam','Engine','Notifications'];
@@ -41,6 +43,9 @@ const T=['follow','like','reply','mention','connection','endorse','repost'];
   const token=auth.signToken({id:me.id,email:me.email,is_admin:false});
   await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",
     [crypto.createHash('sha256').update(token).digest('hex'),me.id]);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(token);
   /* varied types AND distinct actors, or the list groups into one row and there is
      nothing to scroll — the trap this page's notes already record */
   for(let i=0;i<30;i++){const a=await mk('wz','Actor '+i);

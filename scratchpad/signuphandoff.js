@@ -30,12 +30,13 @@
  * on-top checks go red by name.
  */
 const { spawn } = require('child_process');
+const QA_DEFAULT_DB = require('./qa-fixture').DEFAULT_DB;  // the one place the fallback address lives
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const { chromium } = require('playwright-core');
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const PORT = Number(process.env.SH_PORT || 3296); // journeys.js owns 3291
-const DB = process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore';
+const DB = process.env.DATABASE_URL || QA_DEFAULT_DB;
 const BREAK = process.argv.includes('--break');
 
 const WIDTHS = [

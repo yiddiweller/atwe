@@ -19,9 +19,9 @@ const crypto=require('crypto');
 const SP=__dirname+'/';
 const {chromium}=require(SP+'node_modules/playwright-core');
 const {PNG}=require(SP+'node_modules/pngjs');
-const {Pool}=require('/home/user/atwe/node_modules/pg');
+const QA=require('./qa-fixture');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const pool=QA.newPool();
 const PHOTO=require(SP+'mkpng.js')(640,400,[74,96,124]);
 const GUT=14;                       // the phone gutter (--feed-gutter under 768px)
 let pass=0,fail=0;
@@ -58,6 +58,9 @@ function ink(png, y0, y1, side){
   const t=auth.signToken({id:me.id,email:'x',is_admin:false});
   await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",
     [crypto.createHash('sha256').update(t).digest('hex'),me.id]);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(t);
   await pool.query('INSERT INTO follows (follower_id,following_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',[me.id,other.id]);
   await pool.query(`INSERT INTO posts (user_id,body,image,image_w,image_h,to_main,created_at)
     VALUES ($1,'Networking really is just being genuinely curious about people.',$2,640,400,true,now())`,[other.id,PHOTO]);
