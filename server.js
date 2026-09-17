@@ -7438,6 +7438,47 @@ app.post('/api/account/deactivate', auth.requireAuth, rateLimit(5, 60000, 'deact
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not deactivate your account.' }); }
 });
 
+// Personal -> business. ONE account and ONE id: the member keeps their username, email,
+// password, sessions, followers, following, posts, Beam history, notifications, wallet
+// balance and history, reputation and saved content. The ONLY thing that changes is the
+// single `account_type` column, which is what the 26 business guards and the client's
+// `acIsBiz` read. Nothing is created, copied or reset — a personal row already carries
+// every business column at its own safe default (business_hours null, verify status
+// 'none', team_inbox false ...), so it is already a valid, empty business the moment the
+// column flips.
+//
+// There is deliberately NO business -> personal route. A business can hold products,
+// paid orders, money in escrow, confirmed appointments, a team, coupons and reviews, and
+// every one of those surfaces sits behind `account_type = 'business'`. Downgrading would
+// leave those rows in the database with their owner unable to reach them while buyers and
+// customers still hold live commitments, so it is not a safe reversal and is not offered.
+//
+// The server decides the target type. There is no user id, no username and no
+// account_type in the body to supply, so this route can only ever act on the caller.
+app.post('/api/account/convert-to-business', auth.requireAuth, blockImpersonation, rateLimit(10, 60000, 'acct-convert'), async (req, res) => {
+  if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
+  try {
+    const cur = (await db.query(
+      'SELECT account_type, status, status_reason, suspended_until, deactivated FROM users WHERE id = $1',
+      [req.user.id]
+    )).rows[0];
+    if (!cur) return res.status(404).json({ error: 'Account not found.' });
+    if (cur.deactivated) return res.status(403).json({ error: 'Reactivate your account before switching it to a business.' });
+    const blocked = accountStatusBlock(cur);
+    if (blocked) return res.status(403).json({ error: blocked, accountBlocked: true });
+    // Claim-first, like every other state transition here: the guard lives in the WHERE,
+    // so a double-tap or a retry writes exactly once and a repeat can never reset
+    // anything. `account_type` is the only column named.
+    const { rows } = await db.query(
+      "UPDATE users SET account_type = 'business' WHERE id = $1 AND account_type <> 'business' RETURNING id",
+      [req.user.id]
+    );
+    if (!rows[0]) return res.status(409).json({ error: 'This is already a business account.', already: true });
+    logEvent('account', 'account.convert_business', { req, subjectType: 'user', subjectId: req.user.id });
+    res.json({ ok: true, accountType: 'business' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not switch your account to a business.' }); }
+});
+
 // Pro "Pause / Away" mode: mark the account temporarily unavailable with an optional
 // message (moving, on a break, etc.). Unlike hibernate, the account stays signed in and
 // the profile is still reachable — it just shows an "unavailable" banner + the message so
