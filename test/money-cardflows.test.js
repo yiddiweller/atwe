@@ -63,14 +63,24 @@ function signed(body) {
   const v1 = crypto.createHmac('sha256', WH_SECRET).update(`${t}.${raw}`).digest('hex');
   return { raw, sig: `t=${t},v1=${v1}` };
 }
-async function fire(body) {
+// The shared bounded poller (helpers.js). A money side-effect that is deliberately
+// fire-and-forget must be waited FOR, not slept past.
+const waitFor = H.waitFor;
+
+async function fireFull(body) {
   const { raw, sig } = signed(body);
   const res = await fetch(`http://127.0.0.1:${H.port()}/api/billing/webhook`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'stripe-signature': sig },
     body: raw,
   });
-  return res.status;
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+// The webhook's own answer says whether it CLAIMED the event or recognised a
+// duplicate, which is the difference between "the guard fired" and "the balance
+// happened not to move". Most callers only want the status.
+async function fire(body) {
+  return (await fireFull(body)).status;
 }
 const session = (eventId, type, metadata, amountTotal) => ({
   id: eventId, type: 'checkout.session.completed',
@@ -149,16 +159,35 @@ test('a re-delivered ticket event does not pay the host twice', opts, async () =
   const PRICE = 9_000;
   const { host, id } = await anEvent(PRICE);
   const buyer = await H.seedUser();
-  await fire(session('evt_dup_' + id, 'event_ticket', { user_id: String(buyer.id), event_id: String(id) }, PRICE));
-  await settle();
+  // A Stripe event id is globally unique in processed_stripe_events, and `npm test`
+  // runs its FILES concurrently against ONE database. This used to be
+  // 'evt_dup_' + id keyed on an EVENT id, and money-invoice.test.js minted the same
+  // string keyed on an INVOICE id — so event #7 and invoice #7 collided, whichever
+  // file fired second was answered {duplicate:true}, the host was never paid, and
+  // this failed on "paid the first time" with nothing wrong in the app. Mint an id
+  // that cannot collide; firing the SAME one twice is still what proves idempotency.
+  const dup = session(H.uniq('evt_tkt_dup'), 'event_ticket', { user_id: String(buyer.id), event_id: String(id) }, PRICE);
+  assert.equal(await fire(dup), 200, 'the first delivery was accepted');
+  // The webhook awaits the RSVP upsert and settleEventTicketToHost before answering,
+  // so the money is durable once this resolves. Poll anyway rather than sleep: it
+  // returns on the first tick when all is well, and fails in bounded time instead of
+  // passing on a guess about how loaded the machine is.
+  await waitFor(async () => (await balance(host.id)) > 0, 15000);
   const once = await balance(host.id);
   assert.ok(once > 0, 'paid the first time');
 
-  // The same event id again (Stripe is at-least-once) AND a fresh event pointing
-  // at the same, already-paid RSVP — the upsert's own guard covers the second.
-  await fire(session('evt_dup_' + id, 'event_ticket', { user_id: String(buyer.id), event_id: String(id) }, PRICE));
-  await fire(session('evt_dup2_' + id, 'event_ticket', { user_id: String(buyer.id), event_id: String(id) }, PRICE));
-  await settle();
+  // The same event id again (Stripe is at-least-once). The claim is refused inside
+  // the request, so nothing is left in flight to wait for -- and asserting the
+  // refusal is stronger than watching a balance fail to move.
+  const again = await fireFull(dup);
+  assert.equal(again.status, 200);
+  assert.equal(again.body.duplicate, true, 'the second delivery was recognised as a duplicate');
+
+  // And a fresh event pointing at the same, already-paid RSVP — the upsert's own
+  // guard covers that one, and it also runs inside the request.
+  const fresh = await fireFull(session(H.uniq('evt_tkt_dup2'), 'event_ticket', { user_id: String(buyer.id), event_id: String(id) }, PRICE));
+  assert.equal(fresh.status, 200);
+  assert.ok(!fresh.body.duplicate, 'a new event id really was claimed, so the RSVP guard is what stopped it');
   assert.equal(await balance(host.id), once, 'still paid exactly once');
 });
 

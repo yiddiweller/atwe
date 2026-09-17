@@ -43,6 +43,21 @@ let pool = null;
 
 function uniq(p) { return `${p}_${crypto.randomUUID().slice(0, 8)}`; }
 
+// Some money side-effects are deliberately fire-and-forget so a hiccup can never
+// unwind a real sale (settleEscrow takes Atwe's fee with chargePlatformFee(...)
+// .catch(), unawaited). Poll for the durable result rather than sleeping a fixed
+// guess: a fixed sleep is a bet on how loaded the machine is, and this suite runs
+// its files concurrently. The timeout only costs wall-clock when something is
+// genuinely broken -- when the condition holds this returns on the next 100ms tick.
+async function waitFor(fn, timeoutMs = 5000) {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    if (await fn()) return true;
+    if (Date.now() > until) throw new Error('waitFor timed out');
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
 async function api(method, p, { token, body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -137,4 +152,4 @@ async function stopServer() {
 // `port` is exported because one test has to build its own request by hand: the
 // Stripe webhook takes a RAW body plus a signature header, which the `api` helper
 // (which JSON-encodes and sets its own headers) cannot express.
-module.exports = { SKIP, api, seedUser, login, uniq, startServer, stopServer, getPool: () => pool, port: () => PORT };
+module.exports = { SKIP, api, seedUser, login, uniq, waitFor, startServer, stopServer, getPool: () => pool, port: () => PORT };
