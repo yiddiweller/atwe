@@ -9,7 +9,11 @@ const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scr
 const {chromium}=require(SP+'node_modules/playwright-core');
 const {Pool}=require('/home/user/atwe/node_modules/pg');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const QA=require('./qa-fixture');
+// The fixture and the server MUST share a database. This was hardcoded, so the account
+// landed where the server could not see it, the app booted signed out, and all seven
+// "offers Atwe AI" checks failed with "found 0" on a working app. See qa-fixture.js.
+const pool=QA.newPool();
 let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}else{fail++;console.log('  FAIL '+m+(x!==undefined?' :: '+String(x).slice(0,140):''));}};
 const NOPE='zzqq'+crypto.randomUUID().replace(/-/g,'').slice(0,10);
 
@@ -29,29 +33,24 @@ const BARS = [
   ['Emoji picker',        'openEmojiPicker()',       'emojiSearchInput',  false],
 ];
 (async()=>{
-  const email=crypto.randomUUID().slice(0,8)+'@t.local',hash=await auth.hashPassword('x'.repeat(12));
-  const h='sw'+crypto.randomUUID().replace(/-/g,'').slice(0,9);
-  const {rows}=await pool.query(`INSERT INTO users (name,email,password_hash,username,email_verified,onboarded,balance_cents) VALUES ('S',$1,$2,$3,true,true,5000) RETURNING id`,[email,hash,h]);
-  const token=auth.signToken({id:rows[0].id,email,is_admin:false});
-  await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",[crypto.createHash('sha256').update(token).digest('hex'),rows[0].id]);
+  const acct=await QA.seedAccount(pool,{onboarded:true,balanceCents:5000,prefix:'sw'});
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
   const errs=[]; const p=await b.newPage({viewport:{width:390,height:844},deviceScaleFactor:2});
   p.on('pageerror',e=>errs.push(String(e).slice(0,140)));
-  await p.goto('http://localhost:3262',{waitUntil:'domcontentloaded'});
-  await p.evaluate(t=>{localStorage.clear();localStorage.setItem('atwe_token',t);localStorage.setItem('atwe_intro_seen',JSON.stringify(['beam','circles','ai','wallet']));},token);
-  await p.goto('http://localhost:3262',{waitUntil:'domcontentloaded'});
-  await p.waitForTimeout(4800);
+  await QA.signIn(p, acct);   // throws by name if the session is invisible to the server
 
   for (const [label, open, id, want] of BARS) {
     await p.evaluate(()=>{document.querySelectorAll('.overlay:not(.hidden)').forEach(o=>{try{closeOverlay(o.id)}catch(e){}});}).catch(()=>{});
     await p.waitForTimeout(500);
     if (open) { const r = await p.evaluate((c)=>{ try { new Function(c)(); return 'ok'; } catch(e){ return String(e.message); } }, open);
-                if (r !== 'ok') { console.log('  (skip ' + label + ' — ' + r.slice(0,60) + ')'); continue; } }
+                if (r !== 'ok') { ok(false, label + ' opens', r.slice(0,90)); continue; } }
     await p.waitForTimeout(1500);
     if (id) {
       const found = await p.evaluate(([i,q])=>{ const el=document.getElementById(i); if(!el) return false;
         el.value=q; el.dispatchEvent(new Event('input',{bubbles:true})); return true; }, [id, NOPE]);
-      if (!found) { console.log('  (skip ' + label + ' — no #' + id + ' on screen)'); continue; }
+      // A missing bar used to `continue` silently, so a signed-out sweep reported a clean
+      // result. With a proven session every bar in BARS must really be on screen.
+      if (!found) { ok(false, label + ' has its search bar on screen', 'no #' + id); continue; }
     } else {
       await p.evaluate((q)=>{ try { acJobSearch(q); } catch(e) { try { AC._jobQ=q; acLoadJobs(); } catch(e2){} } }, NOPE);
     }

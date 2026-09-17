@@ -6,22 +6,29 @@ const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scr
 const {chromium}=require(SP+'node_modules/playwright-core');
 const {Pool}=require('/home/user/atwe/node_modules/pg');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const QA=require('./qa-fixture');
+// The fixture and the server MUST share a database. This was hardcoded, so the account
+// landed where the server could not see it, the app booted signed out, and every gated
+// surface measured as empty. See qa-fixture.js.
+const pool=QA.newPool();
 let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}else{fail++;console.log('  FAIL '+m+(x!==undefined?'\n         '+String(x).slice(0,400):''));}};
 (async()=>{
-  const email=crypto.randomUUID().slice(0,8)+'@t.local',hash=await auth.hashPassword('x'.repeat(12));
-  const h='ms'+crypto.randomUUID().replace(/-/g,'').slice(0,9);
-  const {rows}=await pool.query(`INSERT INTO users (name,email,password_hash,username,email_verified,onboarded,is_admin) VALUES ('M',$1,$2,$3,true,true,true) RETURNING id`,[email,hash,h]);
-  const token=auth.signToken({id:rows[0].id,email,is_admin:true});
-  await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",[crypto.createHash('sha256').update(token).digest('hex'),rows[0].id]);
+  const acct=await QA.seedAccount(pool,{admin:true,onboarded:true,prefix:'ms'});
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
   const errs=[]; const p=await b.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,hasTouch:true,isMobile:true});
   p.on('pageerror',e=>errs.push(String(e).slice(0,180)));
-  await p.goto('http://localhost:3262',{waitUntil:'domcontentloaded'});
-  await p.evaluate(t=>{localStorage.clear();localStorage.setItem('atwe_token',t);localStorage.setItem('atwe_intro_seen',JSON.stringify(['beam','circles','ai','wallet']));},token);
-  await p.goto('http://localhost:3262',{waitUntil:'domcontentloaded'});
-  await p.waitForTimeout(5200);
-  await p.evaluate(()=>appTab('profile')); await p.waitForTimeout(1600);
+  await QA.signIn(p, acct);                        // throws by name if the session is invisible to the server
+  await p.evaluate(()=>appTab('profile'));
+  // The searchable surface has to be RENDERED and indexed before it can be searched.
+  // Waiting on the bar itself is what turns "not yet" into a wait instead of a crash.
+  const ready = await QA.waitUntil(p, ()=>{
+    const s=document.getElementById('acMeScreen'), i=document.getElementById('acMeSearch');
+    if(!s||s.classList.contains('hidden')||!i) return false;
+    const r=i.getBoundingClientRect();
+    return r.width>50 && r.height>10 && typeof acFindPlaces==='function' && acFindPlaces('wallet',400).length>0;
+  }, null, 20000);
+  ok(ready, 'the Account page and its search bar are rendered and the index is ready');
+  if(!ready) throw new Error('Account search never became ready for @'+acct.username+' - refusing to measure an unrendered surface');
 
   // ---- placement --------------------------------------------------------
   const place = await p.evaluate(()=>{
