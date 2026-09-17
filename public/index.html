@@ -15378,8 +15378,8 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
   <!-- SU birthday (Apple-style Month · Day · Year scroll wheels) -->
   <div class="auth-step hidden" id="suDobStep" role="dialog" aria-label="Date of birth">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('dob')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
-    <h1 class="auth-steptitle">What's your birthday?</h1>
-    <p class="auth-stepsub">We only use this to check if you're old enough.</p>
+    <h1 class="auth-steptitle" id="suDobTitle">What's your birthday?</h1>
+    <p class="auth-stepsub" id="suDobSub">We only use this to check if you're old enough.</p>
     <div class="su-dob-wheels" id="suDobWheels">
       <div class="su-wheel-band"></div>
       <ul class="su-wheel-list su-col-mon" id="suMonList"></ul>
@@ -23011,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1865'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1866'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -25736,6 +25736,13 @@ function suBuildDay() {
   if (SU._dd > days) SU._dd = days; // clamp e.g. Feb 30 → Feb 28/29
 }
 function suDobRender() {
+  const biz = SU.accountType === 'business';
+  const title = document.getElementById('suDobTitle');
+  const sub = document.getElementById('suDobSub');
+  if (title) title.textContent = biz ? 'Your date of birth' : "What's your birthday?";
+  if (sub) sub.textContent = biz
+    ? 'The date of birth of the person setting this account up, not the business. We only use it to check they are old enough.'
+    : "We only use this to check if you're old enough.";
   // First time: build the static columns + wire scroll-settle once.
   if (!document.getElementById('suYearList').children.length) {
     suBuildList('suMonList', 'mon', 12, i => SU_MONTHS[i]);
@@ -30607,6 +30614,45 @@ function appPrompt({ title = '', message = '', confirmText = 'OK', placeholder =
     inp.onkeydown = (e) => { if (e.key === 'Enter') done(inp.value); };
   });
 }
+// Personal -> business, the one door. The server owns the decision: this sends no
+// account type, no id and no username, so it can only ever act on whoever is signed in.
+// Nothing here writes a local "you are a business now" state — S.user is re-read from
+// the server, so the app can never show a business account the server did not agree to.
+async function acConvertToBusiness() {
+  if (!isAccount()) { openLogin(); return; }
+  if (acIsBiz(S.user)) { showNotif('This is already a business account.'); return; }
+  const go = await appConfirm({
+    title: 'Switch to a business account?',
+    message: 'You keep the same @' + (S.user && S.user.username ? S.user.username : 'account') + ', the same followers, posts, messages, wallet and history. '
+           + 'It unlocks selling, a storefront, bookings, a team and hiring. Atwe does not switch a business back to a personal account, so choose this when you are ready.',
+    confirmText: 'Switch to business',
+    danger: false,
+  });
+  if (!go) return;
+  try {
+    await API.req('POST', '/api/account/convert-to-business', {});
+  } catch (e) {
+    // 409 already: the server is telling us it is a business; that is not a failure,
+    // so fall through and re-read. Anything else is a real failure and must say so.
+    if (!(e && e.body && e.body.already)) {
+      showNotif((e && e.message) || 'Could not switch your account. Please try again.');
+      return;
+    }
+  }
+  // Re-read the whole account rather than patching a field: every business-gated
+  // surface reads S.user, and a hand-patched object is how boot hydration drifts.
+  try {
+    const me = await API.req('GET', '/api/auth/me');
+    if (me && me.user) S.user = me.user;
+  } catch (e) {
+    showNotif('Your account was switched. Reopen Atwe to see the business tools.');
+    return;
+  }
+  Store.save();
+  acGoProfileHub();                    // the Account page now shows the business sections
+  showNotif('You are a business account now.');
+}
+
 function appConfirm({ title = 'Are you sure?', message = '', confirmText = 'Delete', danger = true } = {}) {
   return new Promise((resolve) => {
     document.getElementById('cfTitle').textContent = title;
@@ -38841,6 +38887,11 @@ const ME_SECTIONS = [
     { l: 'Who viewed my profile', ic: (_ME_IC.eye || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg>'), run: "acOpenProfileViewers()", kw: 'who viewed my profile visitors views' },
     { l: 'My network', ic: _ME_IC.people, run: "acOpenConnections()", kw: 'my network connections contacts people follow requests' },
     { l: 'Starter packs', ic: _ME_IC.people, run: "acOpenStarterPacks()", kw: 'starter packs follow list curated people' },
+    // The ONE place an account becomes a business. Deliberately not repeated anywhere
+    // else: every other surface that wants it (the team page, selling) points here.
+    { l: 'Switch to a business account', ic: _ME_IC.store, run: "acConvertToBusiness()",
+      kw: 'business account switch convert upgrade company shop store sell selling team hire employer turn into a business',
+      when: (u) => !acIsBiz(u) },
   ] },
   { id: 'money', title: 'Money', ic: _ME_IC.wallet, sub: 'Wallet, payments, invoices and rewards', items: [
     { l: 'Wallet', ic: _ME_IC.wallet, run: "acOpenWallet()", kw: 'wallet balance money cash funds top up cash out withdraw bank payout add money' },
@@ -48099,7 +48150,12 @@ async function acSaveInboxMenu() {
 }
 async function acLoadTeam() {
   const body = document.getElementById('teamBody'); body.innerHTML = acSkelRows(2);
-  if (!acIsBiz(S.user)) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">Only business accounts have a team. Switch to a business account to invite members.</div>'; return; }
+  if (!acIsBiz(S.user)) {
+    body.innerHTML = acEmpty('people', 'A team is a business thing',
+      'Invite people to help you run your shop, answer customers and handle orders. Your account can become a business whenever you are ready.',
+      'Switch to a business account', 'acConvertToBusiness()');
+    return;
+  }
   try {
     const { members } = await API.req('GET', '/api/business/team');
     AC._team = members;
