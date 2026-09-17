@@ -10,15 +10,9 @@ const opts = { skip: H.SKIP ? 'no TEST_DATABASE_URL/DATABASE_URL set' : false };
 
 // Some money side-effects (the platform fee, loyalty points) are deliberately
 // fire-and-forget so a hiccup can never unwind a real sale — poll for them
-// rather than sleeping a fixed guess.
-async function waitFor(fn, timeoutMs = 5000) {
-  const until = Date.now() + timeoutMs;
-  for (;;) {
-    if (await fn()) return true;
-    if (Date.now() > until) throw new Error('waitFor timed out');
-    await new Promise((r) => setTimeout(r, 100));
-  }
-}
+// rather than sleeping a fixed guess. It lives in helpers.js now so the invoice
+// and card-flow files share the one utility instead of each keeping a copy.
+const waitFor = H.waitFor;
 
 before(async () => { if (!H.SKIP) await H.startServer(); });
 after(async () => { await H.stopServer(); });
@@ -231,9 +225,23 @@ test('a protected order holds funds in escrow then releases to the seller on con
   // Buyer confirms receipt → escrow releases to the seller.
   const conf = await H.api('POST', `/api/orders/${orderId}/confirm`, { token: tb, body: {} });
   assert.equal(conf.status, 200, JSON.stringify(conf.body));
+  // settleEscrow commits the status flip and the seller's credit in ONE transaction,
+  // and only THEN takes Atwe's cut — `chargePlatformFee(...).catch(() => {})`, not
+  // awaited. So the seller's balance is 400 for a moment and 396 once the fee lands,
+  // and reading it in the same tick as the response was a race this test lost under
+  // load. Wait for the fee to be RECORDED, which is the last thing the settlement
+  // writes and therefore proves the credit that precedes it already happened.
+  const feeOf = async () => (await pool.query(
+    `SELECT COALESCE(SUM(amount_cents),0)::int AS n FROM company_revenue
+      WHERE source = 'fee' AND ref_id = $1 AND payer_id = $2`, [String(orderId), seller.id])).rows[0].n;
+  await waitFor(async () => (await feeOf()) > 0, 15000);
+  const fee = await feeOf();
   sb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [seller.id]);
   st = await pool.query('SELECT status FROM orders WHERE id = $1', [orderId]);
-  assert.equal(sb.rows[0].balance_cents, 400, 'seller credited on release');
+  assert.ok(fee > 0 && fee < 400, `Atwe took its cut out of the released money (${fee})`);
+  // Conservation, which is stronger than the old fixed 400: a seller who was never
+  // credited, credited twice, or credited the wrong amount all fail here.
+  assert.equal(sb.rows[0].balance_cents + fee, 400, 'seller credited on release, less Atwe\'s fee, with nothing created or lost');
   assert.equal(st.rows[0].status, 'released', 'order released');
 });
 
