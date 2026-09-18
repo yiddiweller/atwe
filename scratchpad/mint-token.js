@@ -8,7 +8,7 @@
  * fallback and a token the server will not accept.
  *
  *   cd /path/to/atwe
- *   DATABASE_URL=postgres://atwe:atwe@localhost:5432/atwescore JWT_SECRET=scoresecret \
+ *   DATABASE_URL=<the one the server was started with> JWT_SECRET=scoresecret \
  *     node scratchpad/mint-token.js <userId>
  *
  * It requires ../auth and ../db by relative path, so it works from anywhere.

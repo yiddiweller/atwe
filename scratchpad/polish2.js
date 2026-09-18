@@ -2,9 +2,9 @@ process.env.JWT_SECRET='scoresecret';
 const crypto=require('crypto');
 const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const {chromium}=require(SP+'node_modules/playwright-core');
-const {Pool}=require('/home/user/atwe/node_modules/pg');
+const QA=require('./qa-fixture');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const pool=QA.newPool();
 let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}else{fail++;console.log('  FAIL '+m+(x!==undefined?' :: '+String(x).slice(0,220):''));}};
 const TYPES=['follow','like','reply','mention','connection','endorse','repost','event_rsvp','qa_answer','team_invite'];
 (async()=>{
@@ -15,6 +15,9 @@ const TYPES=['follow','like','reply','mention','connection','endorse','repost','
   const me=await mk('pl');
   const token=auth.signToken({id:me.id,email:me.email,is_admin:false});
   await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",[crypto.createHash('sha256').update(token).digest('hex'),me.id]);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(token);
   for (let i=0;i<24;i++){ const a=await mk('pa');
     await pool.query("INSERT INTO notifications (user_id,actor_id,type,read,created_at) VALUES ($1,$2,$3,false,now() - ($4||' minutes')::interval)",[me.id,a.id,TYPES[i%TYPES.length],i]); }
 

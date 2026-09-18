@@ -6,9 +6,9 @@ process.env.JWT_SECRET='scoresecret';
 const crypto=require('crypto');
 const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const {chromium}=require(SP+'node_modules/playwright-core');
-const {Pool}=require('/home/user/atwe/node_modules/pg');
+const QA=require('./qa-fixture');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const pool=QA.newPool();
 let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}else{fail++;console.log('  FAIL '+m+(x!==undefined?'\n         '+String(x).slice(0,300):''));}};
 const lum=(r,g,b)=>{const f=c=>{c/=255;return c<=.03928?c/12.92:Math.pow((c+.055)/1.055,2.4);};return .2126*f(r)+.7152*f(g)+.0722*f(b);};
 const ratio=(a,b)=>{const L1=lum(...a),L2=lum(...b);const hi=Math.max(L1,L2),lo=Math.min(L1,L2);return (hi+.05)/(lo+.05);};
@@ -27,6 +27,9 @@ const PHOTO='data:image/png;base64,'+Buffer.from(
     const {rows}=await pool.query(`INSERT INTO users (name,email,password_hash,username,email_verified,onboarded) VALUES ('P',$1,$2,$3,true,true) RETURNING id`,[email,hash,h]);
     const tk=auth.signToken({id:rows[0].id,email,is_admin:false});
     await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",[crypto.createHash('sha256').update(tk).digest('hex'),rows[0].id]);
+    // The session is only real if the SERVER can see it. Without this a probe on the
+    // wrong database measures a signed-out app and blames the product.
+    await QA.assertServerSees(tk);
     /* Seed our OWN photo post rather than hoping the ranker serves one: only 158 of
        250k posts carry an image, so which run gets a photo was pure luck. Read in the
        FOLLOWING scope, which serves your own posts newest-first — For You is

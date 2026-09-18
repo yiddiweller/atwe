@@ -15,6 +15,8 @@
  */
 const BASE = process.env.BASE || 'http://localhost:3262';
 let A = process.env.TOK_A, B = process.env.TOK_B, C = process.env.TOK_C;
+const QA = require('./qa-fixture');
+const QA_DEFAULT_DB = QA.DEFAULT_DB;  // the one place the fallback address lives
 let IDA = +process.env.ID_A, IDB = +process.env.ID_B, IDC = +process.env.ID_C;
 
 /* IT SEEDS ITS OWN THREE ACCOUNTS, and that is the whole reason it now runs at all.
@@ -30,7 +32,7 @@ async function seedThree() {
   const { Pool } = require('/home/user/atwe/node_modules/pg');
   const auth = require('/home/user/atwe/auth');
   const pool = new Pool({ connectionString: process.env.DATABASE_URL
-    || 'postgres://atwe:atwe@localhost:5432/atwescore' });
+    || QA_DEFAULT_DB });
   const hash = await auth.hashPassword('x'.repeat(12));
   const mk = async (n) => {
     const email = crypto.randomUUID().slice(0, 8) + '@t.local';
@@ -47,6 +49,9 @@ async function seedThree() {
     await pool.query(`INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip)
       VALUES ($1,$2,'lastseen','1.1.1.1')`,
       [crypto.createHash('sha256').update(tok).digest('hex'), id]);
+    // The session is only real if the SERVER can see it. Without this a probe on the
+    // wrong database measures a signed-out app and blames the product.
+    await QA.assertServerSees(tok);
     return { id, tok };
   };
   const a = await mk('LS A'), b = await mk('LS B'), c = await mk('LS C');
@@ -84,6 +89,10 @@ const sees = async (tok, id) => {
       IDA = s.a.id; IDB = s.b.id; IDC = s.c.id;
       console.log('  (seeded three accounts of its own: ' + IDA + ' / ' + IDB + ' / ' + IDC + ')');
     } catch (e) {
+      /* A SEEDED ACCOUNT THE SERVER CANNOT SEE IS NOT A MISSING DATABASE, and letting this
+         catch swallow it would turn the one failure worth shouting about into a clean exit
+         0. Re-raise it; everything below would measure a signed-out app. */
+      if (/FIXTURE NOT VISIBLE/.test(String(e.message))) throw e;
       /* no database reachable — skip rather than fail, the way npm test no-ops. This is
          now the ONLY reason it can skip, and it says which one it is. */
       console.log('  skipped — no database to seed against (' + String(e.message).slice(0, 80) + ')');

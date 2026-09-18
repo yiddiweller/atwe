@@ -34,6 +34,8 @@
  *   · break the two-browser negotiation and 4b goes red on "the two really connect".
  */
 const { chromium } = require('playwright-core');
+const QA = require('./qa-fixture');
+const QA_DEFAULT_DB = QA.DEFAULT_DB;  // the one place the fallback address lives
 const path = require('path');
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const BASE = process.env.BASE || 'http://localhost:3262';
@@ -69,6 +71,9 @@ async function seed(name, extra) {
   const tok = auth.signToken({ id, email, is_admin: false });
   await pool.query(`INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'twoperson','1.1.1.1')`,
     [crypto.createHash('sha256').update(tok).digest('hex'), id]);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(tok);
   return { id, tok, username: h, email };
 }
 let PWHASH = null;
@@ -492,7 +497,7 @@ async function realCall(A, B) {
 
 (async () => {
   try { pool = new (require(path.join(ROOT, 'node_modules/pg')).Pool)({
-      connectionString: process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore' });
+      connectionString: process.env.DATABASE_URL || QA_DEFAULT_DB });
     auth = require(path.join(ROOT, 'auth'));
     PWHASH = await auth.hashPassword('x'.repeat(12));
     await pool.query('SELECT 1');
