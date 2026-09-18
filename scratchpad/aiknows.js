@@ -15,6 +15,8 @@
  */
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'scoresecret';
 const fs = require('fs');
+const QA = require('./qa-fixture');
+const QA_DEFAULT_DB = QA.DEFAULT_DB;  // the one place the fallback address lives
 const path = require('path');
 const crypto = require('crypto');
 const ROOT = path.resolve(__dirname, '..');           // probes run with cwd=scratchpad
@@ -24,7 +26,7 @@ const SP = '/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/s
 const { chromium } = require(SP + 'node_modules/playwright-core');
 const FEATURES = require(ROOT + '/features-data.js');
 const B = 'http://localhost:3262';
-const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore' });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL || QA_DEFAULT_DB });
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ok   ' + m); } else { fail++; console.log('  FAIL ' + m); } };
@@ -190,6 +192,9 @@ function loadRetrieval() {
   const token = auth.signToken({ id: rows[0].id, email, is_admin: false });
   await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",
     [crypto.createHash('sha256').update(token).digest('hex'), rows[0].id]);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(token);
 
   const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
   const p = await br.newPage({ viewport: { width: 390, height: 844 } });

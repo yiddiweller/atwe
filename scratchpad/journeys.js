@@ -29,12 +29,13 @@
  * on "the new password signs me in".
  */
 const { spawn } = require('child_process');
+const QA_DEFAULT_DB = require('./qa-fixture').DEFAULT_DB;  // the one place the fallback address lives
 const { chromium } = require('playwright-core');
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const PORT = 3291;
-const DB = process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore';
+const DB = process.env.DATABASE_URL || QA_DEFAULT_DB;
 
 let pass = 0; const fails = [];
 const ok = (c, m, x) => { if (c) { pass++; console.log('  ok   ' + m); } else { fails.push(m + (x !== undefined ? ' :: ' + x : '')); console.log('  FAIL ' + m + (x !== undefined ? ' :: ' + x : '')); } };

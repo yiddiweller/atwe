@@ -15,6 +15,7 @@
  *      routes for months.
  */
 const { chromium } = require('playwright-core');
+const QA = require('./qa-fixture');
 const fs = require('fs');
 const crypto = require('crypto');
 const PORT = process.env.PORT || 3262;
@@ -55,6 +56,9 @@ const chk = (c, m, extra) => { if (c) ok++; else fails.push(m + (extra ? ' — '
   const tok = auth.signToken(u);
   await pool.query('INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
     [crypto.createHash('sha256').update(tok).digest('hex'), u.id, 'admindead', '127.0.0.1']);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(tok);
 
   const b = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });

@@ -21,12 +21,13 @@
  *   DATABASE_URL=... JWT_SECRET=scoresecret node cluster.js
  */
 const { spawn } = require('child_process');
+const QA_DEFAULT_DB = require('./qa-fixture').DEFAULT_DB;  // the one place the fallback address lives
 const crypto = require('crypto');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const { Pool } = require(path.join(ROOT, 'node_modules/pg'));
 
-const DB = process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore';
+const DB = process.env.DATABASE_URL || QA_DEFAULT_DB;
 const SECRET = process.env.JWT_SECRET || 'scoresecret';
 /* auth.js reads JWT_SECRET once, AT REQUIRE TIME. Requiring it before this line means
    the probe mints tokens with the insecure dev fallback while the servers it spawns

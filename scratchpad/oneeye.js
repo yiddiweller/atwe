@@ -12,9 +12,9 @@ const crypto=require('crypto');
 const fs=require('fs');
 const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const {chromium}=require(SP+'node_modules/playwright-core');
-const {Pool}=require('/home/user/atwe/node_modules/pg');
+const QA=require('./qa-fixture');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const pool=QA.newPool();
 let pass=0,fail=0;
 const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}else{fail++;console.log('  FAIL '+m+(x!==undefined?'\n         '+String(x).slice(0,300):''));}};
 const EYE='<ellipse cx="12" cy="12" rx="8.6" ry="7.4"/>';   // the ellipse, verbatim from Beam
@@ -38,6 +38,9 @@ const dims=e=>e?[+e.getAttribute('rx'),+e.getAttribute('ry')]:null;
   const {rows}=await pool.query(`INSERT INTO users (name,email,password_hash,username,email_verified,onboarded) VALUES ('Eye',$1,$2,$3,true,true) RETURNING id`,[email,hash,h]);
   const uid=rows[0].id; const t=auth.signToken({id:uid,email,is_admin:false});
   await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",[crypto.createHash('sha256').update(t).digest('hex'),uid]);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(t);
   for(let i=0;i<3;i++) await pool.query(`INSERT INTO posts (user_id,body,to_main,created_at) VALUES ($1,$2,true,now()-($3||' seconds')::interval)`,[uid,'Eye probe '+i,i]);
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
   // 2) the post's views icon really renders the new eye

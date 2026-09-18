@@ -11,9 +11,9 @@ process.env.JWT_SECRET='scoresecret';
 const crypto=require('crypto');
 const SP='/tmp/claude-0/-home-user-atwe/f20aa7b3-6669-5835-9ba8-518900db6c09/scratchpad/';
 const {chromium}=require(SP+'node_modules/playwright-core');
-const {Pool}=require('/home/user/atwe/node_modules/pg');
+const QA=require('./qa-fixture');
 const auth=require('/home/user/atwe/auth');
-const pool=new Pool({connectionString:'postgres://atwe:atwe@localhost:5432/atwescore'});
+const pool=QA.newPool();
 const PROBE=`(()=>{
   const eff=(e,ps)=>{const bb=e.getBoundingClientRect(),cs=getComputedStyle(e,ps||null);
     const parts=cs.borderRadius.split('/')[0].trim().split(/\\s+/);
@@ -43,6 +43,9 @@ const PROBE=`(()=>{
   const {rows}=await pool.query(`INSERT INTO users (name,email,password_hash,username,email_verified,onboarded,balance_cents) VALUES ('Yiddi Weller',$1,$2,$3,true,true,17813) RETURNING id`,[email,hash,h]);
   const uid=rows[0].id; const t=auth.signToken({id:uid,email,is_admin:false});
   await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",[crypto.createHash('sha256').update(t).digest('hex'),uid]);
+  // The session is only real if the SERVER can see it. Without this a probe on the
+  // wrong database measures a signed-out app and blames the product.
+  await QA.assertServerSees(t);
   for(let i=0;i<5;i++) await pool.query(`INSERT INTO posts (user_id,body,to_main,created_at) VALUES ($1,$2,true,now()-($3||' seconds')::interval)`,[uid,'Sweep post '+i,i]);
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
   const p=await b.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,hasTouch:true,isMobile:true});

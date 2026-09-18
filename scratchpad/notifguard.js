@@ -23,6 +23,8 @@
  */
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'scoresecret';
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
+const QA = require('./qa-fixture');
+const QA_DEFAULT_DB = QA.DEFAULT_DB;  // the one place the fallback address lives
 const REPO = f => path.join(__dirname, '..', f);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) { pass++; console.log('  ok   ' + m); }
@@ -99,7 +101,7 @@ ok(missing.length === 0, 'every destination in the table is a function that exis
     auth = require(REPO('auth'));
   } catch (e) { console.log('\n  (live pass unavailable here: ' + e.message.slice(0, 60) + ')'); return done(); }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://atwe:atwe@localhost:5432/atwescore' });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL || QA_DEFAULT_DB });
   let uid, aid, token, b;
   try {
     const mk = async (tag) => {
@@ -114,6 +116,9 @@ ok(missing.length === 0, 'every destination in the table is a function that exis
     token = auth.signToken({ id: uid, email: 'x@t.local', is_admin: false });
     await pool.query("INSERT INTO auth_sessions (token_hash,user_id,user_agent,ip) VALUES ($1,$2,'t','1.1.1.1')",
       [crypto.createHash('sha256').update(token).digest('hex'), uid]);
+    // The session is only real if the SERVER can see it. Without this a probe on the
+    // wrong database measures a signed-out app and blames the product.
+    await QA.assertServerSees(token);
 
     // One row per family, so a pass means the table really is wired end to end.
     const CASES = [
