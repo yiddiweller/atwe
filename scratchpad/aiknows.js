@@ -50,7 +50,25 @@ const ASKS = [
    NOTHING AT ALL is only right when the question shares no vocabulary with Atwe —
    "email", "capital" and "translate" are all real Atwe words, so a question using one
    legitimately matches something. What must always hold is that an off-topic question
-   is never BURIED: a couple of stray rows the model can ignore, not a wall of them. */
+   is never BURIED: a couple of stray rows the model can ignore, not a wall of them.
+
+   THE BOUND IS A FRACTION OF THE BLOCK'S OWN CAP, NOT A FROZEN NUMBER. It used to be a
+   literal 3, and it went red the day the catalogue grew: `capabilityBlock` keeps every
+   feature matching the question's RAREST word whatever it scores (deliberately — that
+   word is the question), so the count of rows an "email" question returns is simply how
+   many features mention email, and it rises as the product does. Measured on the parent
+   commit: 611 features gave 3 rows, 612 gave 4, with nothing about the ranker changed.
+   A number tuned to one day's catalogue is not the rule; the rule is that off-topic must
+   stay far short of the cap, and CAP_SEND is where that cap already lives.
+
+   ONE THING THIS SURFACED IS WORTH KNOWING AND IS NOT FIXED HERE. Two of the four rows
+   an email question returns are OPERATOR console commands from tools/seed-beta.js
+   ("Official Atwe account login email", "Beta founder account email migration"), which
+   no member and no staffer can reach from any screen. They sit in features-data.js as
+   ordinary `inv` rows because that file has exactly two states by the owner's own
+   instruction, and adding a third to hide them is explicitly forbidden. So the catalogue
+   cannot currently tell "a thing a member can do" from "a thing an operator can run".
+   Recorded, deliberately not worked around here: it needs a decision, not a patch. */
 const OFF_TOPIC_SILENT = ['write me a poem about the sea'];
 const OFF_TOPIC_QUIET = ['summarise this email for me', 'what is the capital of France', 'what is 15 percent of 240'];
 
@@ -148,9 +166,21 @@ function loadRetrieval() {
   for (const q of OFF_TOPIC_SILENT) {
     ok(!R.capabilityBlock([{ role: 'user', content: q }], false), 'nothing at all injected for: ' + q);
   }
+  const OFF_TOPIC_MAX = Math.floor(R.CAP_SEND / 4);   // a quarter of what the block may ever send
   for (const q of OFF_TOPIC_QUIET) {
     const n = (R.capabilityBlock([{ role: 'user', content: q }], false) || '').split('\n').filter((l) => l.startsWith('- ')).length;
-    ok(n <= 3, 'an off-topic question is not buried (' + n + ' rows): ' + q);
+    ok(n <= OFF_TOPIC_MAX, 'an off-topic question is not buried (' + n + ' of at most ' + OFF_TOPIC_MAX + ' rows): ' + q);
+  }
+  /* …and it must still be plainly quieter than a question that IS about Atwe. Without
+     this the bound above could be met by a ranker that had simply stopped retrieving. */
+  {
+    const rows = (q) => (R.capabilityBlock([{ role: 'user', content: q }], false) || '').split('\n').filter((l) => l.startsWith('- ')).length;
+    const onTopic = ASKS.map(([q]) => rows(q));
+    const offTopic = OFF_TOPIC_QUIET.map(rows).concat(OFF_TOPIC_SILENT.map(rows));
+    const busiest = Math.max(...onTopic);
+    ok(busiest > Math.max(...offTopic),
+       'a question that IS about Atwe retrieves more than any off-topic one ('
+       + busiest + ' vs ' + Math.max(...offTopic) + ')');
   }
   // A member must never be shown the dashboard's own tools.
   /* The function existing proves nothing — it has to be WIRED into the route that

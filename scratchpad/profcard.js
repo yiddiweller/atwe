@@ -22,16 +22,34 @@
 //
 // Self-test: revert .ac-prof-banner to full-bleed, or .ac-icon-btn to transparent,
 // and this goes red.
+//
+// IT SEEDS THE PROFILE IT LOOKS AT, and that is not tidiness. It used to open
+// @emptytester, an account NOTHING in this repo has ever created: it existed only in
+// whichever database a long-gone session left behind. On any other database the page
+// rendered its not-found state, every selector came back null, and the probe died with
+// `Cannot read properties of null` before a single check ran. A crash is not a verdict.
+// The account is deliberately EMPTY (no banner photo, no posts) because the geometry
+// being measured is the card's own, and a photo would make the numbers depend on which
+// photo. If the profile ever fails to render again, that is now a NAMED failure.
 const { chromium } = require('playwright-core');
 const fs = require('fs');
+const QA = require('./qa-fixture');
 const PORT = process.env.PORT || 3262;
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 let ok = 0; const fails = [];
 const chk = (c, m) => { if (c) ok++; else fails.push(m); };
 const near = (a, b, t, m) => chk(Math.abs(a - b) <= t, `${m} (${a} vs ${b})`);
+/* The profile must really be on screen before anything is measured. Without this a
+   fixture problem arrives as `Cannot read properties of null` from whichever selector
+   happened to be read first, which says nothing about what went wrong. */
+const profileUp = (p) => p.evaluate(() => !!document.querySelector('#acProfileBody .ac-prof-banner'));
 
 (async () => {
   const tok = fs.readFileSync('/tmp/tok.txt', 'utf8').trim();
+  const pool = QA.newPool();
+  const subject = await QA.seedAccount(pool, { prefix: 'pc' });
+  await QA.assertServerSees(subject.token, subject.username);
+  const HANDLE = subject.username;
   const b = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
 
   for (const theme of ['black', 'light']) {
@@ -40,8 +58,11 @@ const near = (a, b, t, m) => chk(Math.abs(a - b) <= t, `${m} (${a} vs ${b})`);
     await p.addInitScript(([t, th]) => { localStorage.setItem('atwe_token', t); localStorage.setItem('atwe_theme', th); }, [tok, theme]);
     await p.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(3500);
-    await p.evaluate(() => acGoProfile('emptytester'));
+    await p.evaluate((h) => acGoProfile(h), HANDLE);
     await p.waitForTimeout(2200);
+    const up = await profileUp(p);
+    chk(up, `${theme}: the profile @${HANDLE} rendered at all`);
+    if (!up) { await ctx.close(); continue; }
 
     const m = await p.evaluate(() => {
       const box = s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect();
@@ -88,8 +109,15 @@ const near = (a, b, t, m) => chk(Math.abs(a - b) <= t, `${m} (${a} vs ${b})`);
     await p.addInitScript(t => localStorage.setItem('atwe_token', t), tok);
     await p.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(3500);
-    await p.evaluate(() => acGoProfile('emptytester'));
+    await p.evaluate((h) => acGoProfile(h), HANDLE);
     await p.waitForTimeout(2500);
+    /* Recording the failure is not enough: everything below reads the banner and the
+       notch, so it must STOP here rather than crash into a null. A crash is not a
+       verdict — that is the whole reason this probe was red. */
+    const filletReady = await profileUp(p);
+    chk(filletReady, `the profile @${HANDLE} rendered for the fillet measurements`);
+    if (!filletReady) { await ctx.close(); }
+    else {
 
     /* (a) THE TWO BLENDS MUST BE THE SAME SIZE. The founder read the left one as
        visibly bigger, and it was: the cut meets the bottom edge almost square-on but
@@ -179,6 +207,7 @@ const near = (a, b, t, m) => chk(Math.abs(a - b) <= t, `${m} (${a} vs ${b})`);
        un-filleted shape genuinely cannot reach, not to the tangent point. */
     chk(withFillet.rightFromLeft > plain.rightFromLeft + 3.5,
       `and carries further along the bottom edge (${withFillet.rightFromLeft.toFixed(1)} vs ${plain.rightFromLeft.toFixed(1)})`);
+    }
     await ctx.close();
   }
 
@@ -190,7 +219,7 @@ const near = (a, b, t, m) => chk(Math.abs(a - b) <= t, `${m} (${a} vs ${b})`);
     await p.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(3500);
     await p.route('**/api/social/profile/**', async r => { await new Promise(z => setTimeout(z, 6000)); r.abort(); });
-    await p.evaluate(() => acGoProfile('emptytester'));
+    await p.evaluate((h) => acGoProfile(h), HANDLE);
     await p.waitForTimeout(700);
     const s = await p.evaluate(() => {
       const e = document.querySelector('#acProfileBody .skel'); if (!e) return null;
@@ -212,7 +241,7 @@ const near = (a, b, t, m) => chk(Math.abs(a - b) <= t, `${m} (${a} vs ${b})`);
     await ctx.close();
   }
 
-  await b.close();
+  await b.close(); await pool.end();
   if (fails.length) { console.log('== FAILS ==\n' + fails.map(f => '  FAIL ' + f).join('\n')); }
   console.log(`ok checks: ${ok}`);
   console.log(fails.length ? `${fails.length} FAILED` : 'ALL PASS');

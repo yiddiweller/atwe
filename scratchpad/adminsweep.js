@@ -25,6 +25,18 @@
  *     reported the 14-language row on the Wording tab as broken when it behaves exactly
  *     as designed. Only a PAGE that scrolls sideways is a fault.
  *
+ *   • A VIEW THE DASHBOARD DELIBERATELY GATES OFF IS NOT A BROKEN VIEW. It swept every
+ *     key of NAV_TITLES, but `switchTab` opens with `if (!canSee(v)) return;` — so on a
+ *     deployment that is not beta, `switchTab('betaaccess')` does nothing at all: the
+ *     content column still holds the PREVIOUS view, which is why "opens", "no JS error"
+ *     and "not showing its failure line" all passed while "actually asked the server"
+ *     failed. The gate is correct and stays: Beta Access is beta-only by design, the
+ *     sidebar item is absent off beta, and every route behind it re-runs the real
+ *     environment guard server-side. So this probe now sweeps the views the dashboard
+ *     ACTUALLY offers, names the ones it skipped, and asserts each skip is the gate
+ *     doing its job rather than a view that quietly went missing. Where the deployment
+ *     IS beta, Beta Access is swept like everything else.
+ *
  * NO EXCEPTIONS. D2 (the destructive red button, once 3.22:1) was decided in build 1836:
  * the app has --red for identity and --red-fill (#D4002D, 5.47:1 under white) for a solid
  * destructive button, exactly as it now has --accent and --accent-fill. Nothing here is
@@ -164,8 +176,32 @@ const SCORE = `(${function () {
     await p.addInitScript((t) => localStorage.setItem('atwe_token', t), tok);
     await p.goto(`http://localhost:${PORT}/admin.html`, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(2500);
-    const tabs = await p.evaluate(() => Object.keys(NAV_TITLES));
-    chk(tabs.length > 40, `${label}: the dashboard names its views`, String(tabs.length));
+    /* Ask the DASHBOARD what it offers this staffer on this deployment, rather than
+       assuming the whole of NAV_TITLES is reachable. `betaEnv` is read straight from the
+       page so the probe and the dashboard can never disagree about which environment
+       this is. */
+    const env = await p.evaluate(() => ({
+      all: Object.keys(NAV_TITLES),
+      open: Object.keys(NAV_TITLES).filter((v) => canSee(v)),
+      betaEnv: typeof BETA_ENV === 'boolean' ? BETA_ENV : null,
+      superadmin: !!(ME && ME.superadmin),
+    }));
+    const tabs = env.open;
+    const gated = env.all.filter((v) => !tabs.includes(v));
+    chk(env.all.length > 40, `${label}: the dashboard names its views`, String(env.all.length));
+    chk(env.superadmin, `${label}: signed in with the access that opens every view`);
+    /* EVERY SKIP MUST BE EXPLAINED. Beta Access is the one view with an environment gate;
+       anything else disappearing from a superadmin's dashboard is a fault, not a policy. */
+    chk(gated.every((v) => v === 'betaaccess'),
+        `${label}: the only view gated off a superadmin is the beta-only one`,
+        gated.join(', ') || 'none');
+    /* …and it is gated for the RIGHT reason. If the environment flag ever stops being
+       what decides this, the skip stops being explained and this fails by name. */
+    chk(env.betaEnv === false ? gated.includes('betaaccess')
+      : env.betaEnv === true ? tabs.includes('betaaccess') : false,
+        `${label}: Beta Access follows the environment (betaEnv=${env.betaEnv})`,
+        'swept: ' + tabs.includes('betaaccess'));
+    if (gated.length) console.log(`  (${label}: ${gated.join(', ')} — gated off this deployment, not swept)`);
 
     for (const t of tabs) {
       errs = []; reqs = [];
