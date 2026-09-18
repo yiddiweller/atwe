@@ -11851,7 +11851,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 @media(hover:hover){.xp-grid-tiles .xp-tile:hover .xp-tile-ic{background:rgba(var(--accent-rgb),.22);}}
 .xp-grid-tiles .xp-tile-l{font-size:11.5px;font-weight:700;color:var(--t1);-webkit-line-clamp:2;min-height:0;}
 /* NEAR YOU — location prompt + nearby-business rows (gold rating · distance · open) */
-.ny-ask{display:flex;align-items:center;gap:12px;background:var(--s1);border-radius:16px;padding:14px 16px;margin-bottom:4px;}
+.ny-ask{display:flex;align-items:center;gap:12px;background:var(--s1);border-radius:var(--set-card-r);padding:14px 16px;margin-bottom:4px;}
 .ny-ask-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
 .ny-ask-tx b{font-size:14px;font-weight:700;color:var(--t1);}
 .ny-ask-tx span{font-size:12.5px;color:var(--t3);line-height:1.35;}
@@ -23011,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1866'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1867'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
