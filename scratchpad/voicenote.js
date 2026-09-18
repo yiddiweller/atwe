@@ -84,29 +84,58 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   });
   say(play && !play.err && play.t > 0.2 && !play.paused,
     `it actually plays after a reload (${JSON.stringify(play)})`);
+  /* THE THREE FAILURE SCENARIOS EACH GET THEIR OWN FRESH NOTE, and that is the whole
+     repair. They used to mutate the LIVE note in the thread and re-run the binder on
+     it, which broke them in two different ways:
+
+       • the note had just been PLAYED, so the previous binding's rAF clock was still
+         running on the same element — and the moment markDead wrote "Can't play" that
+         clock painted "0:00" straight back over it. Measured: class vn-dead correctly
+         added, label "0:00". The product was right; the probe was reading a label two
+         bindings were fighting over.
+       • the network scenario took `all[1] || all[0]`, i.e. the SAME note the previous
+         scenario had just poisoned when the thread holds only one. Its audio.error was
+         already 4, so re-binding re-marked it dead and the synthetic error event proved
+         nothing. How many notes the thread happens to hold depends on how many times
+         this probe has run before, which is why it passed in some runs and not others.
+
+     So: take a PRISTINE clone before anything is touched, and stamp a fresh copy for
+     each scenario into an off-screen lab. A fresh element carries no old closure, and
+     the live note is never disturbed. */
+  const lab = await p.evaluate(() => {
+    const live = [...document.querySelectorAll('#acThread .msg-voice')].pop();
+    if (!live) return false;
+    const host = document.createElement('div');
+    host.id = 'vnLab';
+    host.style.cssText = 'position:fixed;left:-9999px;top:0;width:300px;';
+    document.body.appendChild(host);
+    window.__vnProto = live.cloneNode(true);   // pristine: nothing has mutated it yet
+    return true;
+  });
+
   /* A note this device CANNOT DECODE must say so on its own, before anyone taps it.
      Notes recorded before the conversion shipped are Opus, and an iPhone has no Opus
      decoder at all — they cannot be rescued on the device, so the only honest thing is
      to stop them looking identical to a working note (a play button and 0:00, which is
      what "some voice notes still don't work" felt like). */
-  const dead = await p.evaluate(async () => {
-    const vn = document.querySelector('#acThread .msg-voice');
-    if (!vn) return { skip: true };
+  const dead = !lab ? { skip: true } : await p.evaluate(async () => {
+    const host = document.getElementById('vnLab');
+    const vn = window.__vnProto.cloneNode(true); host.appendChild(vn);
     const a = vn.querySelector('.vn-audio');
     a.src = 'data:audio/webm;base64,' + btoa('not actually audio at all');
-    vn._vnWired = false; a.dataset.dur = '';
-    _bindVoiceNotes(document.getElementById('acThread'));
+    a.dataset.dur = '';
+    _bindVoiceNotes(host);
     a.load();
-    await new Promise(r => setTimeout(r, 1200));
+    await new Promise(r => setTimeout(r, 1400));
     return { dead: vn.classList.contains('vn-dead'), label: vn.querySelector('.vn-time').textContent,
              code: a.error && a.error.code };
   });
   say(dead.skip || dead.dead, `an undecodable note marks itself unplayable on load (error ${dead.code})`);
   say(dead.skip || /can.t play/i.test(dead.label), `and says so instead of showing 0:00 ("${dead.label}")`);
 
-  const toast = await p.evaluate(async () => {
+  const toast = !lab ? null : await p.evaluate(async () => {
     document.querySelectorAll('.notif').forEach(n => n.remove());
-    const btn = document.querySelector('#acThread .msg-voice .vn-play'); if (!btn) return null;
+    const btn = document.querySelector('#vnLab .msg-voice.vn-dead .vn-play'); if (!btn) return null;
     btn.click();
     await new Promise(r => setTimeout(r, 400));
     const n = document.querySelector('.notif');
@@ -116,14 +145,19 @@ const BASE = process.env.BASE || 'http://localhost:3262';
 
   /* …but a NETWORK error is a flaky connection, not a broken file, and must stay
      retryable. Only MEDIA_ERR_SRC_NOT_SUPPORTED / DECODE may mark a note dead. */
-  const net = await p.evaluate(() => {
-    const all = [...document.querySelectorAll('#acThread .msg-voice')];
-    const vn = all[1] || all[0]; if (!vn) return { skip: true };
-    vn.classList.remove('vn-dead');
-    vn._vnWired = false; _bindVoiceNotes(document.getElementById('acThread'));
-    vn.querySelector('.vn-audio').dispatchEvent(new Event('error'));  // no audio.error set
-    return { dead: vn.classList.contains('vn-dead') };
+  const net = !lab ? { skip: true } : await p.evaluate(async () => {
+    const host = document.getElementById('vnLab');
+    const vn = window.__vnProto.cloneNode(true); host.appendChild(vn);
+    _bindVoiceNotes(host);
+    await new Promise(r => setTimeout(r, 900));
+    const a = vn.querySelector('.vn-audio');
+    // The premise: this note is FINE. If it already carries a decode error the check
+    // would be measuring the previous scenario, not a network blip.
+    const preErr = a.error && a.error.code;
+    a.dispatchEvent(new Event('error'));                // no audio.error set
+    return { preErr, dead: vn.classList.contains('vn-dead') };
   });
+  say(net.skip || net.preErr == null, `the network scenario starts from a HEALTHY note (error ${net.preErr === undefined ? '-' : net.preErr})`);
   say(net.skip || net.dead === false, 'a network error leaves the note retryable — only an undecodable file is marked dead');
 
   say(errs.length === 0, `no JS errors${errs.length ? ' — ' + errs[0] : ''}`);

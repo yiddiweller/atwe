@@ -19,6 +19,18 @@ let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}els
     // wrong database measures a signed-out app and blames the product.
     await QA.assertServerSees(tk);
     return tk;};
+  /* HOME NEEDS SOMETHING IN THE FEED, AND IT USED TO BORROW IT. Every account this
+     probe makes is brand new and follows nobody, so what fills For You is whatever
+     posts happen to be in the database from other probes. On a genuinely empty one the
+     feed is an empty state, there is nothing to settle, and the old check passed by
+     measuring nothing at all. So it writes its own: one author, a handful of posts,
+     seeded once and shared by every surface. */
+  const author = await QA.seedAccount(pool, { prefix: 'sa' });
+  for (let i = 0; i < 8; i++) {
+    await pool.query(
+      `INSERT INTO posts (user_id, body, to_main, created_at) VALUES ($1,$2,true,now()-($3||' seconds')::interval)`,
+      [author.id, 'Settling post ' + i + ' — enough words to give the card a real height.', i]);
+  }
   const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
   const errs=[];
   // A FRESH account per surface: the already-seen filter serves a reused one different
@@ -42,15 +54,21 @@ let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}els
        and a broken page looks identical to a fixed one: the self-test passed with the
        fix removed until this was added. */
     await p.route('**/api/**', async (route) => { await new Promise(x=>setTimeout(x,700)); route.continue(); });
-    /* Home gets a tolerance and the others do not, and the reason is measurable rather
-       than a fudge: a real post is 269–653px tall depending on the SHAPE of its photo,
-       so one skeleton height cannot match whichever post happens to land first. The
-       skeleton is set near the median (345) and the residual is one post's variance —
-       and it shifts UP, which is far less disruptive than content being pushed down.
-       Before any of this the feed grew from 1390 to 4513px, so this still catches a
-       regression; it just does not claim a precision that is not achievable. */
-    await p.evaluate((t)=>{window.__settleTol=t;}, label === 'Home' ? 150 : 2);
-    const r=await p.evaluate(async([g,se])=>{
+    /* HOME IS MEASURED FROM THE MOMENT REAL POSTS ARE ON SCREEN, not from a clock.
+       It used to sample 40ms after appTab('home') and allow 150px of drift, and that
+       number was neither derived nor stable: at 40ms the feed is part skeleton and part
+       real post, and WHICH it is depends on how loaded the machine happens to be. Run
+       alone it read 23px and passed; run inside the seven-probe suite the same build
+       read 181px and failed. A check whose verdict tracks CPU load is not measuring the
+       product.
+       So the baseline waits for the state a reader is actually in — real posts, no
+       skeletons — and then Home is held to the SAME 2px as every other surface. That is
+       stricter than the fudge it replaces, not weaker: the skeleton-to-content swap is a
+       legitimate transition nobody is reading through, and what must never happen is
+       content moving once content has arrived. The swap itself is still bounded below,
+       so a return of the 1390->4513px regression cannot slip past. */
+    const isHome = label === 'Home';
+    const r=await p.evaluate(async([g,se,home])=>{
       // eslint-disable-next-line no-eval
       eval(g);
       const root=()=>document.querySelector(se);
@@ -64,19 +82,44 @@ let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}els
           i++; if(i>8) break;
         }
         return out;};
+      const frame=()=>new Promise(r2=>requestAnimationFrame(()=>setTimeout(r2,30)));
       await new Promise(r2=>requestAnimationFrame(()=>setTimeout(r2,40)));
-      const first=snap(), h0=root()?root().scrollHeight:0;
-      for(let i=0;i<70;i++) await new Promise(r2=>requestAnimationFrame(()=>setTimeout(r2,30)));
+      const opened=snap(), h0=root()?root().scrollHeight:0;
+      /* Home only: advance to the state being judged. Bounded, and it reports whether
+         it got there so a feed that never loads is a named failure, not a silent pass. */
+      let ready=true;
+      if (home) {
+        ready=false;
+        for (let i=0;i<120 && !ready;i++) {
+          await frame();
+          const r0=root();
+          ready = !!r0 && r0.querySelectorAll('.skel-post').length===0
+                       && r0.querySelectorAll('.ac-post').length>0;
+        }
+      }
+      const first=snap();
+      for(let i=0;i<70;i++) await frame();
       const last=snap(), h1=root()?root().scrollHeight:0;
-      const tol = window.__settleTol || 2;
-      const moved=Object.keys(first).filter(k=>k in last && Math.abs(first[k]-last[k])>tol)
-        .map(k=>k+': '+first[k]+'→'+last[k]);
-      return {first, last, moved, n:Object.keys(first).length, h0, h1};
-    },[go,sel]);
+      const drift=(a,b)=>Object.keys(a).filter(k=>k in b && Math.abs(a[k]-b[k])>2)
+        .map(k=>k+': '+a[k]+'→'+b[k]);
+      const worst=(a,b)=>Object.keys(a).reduce((m,k)=>k in b?Math.max(m,Math.abs(a[k]-b[k])):m,0);
+      return {first, last, opened, ready, moved:drift(first,last), load:drift(opened,first),
+              loadWorst:worst(opened,first),
+              n:Object.keys(first).length, h0, h1, vh:innerHeight};
+    },[go,sel,isHome]);
     ok(r.n>0, label+' — something was on screen at first paint', JSON.stringify(r.first));
-    ok(r.moved.length===0, label + (label==='Home'
-        ? ' — the visible feed settles within one post’s height variance'
+    if (isHome) ok(r.ready, 'Home — the feed really replaced its skeleton with posts');
+    ok(r.moved.length===0, label + (isHome
+        ? ' — nothing moves once the real feed is on screen'
         : ' — nothing on screen moved after the first paint'), r.moved.join('  |  '));
+    /* The swap itself. A placeholder cannot know the shape of a photo it has not seen,
+       so on a brand-new account some displacement is unavoidable — but it must stay
+       within a SCREEN. The regression this replaces displaced the column by thousands
+       of pixels; bounding it by the viewport is a line a reader can feel rather than a
+       number tuned to whatever today happens to measure. */
+    if (isHome)
+      ok(r.loadWorst < r.vh, 'Home — loading displaces the column by less than one screen',
+         r.loadWorst + 'px of ' + r.vh + '  |  ' + r.load.join('  |  '));
     /* Engine must also not GROW. Its blocks arrive one request at a time, and on an
        account that has content in them (recents, collections) they sit above the fold,
        so growth there pushes the page down under the reader — which is what the owner
