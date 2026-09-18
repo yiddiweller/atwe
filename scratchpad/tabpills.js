@@ -23,9 +23,16 @@
  *
  * Self-test: point any tab family back at --accent-dim, or give .tb-feedtab
  * background:none, and this goes red.
+ *
+ * IT SEEDS THE PROFILE WHOSE TAB ROW IT MEASURES. It used to open @emptytester, an
+ * account NOTHING in this repo creates — it survived only in whichever database a
+ * long-gone session left behind. Anywhere else the page rendered its not-found state,
+ * no .ac-ptab existed, and both themes failed with "the tab row was not found" on a
+ * profile that draws its tabs perfectly well.
  */
 const { chromium } = require('playwright-core');
 const fs = require('fs');
+const QA = require('./qa-fixture');
 const PORT = process.env.PORT || 3262;
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 let ok = 0; const fails = [];
@@ -39,19 +46,22 @@ const ROWS = [
   { name: 'Beam',          go: "appTab('chat')",             tab: '.tb-feedtab:not(.tb-feedtab-add)' },
   { name: 'Engine',        go: "appTab('search')",           tab: '.tb-feedtab:not(.tb-feedtab-add)' },
   { name: 'Notifications', go: 'acNavNotifs()',              tab: '.ntf-tab' },
-  { name: 'Profile',       go: "acGoProfile('emptytester')", tab: '.ac-ptab' },
+  { name: 'Profile',       go: 'acGoProfile(window.__tabpillsHandle)', tab: '.ac-ptab' },
   { name: 'Events',        go: 'acOpenEvents()',             tab: '.ev-tab' },
   { name: 'Bookings',      go: "acOpenBookings('guest')",    tab: '.bk-tab' },
 ];
 
 (async () => {
   const tok = fs.readFileSync('/tmp/tok.txt', 'utf8').trim();
+  const pool = QA.newPool();
+  const subject = await QA.seedAccount(pool, { prefix: 'tp' });
+  await QA.assertServerSees(subject.token, subject.username);
   const b = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
 
   for (const theme of ['black', 'light']) {
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const p = await ctx.newPage();
-    await p.addInitScript(([t, th]) => { localStorage.setItem('atwe_token', t); localStorage.setItem('atwe_theme', th); }, [tok, theme]);
+    await p.addInitScript(([t, th, h]) => { localStorage.setItem('atwe_token', t); localStorage.setItem('atwe_theme', th); window.__tabpillsHandle = h; }, [tok, theme, subject.username]);
     await p.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(4000);
     await p.evaluate(() => { const s = document.querySelector('#introSheet:not(.hidden)');
@@ -189,7 +199,7 @@ const ROWS = [
     await ctx.close();
   }
 
-  await b.close();
+  await b.close(); await pool.end();
   if (fails.length) console.log('== FAILS ==\n' + fails.map((f) => '  FAIL ' + f).join('\n'));
   console.log(`ok checks: ${ok}`);
   console.log(fails.length ? `${fails.length} FAILED` : 'a row of choices is a row of buttons');
