@@ -33,7 +33,6 @@
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'scoresecret';
 const { chromium } = require(process.env.PW ? process.env.PW + '/node_modules/playwright-core' : 'playwright-core');
 const { PNG } = require(process.env.PW ? process.env.PW + '/node_modules/pngjs' : 'pngjs');
-const crypto = require('crypto');
 const QA = require('./qa-fixture');
 const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const BASE = process.env.BASE || 'http://localhost:3262';
@@ -46,18 +45,13 @@ async function seedOwnWorld() {
   const pool = QA.newPool();
   try {
     const me = await QA.seedAccount(pool, { prefix: 'chathead' });
-    const auth = require('/home/user/atwe/auth');
-    const hash = await auth.hashPassword('x'.repeat(12));
-    const mk = async (name) => {
-      const u = 'chp' + crypto.randomUUID().replace(/-/g, '').slice(0, 9);
-      const { rows } = await pool.query(
-        `INSERT INTO users (name,email,password_hash,username,email_verified,onboarded,last_seen)
-         VALUES ($1,$2,$3,$4,true,true,now()) RETURNING id`,
-        [name, crypto.randomUUID().slice(0, 8) + '@t.local', hash, u]);
-      return rows[0].id;
-    };
-    const peer = await mk('Chathead Peer');
-    const other = await mk('Group Mate');
+    /* The peer and the group's second member go through the SAME helper, not a second
+       INSERT of my own: one place knows how an account is built, and this probe then
+       needs no copy of the repo's own path to auth. Their tokens go unused. Nothing
+       here depends on their `last_seen` - every presence assertion writes `rtPresence`
+       in the page directly, so the dot is driven by the probe, not by the database. */
+    const peer = (await QA.seedAccount(pool, { prefix: 'chpeer' })).id;
+    const other = (await QA.seedAccount(pool, { prefix: 'chmate' })).id;
     for (let i = 0; i < 80; i++) {
       const mine = i % 2 === 0;
       await pool.query(
