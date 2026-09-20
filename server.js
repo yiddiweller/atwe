@@ -31396,6 +31396,7 @@ app.post('/api/offers/:id/checkout', auth.requireAuth, blockImpersonation, rateL
     const p = (await db.query('SELECT p.business_id, p.name, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [o.product_id])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing.' });
+    { const sp = await shopPausedMessage(p.business_id); if (sp) return res.status(400).json({ error: sp, shopPaused: true }); }
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
     const unitPrice = o.amount_cents;
     const items = [{ product_id: o.product_id, qty: 1, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, pickup: p.pickup, pickup_location: p.pickup_location, variant_id: null, variant_label: null }];
@@ -31667,7 +31668,17 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
         }
       }
     } catch (e) { /* the badge is a perk — never block the shop */ }
-    res.json({ products, owner });
+    // The shop's own state, read from the row that owns it. The storefront and the
+    // profile's Shop section both render from THIS answer, so neither can be handed
+    // a partial store object by whichever screen opened it — which is exactly how
+    // vacation mode and the pinned announcement used to be dropped on the way in.
+    const shop = (await db.query('SELECT shop_paused, shop_pause_message, store_banner FROM users WHERE id = $1', [bid])).rows[0] || {};
+    res.json({
+      products, owner,
+      shopPaused: !!shop.shop_paused,
+      shopPauseMessage: shop.shop_paused ? (shop.shop_pause_message || null) : null,
+      storeBanner: shop.store_banner || null,
+    });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load products.' }); }
 });
 // A listing for the marketplace / search: a product + its seller (so a card can
@@ -36519,6 +36530,7 @@ app.post('/api/product-subscriptions', auth.requireAuth, blockImpersonation, rat
     if (!p || !p.active) return res.status(404).json({ error: 'That product isn’t available.' });
     if (p.kind !== 'physical' || p.sub_enabled !== true) return res.status(400).json({ error: 'This product isn’t available for Subscribe & Save.' });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing. Subscribing is disabled in demo mode.' });
+    { const sp = await shopPausedMessage(p.business_id); if (sp) return res.status(400).json({ error: sp, shopPaused: true }); }
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t subscribe to your own product.' });
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
     const rv = resolveVariant(p, req.body.variantId);

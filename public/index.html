@@ -23011,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1867'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1868'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -49686,15 +49686,20 @@ async function acLoadMyServices() {
 async function acLoadShop(bizId, isOwner) {
   const box = document.getElementById('acShopBox'); if (!box) return;
   try {
-    const { products, owner } = await API.req('GET', '/api/businesses/' + bizId + '/products');
+    const store = await API.req('GET', '/api/businesses/' + bizId + '/products');
+    const { products, owner } = store;
     AC._shopBiz = bizId; AC._shopProducts = products;
     const addBtn = (owner || isOwner) ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acProductFormOpen()">＋ Add</button>` : '';
     if (!products.length && !(owner || isOwner)) { box.innerHTML = ''; return; }
     const grid = products.length ? acGroupedProductGrid(products, owner || isOwner) : '<div class="ac-empty" style="padding:14px;">No products yet.</div>';
-    // The seller's pinned announcement also shows on the profile's Shop section.
-    const annText = (owner || isOwner) ? (S.user && S.user.storeBanner)
-      : (AC._profData && AC._profData.user && AC._profData.user.id === bizId ? AC._profData.user.storeBanner : null);
-    box.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">Shop</span>${addBtn}</div>${acStoreBannerHtml(annText)}${grid}`;
+    // The seller's pinned announcement also shows on the profile's Shop section, and
+    // a paused shop says so here too — both from the store's own answer, so this
+    // section and the storefront can never tell a shopper two different things.
+    const mine = owner || isOwner;
+    const vac = store.shopPaused
+      ? `<div class="sf-vac">🌴 ${escHtml(store.shopPauseMessage || (mine ? 'Your shop is paused. No new orders while vacation mode is on.' : 'This shop is on a break and isn’t taking orders right now.'))}</div>`
+      : '';
+    box.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">Shop</span>${addBtn}</div>${acStoreBannerHtml(store.storeBanner)}${vac}${grid}`;
   } catch (e) { box.innerHTML = ''; }
 }
 // Render a product list, grouped into category/menu sections when the seller uses
@@ -53775,10 +53780,11 @@ async function acOpenStorefront(biz) {
   try {
     // Products and the seller's chosen theme, side by side (the theme is
     // optional — a store with none simply renders classic).
-    const [{ products, owner }, themeRes] = await Promise.all([
+    const [store, themeRes] = await Promise.all([
       API.req('GET', '/api/businesses/' + biz.id + '/products'),
       API.req('GET', '/api/store-theme/' + biz.id).catch(() => ({ theme: null })),
     ]);
+    const { products, owner } = store;
     const theme = themeRes && themeRes.theme;
     AC._sfTheme = theme;
     const isOwner = !!owner;
@@ -53805,8 +53811,10 @@ async function acOpenStorefront(biz) {
     // Escrow reassurance for shoppers (design blueprint); owners don't need it.
     const escLine = isOwner ? '' : `<div class="esc-note sf-esc"><span class="esc-dot"></span>Every order is protected. Your money is held in escrow and released when you confirm delivery.</div>`;
     // Vacation mode: an amber heads-up so shoppers know before they try to buy.
-    const vac = biz.shopPaused
-      ? `<div class="sf-vac">🌴 ${escHtml(biz.shopPauseMessage || (isOwner ? 'Your shop is paused. No new orders while vacation mode is on.' : 'This shop is on a break and isn’t taking orders right now.'))}</div>`
+    // The state comes from the STORE's own answer, never from the object whichever
+    // screen opened it happened to build — that is how it used to go missing.
+    const vac = store.shopPaused
+      ? `<div class="sf-vac">🌴 ${escHtml(store.shopPauseMessage || (isOwner ? 'Your shop is paused. No new orders while vacation mode is on.' : 'This shop is on a break and isn’t taking orders right now.'))}</div>`
       : '';
     const grid = visible.length ? acGroupedProductGrid(visible, isOwner, true)
       : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet. Add your first item.' : 'This store has no items yet.'}</div>`;
@@ -53816,8 +53824,9 @@ async function acOpenStorefront(biz) {
     const meta = visible.length
       ? `<div class="sf-meta">${visible.length} item${visible.length === 1 ? '' : 's'}${avg ? ` · <span class="sf-stars">★ ${avg.toFixed(1)}</span> · ${rated.reduce((s2, x) => s2 + x.reviewCount, 0)} review${rated.reduce((s2, x) => s2 + x.reviewCount, 0) === 1 ? '' : 's'}` : ''}</div>`
       : '';
-    // Seller announcement (one pinned line, e.g. "20% off this week").
-    const ann = acStoreBannerHtml(isOwner ? (S.user && S.user.storeBanner) : biz.storeBanner);
+    // Seller announcement (one pinned line, e.g. "20% off this week") — same answer
+    // for the owner and a shopper, so the two can never disagree about what is pinned.
+    const ann = acStoreBannerHtml(store.storeBanner);
     // Products lead; bundles follow them (never an empty box before the goods).
     b.innerHTML = `${cover}${head}${meta}${searchRow}${ann}${vac}${escLine}<div id="sfGrid">${grid}</div><div id="sfBundles"></div>`;
     // The seller's look, layout and brand colour, scoped to this store only.
