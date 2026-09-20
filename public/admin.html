@@ -8224,10 +8224,6 @@ async function openUser(id){
       <div class="m"><span class="k">Account status</span><span class="v">${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended'+(u.suspended_until ? ' · until '+fmtDate(u.suspended_until) : '')+'</span>' : (u.status === 'limited' ? '<span class="pill admin">limited'+(u.suspended_until ? ' · until '+fmtDate(u.suspended_until) : '')+'</span>' : '<span class="pill">active</span>'))}</span></div>
       ${u.status && u.status !== 'active' && u.status_reason ? `<div class="m"><span class="k">Reason</span><span class="v">${esc(u.status_reason)}</span></div>` : ''}
       ${u.account_type === 'business' ? `<div class="m"><span class="k">Org tier</span><span class="v">${esc(BIZ_TIER_LABEL[u.business_verify_tier] || 'Not verified')}</span></div>` : ''}
-      ${u.business_legal_name ? `<div class="m"><span class="k">Legal name</span><span class="v">${esc(u.business_legal_name)}</span></div>` : ''}
-      ${u.business_reg_number ? `<div class="m"><span class="k">Reg. number</span><span class="v">${esc(u.business_reg_number)}</span></div>` : ''}
-      ${u.business_verify_note ? `<div class="m"><span class="k">Their note</span><span class="v">${esc(u.business_verify_note)}</span></div>` : ''}
-      ${u.business_verify_doc ? `<div class="m"><span class="k">Document</span><span class="v"><a href="${u.business_verify_doc}" target="_blank" rel="noopener">Open submitted document ↗</a></span></div>` : ''}
     </div>
     <div class="acts">
       <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro'}</button>
@@ -8250,11 +8246,14 @@ async function openUser(id){
       ${u.is_admin ? '' : `<button class="act" onclick="impersonateUser(${u.id})">View as user…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
+    ${u.account_type === 'business' ? `<div class="section-h">Business verification</div>
+    <div id="bizEvid" style="margin-bottom:20px;"><div class="muted" style="padding:6px 0;">Loading evidence…</div></div>` : ''}
     <div class="section-h">AtChat${u.username ? ` · <span style="color:var(--accent);">@${esc(u.username)}</span>` : ''}</div>
     <div id="userAtchat"><div class="muted" style="padding:6px 0;">Loading activity…</div></div>
     <div class="section-h" style="margin-top:20px;">Conversations</div>
     <div id="userChats"><div class="muted" style="padding:6px 0;">Loading chats…</div></div>`;
 
+  if (u.account_type === 'business') loadBizEvidence(id);
   loadAtchatActivity(id);
   try {
     const { chats } = await api('GET', '/api/admin/users/' + id + '/chats');
@@ -8482,6 +8481,38 @@ async function setBizTier(id, tier){
 async function setBizVerify(id, status){
   try { const { user } = await api('PATCH', '/api/admin/users/' + id, { businessVerifyStatus: status }); merge(user); notify(status === 'verified' ? 'Business verified.' : 'Business verification removed.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
+}
+/* WHAT THE BUSINESS ACTUALLY SENT US. Fetched only when a reviewer opens this
+   account, never in the bulk users list — legal identity and a registration
+   document are not something to ship for every row of a directory. The route is
+   superadmin-only, the same gate the tier decision below already demands. */
+async function loadBizEvidence(id){
+  const box = document.getElementById('bizEvid'); if (!box) return;
+  const quiet = (t) => `<div class="muted" style="padding:6px 0;">${t}</div>`;
+  try {
+    const d = await api('GET', '/api/admin/users/' + id + '/business-verification');
+    const cell = (k, v) => `<div class="m"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    const bits = [];
+    if (d.legalName) bits.push(cell('Legal name', esc(d.legalName)));
+    if (d.regNumber) bits.push(cell('Reg. number', esc(d.regNumber)));
+    if (d.note) bits.push(cell('Their note', esc(d.note)));
+    // The submitted document is an image, so SHOW it. A link to a data: URL is
+    // blocked from opening as a top-level navigation, which is how the old
+    // "Open submitted document" affordance would have failed even with data.
+    const doc = d.doc
+      ? `<div class="m" style="grid-column:1/-1;"><span class="k">Document</span><img src="${esc(d.doc)}" alt="Submitted registration document" style="max-width:100%;border-radius:10px;margin-top:4px;display:block;"/></div>`
+      : '';
+    if (!bits.length && !doc) {
+      // Honest, rather than inventing a reason there is nothing here.
+      box.innerHTML = quiet(d.status === 'pending'
+        ? 'They asked for review and submitted no details.'
+        : 'Nothing submitted.');
+      return;
+    }
+    box.innerHTML = `<div class="meta-grid" style="margin-top:8px;">${bits.join('')}${doc}</div>`;
+  } catch (e) {
+    box.innerHTML = quiet(esc((e && e.message) || 'Could not load the evidence.'));
+  }
 }
 // Suspend (temporary), ban (permanent), or reinstate an account. The account + its
 // content stay; the person is locked out and their live sessions are dropped.

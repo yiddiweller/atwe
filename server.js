@@ -42379,6 +42379,44 @@ app.post('/api/admin/users/:id/messages', auth.requirePerm('users'), rateLimit(6
   }
 });
 
+/* THE EVIDENCE BEHIND A BUSINESS-VERIFICATION REQUEST.
+   A member submits a registered legal name, a registration number, a note and a
+   photo of a registration document. The dashboard has always rendered all four —
+   and never had them: `openUser` draws from the in-memory list that
+   `GET /api/admin/users` fills, and that SELECT lists none of them, so every one
+   of those conditionals was permanently falsy. Staff were asked to grant
+   "Verified business" with nothing on screen, and the member had been told the
+   document was "used only for this review".
+
+   It is deliberately NOT fixed by widening the bulk list: opening the Users screen
+   would then ship legal identity and a document image for every account on the
+   page. This is a separate read, made only when a reviewer opens one account's
+   review, and it is gated as tightly as the decision it exists to inform —
+   `requireAdmin` is superadmin-only, which is exactly what the tier/status
+   mutation below demands. It returns the four submitted values and the current
+   state, and nothing else about the account. */
+app.get('/api/admin/users/:id/business-verification', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT account_type, business_verify_status, business_verify_tier,
+              business_legal_name, business_reg_number, business_verify_note, business_verify_doc
+         FROM users WHERE id = $1`, [id]);
+    const u = rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    res.json({
+      accountType: u.account_type === 'business' ? 'business' : 'personal',
+      status: ['pending', 'verified'].includes(u.business_verify_status) ? u.business_verify_status : 'none',
+      tier: bizTier(u),
+      legalName: u.business_legal_name || null,
+      regNumber: u.business_reg_number || null,
+      note: u.business_verify_note || null,
+      doc: u.business_verify_doc || null,
+    });
+  } catch (err) { console.error(err); fault(res); }
+});
+
 app.patch('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
