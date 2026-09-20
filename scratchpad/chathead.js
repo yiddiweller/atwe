@@ -85,7 +85,18 @@ async function seedOwnWorld() {
 }
 
 (async () => {
-  const OWN = await seedOwnWorld();
+  /* A probe that CRASHES does not print a FAILED line, so a runner counting failures
+     reads a stack trace as a pass. Seeding is the one step here that talks to the
+     database, so name the likely cause rather than letting pg's own stack out. */
+  let OWN;
+  try { OWN = await seedOwnWorld(); }
+  catch (e) {
+    console.error('chathead could not seed its own fixture: ' + e.message);
+    console.error('DATABASE_URL is ' + (process.env.DATABASE_URL || '(unset - falling back to ' + QA.DEFAULT_DB + ')') +
+      '. It must be the database the server on ' + BASE + ' was started with.');
+    console.log('\n1 FAILED');
+    process.exit(1);
+  }
   const b = await chromium.launch({ executablePath: CHROME });
   let bad = 0;
   const say = (ok, m) => { if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : '✗   '} ${m}`); };
