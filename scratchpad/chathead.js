@@ -17,13 +17,75 @@
  * by id) and are hidden with CSS — so "not in the header" is checked by GEOMETRY, not by
  * absence.
  */
+/* IT OWNS EVERY CONVERSATION IT MEASURES, and that is the whole reason this probe went
+   red once in a batch and was green ten times alone.
+   It used to sign in as the SHARED regression account and open `.ac-item[data-uid]`
+   FIRST. `/api/atchat/conversations` orders by last message, so the subject was
+   whichever DM most recently received one - decided entirely by probes that had run
+   earlier. Proved by A/B against one unchanged build: seeding a single unrelated DM
+   moved the subject from the fixture peer to that stranger, and seeding a SELF-CHAT
+   made the self-chat first and took it 7 red (no presence, no calling section) against
+   an app that was behaving correctly for a self-chat. Owning the ACCOUNT is not enough
+   either - the same 7 reds reproduce on a freshly seeded account the moment anything
+   else lands in its list, because "the first row" is still not a conversation anybody
+   chose. So it seeds its own account, its own peer and its own group through the shared
+   fixture, and opens them BY ID. */
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'scoresecret';
 const { chromium } = require(process.env.PW ? process.env.PW + '/node_modules/playwright-core' : 'playwright-core');
 const { PNG } = require(process.env.PW ? process.env.PW + '/node_modules/pngjs' : 'pngjs');
+const crypto = require('crypto');
+const QA = require('./qa-fixture');
 const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const BASE = process.env.BASE || 'http://localhost:3262';
 
+/* A conversation with enough history to scroll, an outgoing message still UNSEEN (the
+   Light-theme check reads `.msg-bubble.msg-unseen`, and with none on screen it would
+   pass vacuously), and a group with a second member so the group case really runs
+   instead of reporting "no group to test" - a skip is not a pass. */
+async function seedOwnWorld() {
+  const pool = QA.newPool();
+  try {
+    const me = await QA.seedAccount(pool, { prefix: 'chathead' });
+    const auth = require('/home/user/atwe/auth');
+    const hash = await auth.hashPassword('x'.repeat(12));
+    const mk = async (name) => {
+      const u = 'chp' + crypto.randomUUID().replace(/-/g, '').slice(0, 9);
+      const { rows } = await pool.query(
+        `INSERT INTO users (name,email,password_hash,username,email_verified,onboarded,last_seen)
+         VALUES ($1,$2,$3,$4,true,true,now()) RETURNING id`,
+        [name, crypto.randomUUID().slice(0, 8) + '@t.local', hash, u]);
+      return rows[0].id;
+    };
+    const peer = await mk('Chathead Peer');
+    const other = await mk('Group Mate');
+    for (let i = 0; i < 80; i++) {
+      const mine = i % 2 === 0;
+      await pool.query(
+        `INSERT INTO at_messages (sender_id,recipient_id,body,created_at,read_at)
+         VALUES ($1,$2,$3, now() - ($4 || ' seconds')::interval, $5)`,
+        [mine ? me.id : peer, mine ? peer : me.id, 'message ' + i, (120 - i) * 10,
+         mine ? null : new Date()]);
+    }
+    const { rows: gr } = await pool.query(
+      `INSERT INTO at_groups (name, created_by) VALUES ('Chathead Group', $1) RETURNING id`, [me.id]);
+    const group = gr[0].id;
+    for (const uid of [me.id, other]) {
+      await pool.query(
+        `INSERT INTO at_group_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+        [group, uid]);
+    }
+    await pool.query(
+      `INSERT INTO at_group_messages (group_id, sender_id, body) VALUES ($1,$2,'hello group')`,
+      [group, other]);
+    /* The server must agree this session exists, or every gated surface measures a
+       signed-out app and the product gets blamed for a database mismatch. */
+    await QA.assertServerSees(me.token, me.username);
+    return { token: me.token, username: me.username, peer, group };
+  } finally { await pool.end(); }
+}
+
 (async () => {
-  if (!process.env.TOK) { console.error('export TOK first'); process.exit(2); }
+  const OWN = await seedOwnWorld();
   const b = await chromium.launch({ executablePath: CHROME });
   let bad = 0;
   const say = (ok, m) => { if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : '✗   '} ${m}`); };
@@ -33,13 +95,17 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       isMobile: (w || 390) < 769, hasTouch: (w || 390) < 769, deviceScaleFactor: 2 });
     const p = await ctx.newPage();
     await p.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
-    await p.evaluate(([t, th]) => { localStorage.setItem('atwe_token', t); localStorage.setItem('atwe_theme', th); },
-      [process.env.TOK, theme]);
+    /* `atwe_intro_seen` is pre-seeded rather than dismissed afterwards. The old code
+       tried once, 5s after navigating, to close a sheet that arrives ~1.5s after boot
+       COMPLETES - so on a slow boot the sheet appeared after the one attempt and sat
+       there over the list. Pre-seeding is what QA.signIn does and cannot race. */
+    await p.evaluate(([t, th]) => {
+      localStorage.setItem('atwe_token', t);
+      localStorage.setItem('atwe_theme', th);
+      localStorage.setItem('atwe_intro_seen', JSON.stringify(['beam', 'circles', 'ai', 'wallet']));
+    }, [OWN.token, theme]);
     await p.goto(BASE + '/messages', { waitUntil: 'domcontentloaded' });
-    await p.waitForTimeout(5000);
-    await p.evaluate(() => { const s = document.querySelector('#introSheet:not(.hidden)');
-      if (s && typeof introDismiss === 'function') introDismiss(); });
-    await p.waitForTimeout(300);
+    await p.waitForSelector('#acListScreen .ac-item[data-uid="' + OWN.peer + '"]', { timeout: 30000 });
     return { ctx, p };
   };
   /* Open a DM and WAIT for it. A bare querySelector().click() silently does nothing when
@@ -47,7 +113,7 @@ const BASE = process.env.BASE || 'http://localhost:3262';
      measuring a hidden screen (zero-size rects reported as "0 / 390"). The locator waits
      for the row, and the thread is confirmed on screen before anything is measured. */
   const openDm = async (p) => {
-    await p.locator('#acListScreen .ac-item[data-uid]').first().click({ timeout: 20000 });
+    await p.locator('#acListScreen .ac-item[data-uid="' + OWN.peer + '"]').click({ timeout: 20000 });
     await p.waitForSelector('#acThreadScreen:not(.hidden)', { timeout: 20000 });
     await p.waitForFunction(() => {
       const b = document.querySelector('.ac-h3-pill');
@@ -450,14 +516,16 @@ const BASE = process.env.BASE || 'http://localhost:3262';
 
   /* 10. A GROUP has no presence to report — no dot at all. */
   const g = await open('black');
-  const grp = await g.p.evaluate(async () => {
-    const row = document.querySelector('#acListScreen .ac-item[data-gid]');
-    if (!row) return { skip: true };
-    row.click(); await new Promise(r => setTimeout(r, 2600));
-    return { hidden: document.getElementById('acPeerDot').classList.contains('hidden'),
-      sub: document.getElementById('acPeerHandle').textContent };
-  });
-  say(grp.skip || grp.hidden, `a group header shows no presence dot${grp.skip ? ' (no group to test)' : ' ("' + grp.sub + '" under the name)'}`);
+  await g.p.locator('#acListScreen .ac-item[data-gid="' + OWN.group + '"]').click({ timeout: 20000 });
+  await g.p.waitForSelector('#acThreadScreen:not(.hidden)', { timeout: 20000 });
+  await g.p.waitForFunction(() => {
+    const b = document.querySelector('.ac-h3-pill');
+    return b && b.getBoundingClientRect().width > 50;
+  }, { timeout: 20000 });
+  const grp = await g.p.evaluate(() => ({
+    hidden: document.getElementById('acPeerDot').classList.contains('hidden'),
+    sub: document.getElementById('acPeerHandle').textContent }));
+  say(grp.hidden, `a group header shows no presence dot ("${grp.sub}" under the name)`);
   await g.ctx.close();
 
   /* 11. LIGHT THEME, and this is where two real bugs were found rather than designed away:
