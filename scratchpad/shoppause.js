@@ -165,7 +165,7 @@ async function run() {
     console.log('\n1 FAILED'); process.exit(1);
   }
 
-  const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args: ['--no-sandbox'] });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
   try {
     /* ══ A. THE SHOP IS OPEN ══ nothing about an active shop may change ══ */
     const ctxA = await browser.newContext({ viewport: { width: 390, height: 844 } });
