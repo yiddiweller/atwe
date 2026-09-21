@@ -123,10 +123,16 @@ async function run() {
   say(!raw.includes(LEGAL), 'D2. the bulk users list does NOT carry the legal name');
   say(!raw.includes(REG), 'D3. ...nor the registration number');
   say(!raw.includes(NOTE), 'D4. ...nor their note');
-  say(!raw.includes('data:image'), 'D5. ...nor any submitted document');
+  say(!raw.includes(DOC), 'D5. ...nor the submitted document');
+  // Named structurally rather than by value: a bulk row legitimately carries an
+  // AVATAR data URL, so "no data: URL anywhere" fails on a perfectly clean list.
+  // What must never appear is an evidence COLUMN.
+  const evid = ['business_verify_doc', 'business_legal_name', 'business_reg_number', 'business_verify_note'];
+  say(evid.every((k) => !raw.includes(k)), 'D6. ...and no evidence column is in the payload at all',
+      evid.filter((k) => raw.includes(k)).join(', '));
 
   /* ══ E. THE DASHBOARD ══ a reviewer opening the account SEES it ══ */
-  const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args: ['--no-sandbox'] });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
   try {
     const openModal = async (userId) => {
       const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
