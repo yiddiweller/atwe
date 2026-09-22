@@ -22,8 +22,19 @@
  *     POST /api/product-subscriptions. A buyer holding an accepted offer, or anyone
  *     starting a Subscribe & Save, could buy from a shop that was explicitly closed.
  *
- * So this probe asks both questions, and asks them of a REAL browser and the REAL API:
- * does a shopper SEE the pause, and does the server REFUSE the sale.
+ * (3) THE SELLER'S OWN DOOR. Account -> Manage store -> View storefront is the route a
+ *     seller actually takes, and it did not work at all: the row opened the storefront
+ *     and something closed it again a moment later, bouncing them back to the Account
+ *     page. Nothing to do with the shop's state - `closeOverlay('storeManageView')`
+ *     walks history back for a panel that owns a route, and the popstate that schedules
+ *     lands AFTER the opener that follows it on the same line has opened its panel, so
+ *     the popstate handler tears that panel down. The probe drove `acOpenMyStorefront()`
+ *     directly and therefore never saw it: a check scoped to part of its subject reports
+ *     a clean result. It drives the REAL ROW now, in both shop states.
+ *
+ * So this probe asks all three questions, and asks them of a REAL browser and the REAL
+ * API: does a shopper SEE the pause, does the server REFUSE the sale, and can the seller
+ * GET THERE.
  *
  * Run:  DATABASE_URL=... JWT_SECRET=... node shoppause.js [--break]
  *       --break serves the OLD client (state read from the caller's object) to prove
@@ -111,7 +122,11 @@ async function serveOldClient(ctx) {
       .replace('const ann = acStoreBannerHtml(store.storeBanner);',
                'const ann = acStoreBannerHtml(isOwner ? (S.user && S.user.storeBanner) : biz.storeBanner);')
       .replace('const vac = store.shopPaused\n      ? `<div class="sf-vac">', 'const vac = false\n      ? `<div class="sf-vac">')
-      .replace(/\$\{acStoreBannerHtml\(store\.storeBanner\)\}\$\{vac\}/, '${acStoreBannerHtml(null)}');
+      .replace(/\$\{acStoreBannerHtml\(store\.storeBanner\)\}\$\{vac\}/, '${acStoreBannerHtml(null)}')
+      // ...and restores the SYNCHRONOUS history walk, so the E checks below fail the way
+      // the seller reported: the row opens the storefront and a popstate closes it again.
+      .replace('Promise.resolve().then(() => {\n      if (_ovShows > shownBefore)', '(() => {\n      if (_ovShows > shownBefore)')
+      .replace('      try { history.back(); } catch (e) { acSyncPath(); }\n    });', '      try { history.back(); } catch (e) { acSyncPath(); }\n    })();');
     await route.fulfill({ response: res, body: html, headers: { ...res.headers(), 'content-length': undefined } });
   });
 }
@@ -152,6 +167,42 @@ async function openStorefrontFromProfile(p, username) {
     return !!b && !/skel/.test(b.innerHTML) && b.innerHTML.length > 40;
   }, null, 20000);
   return Object.assign({ clicked: true }, await readStore(p));
+}
+
+/* THE SELLER'S OWN ROUTE: Account -> Manage store -> View storefront.
+   Driven as a real tap on the real row, because the bug lived in the navigation the row
+   performs, not in the opener it calls - calling acOpenMyStorefront() by hand passes on
+   a build where the row is dead. */
+async function openStorefrontFromManageStore(p) {
+  await p.evaluate(() => acOpenStoreManage());
+  await QA.waitUntil(p, () => {
+    const b = document.getElementById('storeManageBody');
+    return !!b && /View storefront/.test(b.innerHTML);
+  }, null, 20000);
+  const clicked = await p.evaluate(() => {
+    const row = [...document.querySelectorAll('#storeManageBody .iset-row')]
+      .find((r) => /View storefront/.test(r.textContent || ''));
+    if (!row) return false;
+    row.click(); return true;
+  });
+  if (!clicked) return { clicked: false, stayed: false };
+  // Long enough for the popstate that used to kill it to have landed and for the
+  // close animation to finish - a storefront that is .closing is a bounce, not a page.
+  await p.waitForTimeout(1600);
+  const stayed = await p.evaluate(() => {
+    const sf = document.getElementById('storefrontView');
+    const mg = document.getElementById('storeManageView');
+    return {
+      open: !!sf && !sf.classList.contains('hidden') && !sf.classList.contains('closing'),
+      manageGone: !mg || mg.classList.contains('hidden') || mg.classList.contains('closing'),
+    };
+  });
+  if (!stayed.open) return Object.assign({ clicked: true, stayed: false }, stayed);
+  await QA.waitUntil(p, () => {
+    const b = document.getElementById('storefrontBody');
+    return !!b && !/skel/.test(b.innerHTML) && b.innerHTML.length > 40;
+  }, null, 20000);
+  return Object.assign({ clicked: true, stayed: true }, stayed, await readStore(p));
 }
 
 async function run() {
@@ -234,6 +285,17 @@ async function run() {
     say(!!geom && geom.w > 200 && geom.h > 20, 'B8. the pause line is laid out, not collapsed', geom ? geom.w + 'x' + geom.h : 'not found');
     say(!!geom && !geom.clipped, 'B9. its text is not clipped');
     say(!!geom && geom.above, 'B10. it sits above the products, not over them');
+
+    // B-v. THE SELLER'S OWN ROUTE, on the same paused shop. Same page, same account -
+    // the row is the only thing new. `acOpenMyStorefront()` above is the opener; this
+    // is the DOOR, and the door was the broken half.
+    await pc.evaluate(() => { [...document.querySelectorAll('.overlay:not(.hidden)')].forEach((o) => { try { closeOverlay(o.id, true); } catch (e) {} }); });
+    await pc.waitForTimeout(500);
+    const mgB = await openStorefrontFromManageStore(pc);
+    say(mgB.clicked, 'B14. Manage store offers a View storefront row');
+    say(mgB.stayed, 'B15. tapping it OPENS the storefront and stays there', mgB.clicked ? 'manageGone ' + mgB.manageGone : 'row not found');
+    say(mgB.stayed && !!mgB.vac && mgB.vac.includes(PAUSE_MSG), 'B16. and a paused shop still says so on that route', 'saw: ' + JSON.stringify(mgB.vac));
+    say(mgB.stayed && !!mgB.ann && mgB.ann.includes(BANNER), 'B17. the announcement survives it too', 'saw: ' + JSON.stringify(mgB.ann));
     await ctxC.close();
 
     // B-iv. the server refuses every purchase, whatever the screen says
@@ -260,6 +322,20 @@ async function run() {
     const r2 = await post(F.buyer.token, '/api/orders/buy', { productId: F.p1, qty: 1, payWith: 'balance' });
     say(r2.body.shopPaused !== true, 'C3. buying is no longer refused as paused', 'status ' + r2.status);
     await ctxD.close();
+
+    // C-ii. the seller's own route works on an ACTIVE shop too - the fix must not be
+    // something only a paused shop happens to survive.
+    const ctxE = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    if (BREAK) await serveOldClient(ctxE);
+    const pe = await ctxE.newPage();
+    await QA.signIn(pe, F.seller);
+    const mgC = await openStorefrontFromManageStore(pe);
+    say(mgC.stayed, 'C4. Manage store -> View storefront opens an ACTIVE shop and stays', mgC.clicked ? 'manageGone ' + mgC.manageGone : 'row not found');
+    say(mgC.stayed && mgC.vac === null, 'C5. with no pause line on it', mgC.vac ? 'saw: ' + mgC.vac : '');
+    say(mgC.stayed && !!mgC.ann && mgC.ann.includes(BANNER), 'C6. and the announcement present');
+    say(mgC.stayed && !!(await pe.evaluate(() => { const b = document.getElementById('storefrontBody'); return b && b.querySelector('.sf-head'); })),
+        'C7. the storefront really rendered, not an empty shell');
+    await ctxE.close();
 
     /* ══ D. the two new guards are IN THE SOURCE, so a screen nobody drives is covered ══ */
     const fs = require('fs');

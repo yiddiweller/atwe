@@ -23011,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1868'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1869'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -24319,6 +24319,12 @@ let _histDepth = 0;
    NB deliberately not _navRestoring — that name belongs to the screen-stack
    restore a few thousand lines down, and shadowing it would be a nasty trap. */
 let _histRestoring = false;
+/* HOW MANY PANELS HAVE BEEN OPENED, EVER. A handover — `closeOverlay(a); acOpenB()`
+   — is indistinguishable from a plain close at the moment closeOverlay runs, because
+   the opener that follows it has not executed yet. This counter is what lets the
+   close find out a microtask later: if it went up, the caller was navigating, not
+   leaving. See the deferred walk in closeOverlay. */
+let _ovShows = 0;
 function acSyncPath(opts) {
   const wantPush = !!(opts && opts.push) && !_histRestoring;
   if (_pathSyncQueued) return;
@@ -25172,8 +25178,26 @@ function closeOverlay(id, noHistory) {
   // behaves on any real site. Landed here on a deep link (nothing of ours to walk
   // back to)? Just rewrite the address in place and stay put.
   if (!noHistory && !_histRestoring && _histDepth > 0 && ROUTE_BY_VIEW[id] && location.pathname === '/' + ROUTE_BY_VIEW[id]) {
+    /* THE WALK IS DEFERRED BY ONE MICROTASK, AND THAT IS THE WHOLE FIX FOR A HANDOVER.
+       Half the rows in Manage store read `closeOverlay('storeManageView'); acOpenX()`.
+       Walked synchronously, the popstate that back() schedules lands AFTER acOpenX has
+       opened its panel — and the popstate handler then tears that panel down: an
+       unrouted sheet is dismissed by _navDismissModal, a routed one by _navApplyUrl
+       (it belongs to a route the restored address is not). Either way the member is
+       bounced to the world underneath and the row reads as dead. Measured: 16 of the
+       30 Manage-store rows, and the same shape at ~20 other handover sites.
+       A microtask is the right window because a handover is two statements in ONE task
+       and every opener in the app calls showOverlay synchronously, so _ovShows is
+       already up by the time this runs. If it went up, the caller navigated: there is
+       nothing to walk back FROM, so keep the entry and let acSyncPath write the address
+       for whatever is now open — the app's own rule that the address is DERIVED. */
+    const shownBefore = _ovShows;
     _histDepth--;
-    try { history.back(); return; } catch (e) {}
+    Promise.resolve().then(() => {
+      if (_ovShows > shownBefore) { _histDepth++; acSyncPath(); return; }
+      try { history.back(); } catch (e) { acSyncPath(); }
+    });
+    return;
   }
   acSyncPath();
 }
@@ -25205,6 +25229,7 @@ function showOverlay(id) {
   // via their own z-index, so this only reorders within the base tier.
   if (el.parentNode === document.body && document.body.lastElementChild !== el) document.body.appendChild(el);
   el.classList.remove('closing', 'hidden');
+  _ovShows++;                   // a close deferred one microtask reads this to spot a handover
   acSyncPath({ push: true });   // opening a panel is a real move forward
   // A standalone .action-sheet popover (Go Live, Schedule…) starts at opacity:0 and
   // is only revealed by .ctx-open. Anchored menus (postActions) set their own
