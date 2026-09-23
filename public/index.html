@@ -23011,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1872'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1873'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -24307,6 +24307,16 @@ const SELF_ROUTED_SCREENS = ['acProfileScreen', 'acPostViewScreen', 'acCircleScr
    Self-correcting: if a surface opens by some path nobody thought of, the next
    sync still lands on the right address. */
 let _pathSyncQueued = false;
+/* THE STRONGEST HISTORY INTENT ASKED FOR IN THE FRAME BEING COALESCED. acSyncPath is
+   rAF-debounced, so several callers land in one frame — and a handover is exactly that
+   shape: the panel being left syncs (push:false, it is not a new destination) and the
+   panel being opened syncs (push:true, it IS). The first caller used to decide for the
+   whole frame, so the later push was silently discarded and the destination REPLACED its
+   own parent's entry instead of pushing over it — Back then skipped the parent entirely.
+   A push is strictly stronger than a replace (it keeps the entry a replace would destroy),
+   so the frame resolves to push if ANY caller in it asked for one. NB `push` is the only
+   option acSyncPath has ever taken, so there is nothing else in `opts` to merge. */
+let _pathSyncWantPush = false;
 /* How many history entries WE have pushed. Closing a panel walks one back instead
    of pushing another, so the history stays clean and Forward works — but only
    while we have an entry of our own to walk back to. Arriving straight on a deep
@@ -24327,16 +24337,19 @@ let _histRestoring = false;
 let _ovShows = 0;
 function acSyncPath(opts) {
   const wantPush = !!(opts && opts.push) && !_histRestoring;
-  if (_pathSyncQueued) return;
+  if (_pathSyncQueued) { if (wantPush) _pathSyncWantPush = true; return; }
   _pathSyncQueued = true;
+  _pathSyncWantPush = wantPush;
   requestAnimationFrame(() => {
     _pathSyncQueued = false;
+    const push = _pathSyncWantPush;
+    _pathSyncWantPush = false;
     try {
       // The top-most open panel that owns a route is what the person is looking at.
       const open = document.querySelectorAll('.overlay:not(.hidden):not(.closing)');
       for (let i = open.length - 1; i >= 0; i--) {
         const key = ROUTE_BY_VIEW[open[i].id];
-        if (key) { acSetPath('/' + key, { push: wantPush }); return; }
+        if (key) { acSetPath('/' + key, { push }); return; }
       }
       // A profile / post / circle / thread writes a richer path of its own — don't stamp on it.
       for (const id of SELF_ROUTED_SCREENS) {
@@ -24345,7 +24358,7 @@ function acSyncPath(opts) {
       }
       // Two destinations are a tab PLUS a scope rather than a panel — derive them
       // the same way, from the live state, so they stay right without a hint.
-      const _push = { push: wantPush };
+      const _push = { push };
       if (_appTab === 'search' && _searchScope === 'jobs') { acSetPath('/jobs', _push); return; }
       if (_appTab === 'home' && _acFeedScope === 'bookmarks') { acSetPath('/collections', _push); return; }
       acSetPath(WORLD_PATH[_appTab] || '/', _push);
