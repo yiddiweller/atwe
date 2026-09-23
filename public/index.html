@@ -23011,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1869'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1870'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -45696,8 +45696,7 @@ function acOpenSendMoneyByUsername() {
   document.getElementById('sendMoneyAmt').value = '';
   document.getElementById('sendMoneyNote').value = '';
   document.getElementById('sendMoneyHint').textContent = '';
-  closeOverlay('walletView');
-  showOverlay('sendMoneyView');
+  showOverlay('sendMoneyView');   // over the wallet, never instead of it - see acOpenRequestMoney
   setTimeout(() => uf.focus(), 120);
 }
 /* ── "Do you know this person?" — the money-to-a-stranger pause ──
@@ -45769,7 +45768,14 @@ function acOpenRequestMoney(id, name, username) {
   const uf = document.getElementById('reqMoneyUser'); uf.style.display = u ? 'none' : ''; uf.value = '';
   document.getElementById('reqMoneyAmt').value = '';
   document.getElementById('reqMoneyNote').value = '';
-  closeOverlay('walletView');
+  /* THE WALLET STAYS OPEN UNDERNEATH. This sheet is a SUB-FLOW of the wallet, not a
+     replacement for it, and closing the parent is what stranded people: the sheet owns
+     no route, so its own back arrow takes no history branch - it just closes, and with
+     the wallet already gone there is nothing beneath it, so you land on the Account
+     page. `acSendMoney`'s success path has always assumed this by checking whether
+     walletView is still on screen in order to refresh it; that line could never fire
+     while these two wrappers closed it. `acOpenSendMoney`, the same sheet opened from a
+     profile, already opens OVER whatever is beneath. */
   showOverlay('requestMoneyView');
   setTimeout(() => { const f = document.getElementById(u ? 'reqMoneyAmt' : 'reqMoneyUser'); if (f) f.focus(); }, 120);
 }
