@@ -38,12 +38,16 @@ async function serveOld(ctx) {
   await ctx.route('**/', async (route) => {
     const res = await route.fetch();
     let html = await res.text();
-    html = html.split("closeOverlay('bizDirectory', true)").join("closeOverlay('bizDirectory')")
-               .split("closeOverlay('walletView', true)").join("closeOverlay('walletView')")
-               .split("closeOverlay('marketplaceView', true)").join("closeOverlay('marketplaceView')")
-               .split("closeOverlay('servicesView', true)").join("closeOverlay('servicesView')")
-               .split("closeOverlay('ordersView', true)").join("closeOverlay('ordersView')")
-               .split("closeOverlay('connList', true)").join("closeOverlay('connList')");
+    /* Build 1871: the panel was closed with the history opt-out and NOTHING remembered
+       it, so Back fell through to acGoHome() - Engine chrome over a Home feed. */
+    html = html
+      .split("acHandoffFrom('walletView','walletTxView')").join("closeOverlay('walletTxView');closeOverlay('walletView', true)")
+      .split("acHandoffFrom('marketplaceView','listingView')").join("closeOverlay('listingView');closeOverlay('marketplaceView', true)")
+      .split("acHandoffFrom('servicesView','serviceView')").join("closeOverlay('serviceView'); closeOverlay('servicesView', true)")
+      .split("acHandoffFrom('ordersView','orderView')").join("closeOverlay('ordersView', true);closeOverlay('orderView')")
+      .split("acHandoffFrom('bizDirectory')").join("closeOverlay('bizDirectory', true)")
+      .split("acHandoffFrom('marketplaceView')").join("closeOverlay('marketplaceView', true)")
+      .split("acHandoffFrom('connList')").join("closeOverlay('connList', true)");
     await route.fulfill({ response: res, body: html, headers: { ...res.headers(), 'content-length': undefined } });
   });
 }
@@ -58,7 +62,11 @@ const state = (p) => p.evaluate((SCR) => {
     const cs = getComputedStyle(o);
     return (cs.opacity === '0' || cs.visibility === 'hidden') && cs.pointerEvents !== 'none';
   }).map((o) => o.id);
+  const navActive = [...document.querySelectorAll('.bn-tab, .sb-btn')].filter((b) => b.classList.contains('active'))
+    .map((b) => (b.getAttribute('aria-label') || b.id || '').trim());
   return { path: location.pathname, hist: history.length, open, dupes, trapping,
+           tab: (typeof _appTab !== 'undefined' ? _appTab : null), navActive,
+           homeVisible: (() => { const h = document.getElementById('acHomeScreen'); return !!h && !h.classList.contains('hidden'); })(),
            screen: SCR.find((id) => { const s = document.getElementById(id); return s && !s.classList.contains('hidden'); }) || null };
 }, SCR);
 
@@ -142,13 +150,13 @@ function cases(F) {
   }, [sel, within || null]);
 
   return [
-    ['1. Business directory -> seller profile', 'bizDirectory', '/businesses', openDirectory,
+    ['1. Business directory -> seller profile', 'bizDirectory', '/businesses', 'bizDirectory', openDirectory,
       click('.ac-item', '#bizDirectoryBody'), 'acProfileScreen'],
-    ['2. Wallet -> transaction -> peer profile', 'walletView', '/wallet', openWalletTx,
+    ['2. Wallet -> transaction -> peer profile', 'walletView', '/wallet', 'walletTxView', openWalletTx,
       click('.wtxd-peer', '#walletTxView'), 'acProfileScreen'],
-    ['3. Marketplace card head -> seller profile', 'marketplaceView', '/marketplace', openMarket,
+    ['3. Marketplace card head -> seller profile', 'marketplaceView', '/marketplace', 'marketplaceView', openMarket,
       click('.mkt-head', '#marketplaceView'), 'acProfileScreen'],
-    ['4. Listing "Visit store" -> seller profile', 'marketplaceView', '/marketplace', openListing,
+    ['4. Listing "Visit store" -> seller profile', 'marketplaceView', '/marketplace', 'listingView', openListing,
       // selected by its VISIBLE TEXT, not by its onclick: an onclick selector stops
       // matching under --break and the case would report "could not drive" instead of
       // failing, which is the difference between a self-test and a blind spot.
@@ -156,20 +164,20 @@ function cases(F) {
         const b = [...document.querySelectorAll('#listingView .ac-pill-btn')].find((x) => /^Visit\b/.test((x.textContent || '').trim()));
         if (!b) return false; b.click(); return true;
       }), 'acProfileScreen'],
-    ['5. Listing detail head -> seller profile', 'marketplaceView', '/marketplace', openListing,
+    ['5. Listing detail head -> seller profile', 'marketplaceView', '/marketplace', 'listingView', openListing,
       (p) => p.evaluate(() => {
         const v = document.getElementById('listingView');
         const h = v && v.querySelector('.mkt-detail-head');
         if (!h || v.classList.contains('hidden')) return false;
         h.click(); return true;
       }), 'acProfileScreen'],
-    ['6. Services -> message the provider', 'servicesView', '/services', openServices,
+    ['6. Services -> message the provider', 'servicesView', '/services', 'servicesView', openServices,
       (p) => p.evaluate((id) => { acMessageProvider(id); return true; }, F.peer.id), 'acThreadScreen'],
-    ['7. Order -> message the other party', 'ordersView', '/orders', openOrder,
+    ['7. Order -> message the other party', 'ordersView', '/orders', 'orderView', openOrder,
       click('[onclick*="acOpenChat"]', '#orderView'), 'acThreadScreen'],
-    ['8. Connections -> Message', 'connList', '/network', openConns,
+    ['8. Connections -> Message', 'connList', '/network', 'connList', openConns,
       click('.ac-conn-item .ac-pill-btn', '#connListBody'), 'acThreadScreen'],
-    ['9. Connections row -> profile', 'connList', '/network', openConns,
+    ['9. Connections row -> profile', 'connList', '/network', 'connList', openConns,
       click('.ac-conn-item', '#connListBody'), 'acProfileScreen'],
   ];
 }
@@ -186,7 +194,7 @@ async function drive(browser, u, viewport, F, tag) {
   const { ctx, p } = await freshPage(browser, u, viewport);
   const errs = []; p.on('pageerror', (e) => errs.push(String(e).slice(0, 90)));
 
-  for (const [name, source, route, openSrc, go, wantScreen] of cases(F)) {
+  for (const [name, source, route, wantParent, openSrc, go, wantScreen] of cases(F)) {
     await p.evaluate(() => { [...document.querySelectorAll('.overlay:not(.hidden)')].forEach((o) => { try { closeOverlay(o.id, true); } catch (e) {} }); });
     await p.waitForTimeout(400);
     await p.evaluate(() => appTab('home'));
@@ -210,6 +218,25 @@ async function drive(browser, u, viewport, F, tag) {
     say(after.dupes.length === 0, `${tag} ${name}: no duplicate overlay`, JSON.stringify(after.dupes));
     say(after.trapping.length === 0, `${tag} ${name}: no invisible overlay trapping input`, JSON.stringify(after.trapping));
     say(after.hist - before.hist <= 2, `${tag} ${name}: history did not grow wrongly`, 'grew ' + (after.hist - before.hist));
+
+    /* THE EXACT SEMANTIC PARENT. "Back left the destination cleanly" is what the first
+       version of this probe asserted, and it is why a live phone found Engine chrome
+       sitting over a Home feed while this run was 121/0. Back must rebuild ONE coherent
+       source state: the right panel, the right address, the right world, and Home NOT
+       on screen when the source was not Home. */
+    const backHow = await tapInAppBack(p);
+    await p.waitForTimeout(2600);
+    const b2 = await state(p);
+    say(b2.open.includes(wantParent), `${tag} ${name}: BACK restores ${wantParent}`, JSON.stringify(b2) + ' via ' + backHow);
+    say(b2.path === route, `${tag} ${name}: BACK restores the address ${route}`, b2.path);
+    say(b2.tab === before.tab, `${tag} ${name}: BACK restores the world (${before.tab})`, 'saw ' + b2.tab);
+    /* The invariant is RECONSTRUCTION, not "Home is never visible": several of these
+       panels are legitimately opened over the Home screen, and Back must put back
+       whatever was underneath - no more, no less. Asserting a hardcoded "not Home"
+       instead reported a failure on a correctly rebuilt state. */
+    say(b2.screen === before.screen, `${tag} ${name}: BACK restores the screen underneath (${before.screen})`, 'saw ' + b2.screen);
+    say(b2.homeVisible === before.homeVisible, `${tag} ${name}: BACK leaves no world/screen hybrid`, JSON.stringify(b2.navActive) + ' home=' + b2.homeVisible + ' want=' + before.homeVisible);
+    say(b2.dupes.length === 0 && b2.trapping.length === 0, `${tag} ${name}: BACK leaves no duplicate or trapping overlay`, JSON.stringify([b2.dupes, b2.trapping]));
   }
 
   for (const [name, open, go, wantScreen] of controls(F)) {
@@ -258,6 +285,33 @@ async function backForward(browser, u, F) {
   }
 }
 
+
+/* THE LIVE FAILURE, AS ITS OWN NAMED CHECK.
+   Reported from a real phone on beta 1871: Engine -> Marketplace -> a seller -> Back gave
+   Engine chrome, Engine chips and Engine lit in the nav bar over a HOME FEED. */
+async function marketplaceParent(browser, u) {
+  for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+    const { ctx, p } = await freshPage(browser, u, vp);
+    const tag = vp.width === 390 ? '[mobile]' : '[desktop]';
+    await p.evaluate(() => appTab('search'));
+    await p.waitForTimeout(1300);
+    await p.evaluate(() => acOpenMarketplace());
+    await QA.waitUntil(p, () => { const x = document.getElementById('marketplaceBody'); return !!x && /mkt-head|ac-listing/.test(x.innerHTML); }, null, 20000);
+    await p.evaluate(() => { const h = document.querySelector('#marketplaceView .mkt-head'); if (h) h.click(); });
+    await p.waitForTimeout(2500);
+    say((await state(p)).screen === 'acProfileScreen', `${tag} MARKETPLACE PROFILE: the seller profile opened`);
+    await tapInAppBack(p);
+    await p.waitForTimeout(2600);
+    const s2 = await state(p);
+    say(s2.open.includes('marketplaceView'), `${tag} MARKETPLACE PROFILE BACK RESTORES MARKETPLACE`, JSON.stringify(s2));
+    say(s2.path === '/marketplace', `${tag} MARKETPLACE PROFILE BACK restores /marketplace`, s2.path);
+    say(s2.tab === 'search', `${tag} MARKETPLACE PROFILE BACK keeps the Engine world`, 'saw ' + s2.tab);
+    say(!s2.homeVisible, `${tag} MARKETPLACE PROFILE BACK shows NO Home feed (no Engine/Home hybrid)`, JSON.stringify(s2.navActive));
+    say(s2.screen !== 'acProfileScreen', `${tag} MARKETPLACE PROFILE BACK leaves the profile`);
+    await ctx.close();
+  }
+}
+
 (async () => {
   const pool = QA.newPool();
   const seller = await QA.seedAccount(pool, { business: true, prefix: 'nhs', balanceCents: 30000 });
@@ -290,6 +344,7 @@ async function backForward(browser, u, F) {
     await drive(browser, seller, { width: 390, height: 844 }, F, '[mobile]');
     await drive(browser, seller, { width: 1440, height: 900 }, F, '[desktop]');
     await backForward(browser, seller, F);
+    await marketplaceParent(browser, seller);
   } finally {
     await browser.close();
     await pool.end().catch(() => {});
