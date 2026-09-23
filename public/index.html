@@ -23011,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1870'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1871'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -33452,7 +33452,7 @@ async function acLoadDirectory() {
       : (AC._dirNear
         ? acEmpty('store', 'Nothing near you yet', 'No business close by has added its location. Turn “Near me” off to see them all.')
         : acEmpty('store', 'No businesses match', 'Try a different name, or clear the industry filter to see everyone.')); return; }
-    body.innerHTML = businesses.map(bz => `<div class="ac-item" onclick="closeOverlay('bizDirectory');appTab('home');acGoProfile(${jsAttr(bz.username)})">
+    body.innerHTML = businesses.map(bz => `<div class="ac-item" onclick="closeOverlay('bizDirectory', true);appTab('home');acGoProfile(${jsAttr(bz.username)})">
       ${acAvatarHtml(bz.name, bz.avatar, '', true)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(bz.name)}${bz.businessVerified ? vbadge(true) : ''}</span>${bz.featured ? '<span class="dir-featured">Featured</span>' : ''}${bz.distanceKm != null ? `<span class="dir-dist">${acDistLabel(bz.distanceKm)}</span>` : ''}</div>
         <div class="ac-item-last">${bz.headline ? escHtml(bz.headline) : '@' + escHtml(bz.username)}</div>
@@ -45654,7 +45654,7 @@ function acOpenWalletTx(id) {
   const label = _WTX_LABELS[t.kind] || (t.kind || 'Transaction').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
   let when = acTime(t.createdAt);
   try { const d = new Date(t.createdAt); when = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (_) {}
-  const peer = t.peer ? `<div class="wtxd-peer" onclick="closeOverlay('walletTxView');closeOverlay('walletView');acGoProfile('${t.peer.username}')">
+  const peer = t.peer ? `<div class="wtxd-peer" onclick="closeOverlay('walletTxView');closeOverlay('walletView', true);acGoProfile('${t.peer.username}')">
       ${acAvatarHtml(t.peer.name, t.peer.avatar, 'user-avatar sm', t.peer.accountType === 'business')}
       <div><div class="wtxd-peer-name">${escHtml(t.peer.name || '')}</div><div class="wtxd-peer-user">@${escHtml(t.peer.username || '')}</div></div>
     </div>` : '';
@@ -46378,7 +46378,7 @@ function acListingCard(l) {
     ? `<div class="mkt-img" role="button" tabindex="0" aria-label="${jsAttr(l.name)}" style="background-image:url('${thumb}')" onclick="${tap}acOpenListing(${l.id})">${heart}</div>`
     : `<div class="mkt-img noimg" role="button" tabindex="0" aria-label="${jsAttr(l.name)}" onclick="${tap}acOpenListing(${l.id})">${_MKT_BOX_SVG}${heart}</div>`;
   return `<div class="mkt-card"${l.sponsored ? ` data-adid="${l.adId}"` : ''}>
-    <div class="mkt-head" onclick="${tap}closeOverlay('marketplaceView');acGoProfile(${jsAttr(l.seller.username || '')})">
+    <div class="mkt-head" onclick="${tap}closeOverlay('marketplaceView', true);acGoProfile(${jsAttr(l.seller.username || '')})">
       ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
       <div class="mkt-head-main"><span class="mkt-seller">${escHtml(l.seller.name)}${vbadge(acIsVerified(l.seller))}</span>${l.seller.certified ? acCertSeal('Certified') : ''}<span class="mkt-kind">${_PROD_KIND[l.kind] || 'Item'}${biz ? ' · Business' : ''}${l.sponsored ? '<span class="mkt-sponsored">Sponsored</span>' : ''}</span></div>
     </div>
@@ -47521,7 +47521,7 @@ async function acOpenListing(id) {
           ? `<div class="mkt-detail-img mkt-vidcell"><video src="${media[0].v}" muted autoplay loop playsinline controls preload="metadata" aria-label="${alt} video"></video></div>`
           : `<div class="mkt-detail-img" role="img" aria-label="${alt}" style="background-image:url('${media[0].i}')"></div>`)
         : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`;
-    const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
+    const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView', true);appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
     // Shipping line + rating.
     const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? 'Free shipping' : '+ $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
@@ -47547,7 +47547,7 @@ async function acOpenListing(id) {
     body.innerHTML = `<div class="lv-top">
       <div class="mkt-detail-imgwrap">${img}${heart}${shareBtn}</div>
       <div class="lv-details">
-        <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">
+        <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView', true);appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">
           ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
           <span>${escHtml(l.seller.name)}${l.seller.username ? ` · @${escHtml(l.seller.username)}` : ''}</span>
           ${l.seller.certified ? acCertSeal('Certified') : ''}
@@ -49561,7 +49561,14 @@ function acLocalEventRow(e) {
   </div>`;
 }
 // Message a service provider (opens the DM).
-function acMessageProvider(id) { closeOverlay('serviceView'); closeOverlay('servicesView'); appTab('chats'); acOpenChat(id, null); }
+/* A ROUTED PANEL HANDING OFF TO A SCREEN PASSES noHistory, LIKE closeNotifToHome DOES.
+   Without it closeOverlay walks history back for a panel that owns a route, and the
+   popstate that schedules lands AFTER the screen has been shown - _navApplyUrl then
+   honours the restored address and navigates away from the conversation the member
+   just asked for. Nine controls read this way; this is one of them.
+   The tab id is 'chat', not 'chats': appTab has no 'chats' branch, so the old spelling
+   set _appTab to a world that does not exist and ran no navigation at all. */
+function acMessageProvider(id) { closeOverlay('serviceView'); closeOverlay('servicesView', true); appTab('chat'); acOpenChat(id, null); }
 // Services scope on the main search page → renders into the search results pane.
 async function acLoadServices(q) {
   const el = document.getElementById('acSearchPageResults'); if (!el) return;
@@ -50455,7 +50462,7 @@ async function acOpenOrder(id) {
     // One-tap line to the other party (Amazon "Contact seller" / Etsy "Message"):
     // opens the existing DM thread — the order card is already in it from purchase.
     { const other = o.mine ? o.buyer : o.seller;
-      if (other && other.id) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('ordersView');closeOverlay('orderView');appTab('chat');acOpenChat(${other.id})">💬 Message ${o.mine ? 'the buyer' : 'the seller'}${other.name ? ' · ' + escHtml(other.name) : ''}</button>`; }
+      if (other && other.id) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('ordersView', true);closeOverlay('orderView');appTab('chat');acOpenChat(${other.id})">💬 Message ${o.mine ? 'the buyer' : 'the seller'}${other.name ? ' · ' + escHtml(other.name) : ''}</button>`; }
     // Archive is a personal tidy-up: only once the order is finished either way.
     if (['fulfilled', 'delivered', 'released', 'cancelled', 'refunded'].includes(o.status)) {
       action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acArchiveOrder(${o.id}, ${o.archived ? 'false' : 'true'})">${o.archived ? 'Restore to orders' : 'Archive'}</button>`;
@@ -55654,8 +55661,8 @@ function acConnRow(u, isRequest) {
          <button class="ac-pill-btn accent" style="padding:7px 14px;" onclick="event.stopPropagation();acConnAccept(${u.id},this)">Accept</button>
          <button class="ac-pill-btn" style="padding:7px 12px;" onclick="event.stopPropagation();acConnDecline(${u.id},this)">Ignore</button>
        </div>`
-    : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();closeOverlay('connList');acOpenChat(${u.id})">Message</button>`;
-  return `<div class="ac-item ac-conn-item" onclick="closeOverlay('connList');acGoProfile(${jsAttr(u.username)})">
+    : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();closeOverlay('connList', true);acOpenChat(${u.id})">Message</button>`;
+  return `<div class="ac-item ac-conn-item" onclick="closeOverlay('connList', true);acGoProfile(${jsAttr(u.username)})">
     ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
     <div class="ac-item-main">
       <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div>
