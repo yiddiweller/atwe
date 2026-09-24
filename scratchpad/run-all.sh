@@ -44,6 +44,19 @@ node seed-fixtures.js 2>&1 | sed 's/^/-- fixtures: /'
 for f in qadsn profilemenu buttons rowsize notifscroll demomedia gutters sethandoff concentric fullscan offstate sbfoot timealign menutrim iconsize oneeye actionrow postcorners evencards headcentre adcard postcard skelgrey trayline radii pillfit cardsweep postdetail postshot blurup settle toastpolish welcome setslide helpfb mehub meacct meidx mesearch mesearchx menonadmin mecolor medesk megap setpage focusring polish3 mefeedback engsettle imgedge appsearch aiguide navlayer aipage aileak addtab polish2 aicomposer clicktest structure everywhere searchsweep deskcols authpane chatscroll voicenote chathead fixtext lastseen chatedge acctswitch pwsave navnotif smooth attach sendundo openbottom layouts navtap apperrors emptystates bootspeed storagesign feedskel cluster profcard tabpills topglass reachable signupflow signuphandoff obresume accttype deadends journeys admintabs admindead adminsweep bizevidence admintouch fillroles notifguard ctlsweep wayback touchwide gapmob notifhdr acctbug worldhdr verchk contrastfix touchsize legible aiknows aiagent deepstates twoperson shoppause wallethandoff navhandoff setpush motion nodash dashlive nohang callpath tapown rtalive aitell tabrow navclear loadstate errstate; do
   [ -f "$f.js" ] || { echo "-- $f -- MISSING"; continue; }
   echo "-- $f --"
-  timeout 600 node "$f.js" 2>&1 | tail -3   # totals only; run a probe directly for its full output
+  # EVERY PROBE GETS 600s, AND A PROBE THAT GENUINELY NEEDS LONGER IS NAMED HERE WITH ITS
+  # MEASURED RUNTIME - never raise the default for everyone to fit one. navhandoff is 241
+  # checks over nine handoffs at two viewports and measures ~631s on its own, so the 600s
+  # cap killed it near the end (exit 124) on every full run while it passed 241/0 when run
+  # directly. The kill printed only a "browser has been closed" stack, which read as a
+  # crash; it was the runner.
+  case "$f" in
+    navhandoff) cap=1200 ;;
+    *)          cap=600 ;;
+  esac
+  timeout "$cap" node "$f.js" 2>&1 | tail -3   # totals only; run a probe directly for its full output
+  # A timeout kill prints no totals line, so say so by name: otherwise it looks like a crash
+  # and a monitor grepping for FAILED reports nothing at all.
+  [ "${PIPESTATUS[0]}" = 124 ] && echo "   TIMED OUT after ${cap}s (killed by the runner)"
 done
 echo "== ALLDONE =="
