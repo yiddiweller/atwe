@@ -15923,7 +15923,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
 <div class="iset-group"><button class="iset-row" onclick="changeName()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg></span><div class="iset-main"><div class="iset-label">Display name</div></div><span class="iset-val" id="profileNameDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="changeUsername()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.6a2.4 2.4 0 0 0 4.8 0V12a8.8 8.8 0 1 0-3.4 7"/></svg></span><div class="iset-main"><div class="iset-label">Username</div></div><span class="iset-val" id="profileUserDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 21h16v-7H4z"/><path d="M6 14v-3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/><path d="M12 9V5"/><circle cx="12" cy="4" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Birthday</div><div class="iset-sub">Only you can see this</div></div><input type="date" class="settings-date" id="settingsBirthday" onchange="saveBirthday(this.value)"/></div><button class="iset-row" onclick="openChangeEmail()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email</div></div><span class="iset-val" id="setAcctEmail"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your account information is private. Only you can see your email and birthday.</div><div class="iset-group"><button class="iset-row" id="settingsPwRow" onclick="changePassword()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label" id="settingsPwLabel">Password</div><div class="iset-sub" id="settingsPwDesc">We’ll email you a secure reset link</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="shareProfile()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share profile</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download an archive of your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="openPause()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="10" y1="9" x2="10" y2="15"/><line x1="14" y1="9" x2="14" y2="15"/></svg></span><div class="iset-main"><div class="iset-label">Pause my account</div><div class="iset-sub">Show as “away” with a message. Turn off any time · Pro</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeactivate()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><circle cx="12" cy="16" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Deactivate account</div><div class="iset-sub">Hide your profile temporarily. Sign back in to restore it</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
     </div>
     <div class="iset-body hidden" data-page="privacy" data-title="Privacy & safety">
-<div class="iset-group"><button class="iset-row" onclick="closeSettings(true);openContactPrivacy()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.4 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span><div class="iset-main"><div class="iset-label">Who can contact you</div><div class="iset-sub">Choose who can message &amp; call you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><polyline points="3 12.5 6.6 16 12 9.5"/><polyline points="11.5 13 13.2 14.8 21 6.5"/></svg></span><div class="iset-main"><div class="iset-label">Read receipts</div><div class="iset-sub" id="rrDesc">Send &amp; see blue “seen” ticks</div></div><label class="ios-switch"><input type="checkbox" id="rrSwitch" onchange="toggleReadReceipts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Private browsing</div><div class="iset-sub" id="ppvDesc">Browse profiles anonymously, but you won’t see who viewed you either</div></div><label class="ios-switch"><input type="checkbox" id="ppvSwitch" onchange="togglePrivateViews()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4.5 5.5c0 7.5 6.5 14 14 14l1.5-3-4-1.8-2 2a12 12 0 0 1-5.7-5.7l2-2L8.5 5z"/><line x1="4" y1="4" x2="20" y2="20"/></svg></span><div class="iset-main"><div class="iset-label">Silence unknown callers</div><div class="iset-sub">Calls from people you don’t know won’t ring. They land as a missed call</div></div><label class="ios-switch"><input type="checkbox" id="apSilenceUnknown" onchange="toggleAccPriv('silenceUnknownCallers', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-group"><button class="iset-row" onclick="openBlockedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/></svg></span><div class="iset-main"><div class="iset-label">Blocked accounts</div><div class="iset-sub">They can’t see or reach you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><line x1="15.5" y1="9.5" x2="20.5" y2="14.5"/><line x1="20.5" y1="9.5" x2="15.5" y2="14.5"/></svg></span><div class="iset-main"><div class="iset-label">Muted accounts</div><div class="iset-sub">Their posts are hidden from your feed</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedWords()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 8h15M3.5 14h12"/><path d="M10 4 8 20M16 4l-1.5 11"/></svg></span><div class="iset-main"><div class="iset-label">Muted words</div><div class="iset-sub">Hide posts containing these</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your profile is public, but blocks, mutes and contact controls put you in charge of who reaches you.</div>
+<div class="iset-group"><button class="iset-row" onclick="openContactPrivacy()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.4 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span><div class="iset-main"><div class="iset-label">Who can contact you</div><div class="iset-sub">Choose who can message &amp; call you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><polyline points="3 12.5 6.6 16 12 9.5"/><polyline points="11.5 13 13.2 14.8 21 6.5"/></svg></span><div class="iset-main"><div class="iset-label">Read receipts</div><div class="iset-sub" id="rrDesc">Send &amp; see blue “seen” ticks</div></div><label class="ios-switch"><input type="checkbox" id="rrSwitch" onchange="toggleReadReceipts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Private browsing</div><div class="iset-sub" id="ppvDesc">Browse profiles anonymously, but you won’t see who viewed you either</div></div><label class="ios-switch"><input type="checkbox" id="ppvSwitch" onchange="togglePrivateViews()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4.5 5.5c0 7.5 6.5 14 14 14l1.5-3-4-1.8-2 2a12 12 0 0 1-5.7-5.7l2-2L8.5 5z"/><line x1="4" y1="4" x2="20" y2="20"/></svg></span><div class="iset-main"><div class="iset-label">Silence unknown callers</div><div class="iset-sub">Calls from people you don’t know won’t ring. They land as a missed call</div></div><label class="ios-switch"><input type="checkbox" id="apSilenceUnknown" onchange="toggleAccPriv('silenceUnknownCallers', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-group"><button class="iset-row" onclick="openBlockedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/></svg></span><div class="iset-main"><div class="iset-label">Blocked accounts</div><div class="iset-sub">They can’t see or reach you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><line x1="15.5" y1="9.5" x2="20.5" y2="14.5"/><line x1="20.5" y1="9.5" x2="15.5" y2="14.5"/></svg></span><div class="iset-main"><div class="iset-label">Muted accounts</div><div class="iset-sub">Their posts are hidden from your feed</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedWords()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 8h15M3.5 14h12"/><path d="M10 4 8 20M16 4l-1.5 11"/></svg></span><div class="iset-main"><div class="iset-label">Muted words</div><div class="iset-sub">Hide posts containing these</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your profile is public, but blocks, mutes and contact controls put you in charge of who reaches you.</div>
 <div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Connections &amp; visibility</div>
 <div class="iset-group">
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Active status</div><div class="iset-sub">Who sees when you’re online</div></div><select class="iset-select" id="apPresence" aria-label="Active status visibility" onchange="setAccPriv('presenceVisibility', this.value)"><option value="everyone">Everyone</option><option value="connections">Connections</option><option value="nobody">No one</option></select></div>
@@ -15990,10 +15990,10 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
 <div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCurrency()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.5 9a2.6 2.6 0 0 0-2.5-1.6C10.6 7.4 9.4 8.3 9.4 9.6c0 3 5.4 1.6 5.4 4.6 0 1.3-1.2 2.3-2.8 2.3A2.8 2.8 0 0 1 9.3 15"/><line x1="12" y1="5.6" x2="12" y2="7.4"/><line x1="12" y1="16.6" x2="12" y2="18.4"/></svg></span><div class="iset-main"><div class="iset-label">Currency</div><div class="iset-sub" id="setCurrencyVal">US Dollar</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-sectlabel" data-i18n="Appearance">Appearance</div><div class="iset-group"><div class="theme-picker" id="themePicker"><button class="theme-card" data-theme="black" onclick="setTheme('black')" aria-label="Black theme"><span class="theme-swatch sw-black"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Black">Black</span></button><button class="theme-card" data-theme="light" onclick="setTheme('light')" aria-label="Light theme"><span class="theme-swatch sw-light"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Light">Light</span></button><button class="theme-card" data-theme="system" onclick="setTheme('system')" aria-label="System theme"><span class="theme-swatch sw-system"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="System">System</span></button></div></div><div class="iset-sectlabel" data-i18n="Accent colour">Accent colour</div><div class="iset-group"><div class="accent-picker" id="accentPicker"></div></div><div class="iset-cap" data-i18n="Pick any colour for buttons, links & highlights across the app.">Pick any colour for buttons, links &amp; highlights across the app.</div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Hide like counts">Hide like counts</div><div class="iset-sub" data-i18n="Don’t show like & repost numbers on posts">Don’t show like &amp; repost numbers on posts</div></div><label class="ios-switch"><input type="checkbox" id="hideCountsToggle" onchange="toggleHideCounts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
     </div>
     <div class="iset-body hidden" data-page="assistant" data-title="Atwe Assistant">
-<div class="iset-group"><button class="iset-row" onclick="closeSettings(true);acOpenAiAsk()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label">Ask about your data</div><div class="iset-sub">Put a question to Atwe AI about your own account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Active model</div></div><span class="iset-val" id="settingsModel">Atwe Standard</span></div><button class="iset-row" onclick="shareFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share conversation</div><div class="iset-sub">Copy a link to this chat</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="clearHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Clear chat history</div><div class="iset-sub">Delete all saved AI conversations</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe AI is your built-in assistant. Conversations are saved to your account so you can pick up where you left off.</div>
+<div class="iset-group"><button class="iset-row" onclick="acOpenAiAsk()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label">Ask about your data</div><div class="iset-sub">Put a question to Atwe AI about your own account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Active model</div></div><span class="iset-val" id="settingsModel">Atwe Standard</span></div><button class="iset-row" onclick="shareFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share conversation</div><div class="iset-sub">Copy a link to this chat</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="clearHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Clear chat history</div><div class="iset-sub">Delete all saved AI conversations</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe AI is your built-in assistant. Conversations are saved to your account so you can pick up where you left off.</div>
     </div>
     <div class="iset-body hidden" data-page="data" data-title="Your data & storage">
-<div class="iset-group"><button class="iset-row" onclick="closeSettings(true);acOpenHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Posts you’ve read</div><div class="iset-sub">What you’ve already seen</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download your data</div><div class="iset-sub">Profile, posts, messages &amp; more as a file</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="deleteFullHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete full history</div><div class="iset-sub">Erase posts, messages, chats &amp; notifications</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div><div class="iset-sub">Permanently remove your account &amp; everything in it</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Deleting your account is permanent and cannot be undone.</div>
+<div class="iset-group"><button class="iset-row" onclick="acOpenHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Posts you’ve read</div><div class="iset-sub">What you’ve already seen</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download your data</div><div class="iset-sub">Profile, posts, messages &amp; more as a file</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="deleteFullHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete full history</div><div class="iset-sub">Erase posts, messages, chats &amp; notifications</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div><div class="iset-sub">Permanently remove your account &amp; everything in it</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Deleting your account is permanent and cannot be undone.</div>
     </div>
     <div class="iset-body hidden" data-page="about" data-title="About">
 <div class="iset-group"><button class="iset-row" onclick="acOpenFeedback()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="15" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Report a problem</div><div class="iset-sub">Tell us about a bug or share an idea</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
@@ -23011,7 +23011,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1873'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1874'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -24422,7 +24422,7 @@ function openDeepLink(r) {
     if (r.type === 'settings') {
       if (!isAccount()) { openLogin(); return; }
       openSettings();
-      setTimeout(() => { try { setNav(r.page); } catch (e) {} }, 60);
+      setTimeout(() => { try { setNav(r.page, { deep: true }); } catch (e) {} }, 60);
       return;
     }
     if (r.type === 'auth') {
@@ -28141,7 +28141,16 @@ function openSettings() {
   syncPrivacyRows();
   syncThemeButtons();
   acRenderAccentPicker();
-  setNav('hub', { immediate: true });
+  /* A RESTORE REOPENS ON THE PAGE THE ENTRY NAMES. Back to /settings from Devices, the
+     Wallet or a Forward used to land on the hub whatever page it came from. Anything that
+     is not a restore still opens on the hub, exactly as before. */
+  const so = document.getElementById('settingsOverlay');
+  const wasOpen = !!so && !so.classList.contains('hidden') && !so.classList.contains('closing');
+  if (_histRestoring && location.pathname === '/settings') {
+    const target = (history.state && history.state.setPage) || 'hub';
+    if (!wasOpen) setNav(target, { immediate: true });
+    else if (target !== _setPage) setNav(target, { back: target === 'hub' });
+  } else setNav('hub', { immediate: true });
   showOverlay('settingsOverlay');
 }
 
@@ -28149,6 +28158,7 @@ function openSettings() {
 function setNav(pageName, opts) {
   opts = opts || {};
   if (pageName === '__admin') { closeSettings(true); openAdmin(); return; }
+  const prevPage = _setPage;
   _setHideSearch();
   const overlay = document.getElementById('settingsOverlay');
   let title = 'Settings';
@@ -28162,6 +28172,7 @@ function setNav(pageName, opts) {
     }
   });
   _setPage = pageName;
+  _setHistWrite(prevPage, pageName, opts);
   /* Search lives on the hub only, as it does in iOS Settings and on the Account page —
      a "Search settings" box under the title "Your account" reads wrong. The class goes
      on the card, the nearest ancestor of the bar. */
@@ -28180,9 +28191,60 @@ function setNav(pageName, opts) {
   if (pageName === 'privacy') acLoadAccountPrivacy();
   if (pageName === 'security') { acLoadConnected(); syncAppLockRow(); }
 }
+/* A SETTINGS PAGE OWNS A HISTORY ENTRY, SO BACK FROM IT IS ONE STEP BY EVERY ROUTE.
+   Settings is ONE routed overlay (/settings) and its pages are panels inside it. setNav
+   used to switch panels without touching history, so the page never had an entry of its
+   own: browser Back from Privacy left Settings entirely (the hub was skipped), and every
+   return to /settings - from Devices, from the Wallet, from a Forward - reopened on the
+   hub because openSettings() always did. Measured on 1873: 90 failures across 15 chains.
+
+   The URL does not change - /settings/<page> is the Route & URL work, not this. A page
+   is an entry with the SAME address and a `setPage` in its state:
+     push - a tap on a hub row. The hub was a real stop, so Back returns to it.
+     land - Settings opened straight onto a page from elsewhere (Notifications' menu,
+            app-wide search, the profile-viewers card). The hub was never on screen, so
+            the page REPLACES Settings' own entry and Back returns to where you came from.
+     deep - a /settings/<page> link. No in-app origin to walk to, so Back is the hierarchy.
+   Written in a rAF so it lands AFTER acSyncPath has pushed /settings for a fresh open,
+   and never during a restore, which is replaying an entry that already exists. */
+function _setHistWrite(prev, page, opts) {
+  if (opts.immediate || opts.back || _histRestoring || page === 'hub' || prev === page) return;
+  const via = opts.deep ? 'deep' : opts.land ? 'land' : 'push';
+  requestAnimationFrame(() => {
+    if (_histRestoring || _setPage !== page || location.pathname !== '/settings') return;
+    const so = document.getElementById('settingsOverlay');
+    if (!so || so.classList.contains('hidden') || so.classList.contains('closing')) return;
+    const st = { atwe: 1, path: '/settings', setPage: page, via };
+    try {
+      if (via === 'push' && prev === 'hub') { history.pushState(st, ''); _histDepth++; }
+      else history.replaceState(st, '');
+    } catch (e) {}
+  });
+}
+/* The history entry a Back-cancelling re-push should recreate. The popstate handler
+   re-pushes when Back only dismissed a sheet; without the page it would stamp a bare
+   /settings entry over a page that is still on screen, and Forward would lose it. */
+function _histEntry() {
+  const st = { atwe: 1, path: location.pathname };
+  const so = document.getElementById('settingsOverlay');
+  if (location.pathname === '/settings' && so && !so.classList.contains('hidden') && _setPage && _setPage !== 'hub') {
+    st.setPage = _setPage; st.via = 'push';
+  }
+  return st;
+}
 function setBack() {
   if (!document.getElementById('setSearchResults').classList.contains('hidden')) { setSearchClear(); return; }
-  if (_setPage !== 'hub') setNav('hub', { back: true });
+  if (_setPage !== 'hub') {
+    const st = history.state;
+    // Our own entry for this page: walk it, so the app arrow, browser Back and device Back
+    // all consume the SAME entry and land in the same place.
+    if (st && st.setPage === _setPage && (st.via === 'push' || st.via === 'land') && location.pathname === '/settings') {
+      _histDepth = Math.max(0, _histDepth - 1);
+      try { history.back(); return; } catch (e) {}
+    }
+    setNav('hub', { back: true });
+    if (st && st.setPage && location.pathname === '/settings') { try { history.replaceState({ atwe: 1, path: '/settings' }, ''); } catch (e) {} }
+  }
   else closeSettings();
 }
 // Search across all settings.
@@ -28461,8 +28523,7 @@ async function disable2FA() {
 }
 // Change @username via the full profile editor (focused on the username field).
 function changeUsername() {
-  closeSettings(true);
-  openProfileEdit(true);
+  openProfileEdit(true);   // over Settings, so closing the editor returns to Your account
 }
 // Save / clear the (private) birthday.
 async function saveBirthday(v) {
@@ -28607,8 +28668,12 @@ function renderLockedSections() {
   wrap.innerHTML = LOCK_SECTIONS.map((s) => `<div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24">${s.icon}</svg></span><div class="iset-main"><div class="iset-label">${s.label}</div><div class="iset-sub">${s.sub}</div></div><label class="ios-switch"><input type="checkbox" id="lock-${s.key}" onchange="toggleSectionLock(this,'${s.key}')"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>`).join('');
   syncSectionLockRows();
 }
-function openLockedSections() { closeSettings(true); showOverlay('lockedSectionsOverlay'); renderLockedSections(); }
-function closeLockedSections() { closeOverlay('lockedSectionsOverlay'); setTimeout(openSettings, 180); }
+function openLockedSections() { showOverlay('lockedSectionsOverlay'); renderLockedSections(); }
+/* Reopen Settings after a sheet closes ONLY if it is not already back. These timers were
+   written when the sheet had closed Settings; now the sheet sits over it, or a history walk
+   restores it on the right page, and an unconditional reopen would reset it to the hub. */
+function _setReturn() { const so = document.getElementById('settingsOverlay'); if (!so || so.classList.contains('hidden')) openSettings(); }
+function closeLockedSections() { closeOverlay('lockedSectionsOverlay'); setTimeout(_setReturn, 180); }
 function syncSectionLockRows() {
   const locked = appLockEnabled() ? getLockedSections() : [];
   LOCK_SECTIONS.forEach((s) => { const el = document.getElementById('lock-' + s.key); if (el) el.checked = locked.includes(s.key); });
@@ -28880,13 +28945,12 @@ function openDeleteAccount() {
   btn.classList.add('is-empty');
   btn.disabled = false;
   btn.textContent = 'Continue';
-  closeSettings(true);
-  showOverlay('deleteAccountOverlay');
+  showOverlay('deleteAccountOverlay');   // a Settings sheet: it sits over Settings
   kbFocus('delAcctPass');
 }
 function closeDeleteAccount() {
   closeOverlay('deleteAccountOverlay');
-  setTimeout(openSettings, 180);
+  setTimeout(_setReturn, 180);
 }
 
 /* ─── Devices & sessions ─── */
@@ -28897,7 +28961,7 @@ function openDevices() {
   document.getElementById('devList').innerHTML = '<div class="ac-empty" style="padding:34px 0;">Loading…</div>';
   loadDevices();
 }
-function closeDevices() { closeOverlay('devicesOverlay'); setTimeout(openSettings, 180); }
+function closeDevices() { closeOverlay('devicesOverlay'); setTimeout(_setReturn, 180); }
 async function loadDevices() {
   try {
     const { sessions } = await API.req('GET', '/api/auth/sessions');
@@ -35837,7 +35901,7 @@ function acPplLoc() {
 
 function acGoSettingsPage(page) {
   openSettings();
-  setTimeout(() => { try { setNav(page); } catch (e) {} }, 60);
+  setTimeout(() => { try { setNav(page, { land: true }); } catch (e) {} }, 60);
 }
 
 /* Destinations that have a URL but no Profile-hub row — mostly the worlds
@@ -41548,7 +41612,7 @@ function acNotifMenuPick(which) {
   if (which === 'settings') {
     closeOverlay('notifOverlay', true);
     openSettings();
-    setTimeout(() => setNav('notifications'), 0);   // let the hub finish drawing, then slide into the page
+    setTimeout(() => setNav('notifications', { land: true }), 0);   // let the hub finish drawing, then slide into the page
   } else acClearNotifs();
 }
 // Empty the notification list for good. These are alerts, not records — nothing
@@ -44197,7 +44261,7 @@ async function acOpenProfileViewers() {
     if (isPrivate) {
       el.innerHTML = teaser + acEmpty('eyeoff', 'You’re browsing privately',
         'While private browsing is on your visits stay anonymous, so you cannot see who viewed you either. Turn it off to reveal your viewers.',
-        'Change privacy settings', "closeOverlay('viewersList');openSettings();setTimeout(()=>setNav('privacy'),120);");
+        'Change privacy settings', "closeOverlay('viewersList');openSettings();setTimeout(()=>setNav('privacy',{land:true}),120);");
       return;
     }
     // The Pro perk: free sees the count, Pro sees who. Said plainly, one tap up.
@@ -67019,8 +67083,7 @@ async function saveProfile() {
 }
 
 function closePlansFromSettings() {
-  closeSettings(true);
-  openPlans();
+  openPlans();   // over Settings, so "Maybe later" returns to Premium
 }
 function shareFromSettings() {
   closeSettings(true);
@@ -68543,6 +68606,9 @@ function appGoBack() {
   }
   // 4) topmost modal overlay
   const ov = navTopOverlay();
+  // Settings on top steps up through its own pages, exactly like its own arrow; closing
+  // it whole skipped the hub from any page.
+  if (ov && ov.id === 'settingsOverlay') { setBack(); return 'x'; }
   if (ov) { closeOverlay(ov.id); return 'x'; }
   // 5) mobile sidebar drawer
   const sb = document.getElementById('sidebar');
@@ -68649,7 +68715,7 @@ function navInit() {
   try { history.replaceState({ atwe: 1, path: location.pathname }, ''); } catch (e) {}
   window.addEventListener('popstate', () => {
     // A menu / dialog / call is open → Back cancels THAT, and the page stays put.
-    if (_navDismissModal()) { try { history.pushState({ atwe: 1, path: location.pathname }, ''); } catch (e) {} return; }
+    if (_navDismissModal()) { try { history.pushState(_histEntry(), ''); } catch (e) {} return; }
     // Otherwise this is a genuine page move. The browser has already restored the
     // URL; honour it, and suppress the pushes that landing there would normally
     // make — or Back would mint a fresh entry each time and never let you out.
