@@ -8427,6 +8427,35 @@ object; `openDeepLink()` turns that into the surface, auth-gating anything marke
 `auth:true`. A path we don't own returns null and the app falls through to its
 default surface — an unknown URL never errors.
 
+### The route registry — `public/atwe-routes.js` (Route Audit batch 0)
+
+**One declarative description of every Atwe address, read by the browser AND the
+server.** It is a UMD file: the page loads it as a classic script
+(`<script src="/atwe-routes.js?v=<ATWE_BUILD>">`, before the app script, so
+`window.ATWE_ROUTES` exists at boot) and `server.js` / the tests `require()` it. There
+is no build step, so a file valid in both worlds is the only way to have ONE source.
+
+- **Per route:** name, current pattern, aliases, `next` (the approved FUTURE canonical,
+  e.g. `/messages` → `/beam` — data only), world, view, auth, privacy, SEO, motion
+  family, logical parent, native mapping. `status:'planned'` rows are the approved route
+  tree from the Route Audit: data only, never matched, but already reserved.
+- **`match(path)` / `build(name, params)`** cover LIVE routes only. `build` throws on a
+  planned route or a bad parameter rather than inventing `/undefined`.
+- **Authoritative during the migration:** the registry owns route DATA; `APP_ROUTES` /
+  `parseDeepLink` / `RESERVED_PATHS` in `index.html` still own RUNTIME behaviour. Nothing
+  at runtime is routed through the registry yet — deliberately, no big-bang swap.
+- **`test/route-registry.test.js` is the drift guard.** It runs the app's REAL
+  `parseDeepLink` (extracted from the shipped file) over ~1,000 paths, including a seeded
+  fuzz corpus, and fails if `match()` disagrees about any of them. It also requires
+  `RESERVED_PATHS` to equal `parseReserved()` exactly. Self-tested: dropping one `tail`
+  flag fails the parity check by path.
+- **THE `?v=` MUST EQUAL `ATWE_BUILD`** (asserted). The service worker serves static
+  files cache-first, so an unversioned URL would hand a new shell yesterday's registry.
+  **Build bumps now move THREE things in lockstep: `ATWE_BUILD`, `sw.js` `CACHE` and
+  this `?v=`.**
+- **Retirement path:** when the runtime reads routes from here (route batch 3+), the data
+  tables in `index.html` are deleted and `APP_ROUTES` shrinks to name → `open()`.
+
 ## Search & typeahead
 
 **Two separate things, one rule each.**
