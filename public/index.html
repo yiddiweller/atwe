@@ -22986,6 +22986,14 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
   </div>
 </div>
 
+<!-- The route registry (window.ATWE_ROUTES): the one declarative description of every
+     Atwe address, shared with the server and the tests. A classic blocking script so it
+     is defined before the app below runs. NOTHING the app does REQUIRES it yet — every
+     use is guarded, so a failed load (offline on a cold cache) changes nothing.
+     THE ?v= IS THE BUILD, and test/route-registry.test.js fails if it drifts from
+     ATWE_BUILD: the service worker serves static files cache-first, so an unversioned
+     URL would hand a new shell yesterday's registry. Bump it with ATWE_BUILD. -->
+<script src="/atwe-routes.js?v=1874"></script>
 <script>
 /* ═══════════════════════════════════════════════
    CRASH TELEMETRY — must run FIRST (before anything that could throw).
@@ -24173,7 +24181,16 @@ let _pendingRoute = null;
 
    NOTE (no build step, so this cannot be imported): server.js keeps a
    matching SYSTEM_ROUTES list, which is what seeds the reserved_usernames
-   table. test/routes.test.js asserts the two never drift apart. */
+   table. test/routes.test.js asserts the two never drift apart.
+
+   MIGRATION (Route Audit batch 0): public/atwe-routes.js is now the declarative
+   route REGISTRY — names, patterns, aliases, approved future paths, parents,
+   auth/SEO/motion classes and every reserved-name set. During the migration the
+   tables below stay authoritative for RUNTIME behaviour, and
+   test/route-registry.test.js runs this file's parseDeepLink against the
+   registry's match() over a corpus of paths so the two can never disagree. When
+   the runtime moves onto the registry these data tables are deleted and
+   APP_ROUTES shrinks to name → open(). Add a route in BOTH until then. */
 
 const APP_ROUTES = {
   /* ── The five worlds ── */
