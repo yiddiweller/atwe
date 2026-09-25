@@ -8490,6 +8490,51 @@ refused name as `reserved` so the signup screen says so up front.
   over real HTTP, and a source check that every write door calls the gate. Self-tested:
   removing the admin-assign guard or the grandfather clause fails it by name.
 
+### History v2 + NavEvent — `AtweHistory` (Route Audit batch 2)
+
+**Every history entry Atwe writes is `{ atwe:2, idx, key, route, path, ...legacy }`, and
+every write goes through ONE module** (`AtweHistory.write/writeState/repush/init/traverse`,
+defined just above `acSetPath`). `acSetPath`, the 1874 Settings entries, `setBack`,
+`stripParam`, `navInit`, the popstate dismiss re-push and the exit guard all call it.
+
+- **`idx`** — one monotonic sequence per tab in `sessionStorage.atwe_hist_max` (survives a
+  reload, per-tab by definition). Push = next number; replace KEEPS the number; reload and
+  back/forward into the document ADOPT the entry's own number.
+- **Direction:** a popstate compares the new entry's `idx` with the one it left:
+  `back` / `forward` (any number of steps — `history.go(-2)` reports delta −2) / `none`,
+  and **`unknown`** for anything without an `idx` (a build-1861 `{atwe:1}`, an old `{}`,
+  another site). Never guessed.
+- **`key`** — unique per entry, reserved for future per-entry stash (scroll, local tab).
+  Unused today.
+- **`route`** — the registry name of the URL. DEBUG ONLY; `histv2.js` asserts no app code
+  reads `route/idx/key/path` back out of `history.state`.
+- **`path`** — now always the entry's real URL. It used to go stale (a replace reused the
+  previous state wholesale, so an entry at `/marketplace` still said `/`).
+- **legacy** — the 1874 Settings `setPage`/`via` ride along unchanged. That is destination
+  state in history, which the architecture forbids; it retires with `/settings/<page>`
+  URLs (route batch 4). **Add nothing else there** — the URL alone says what is shown.
+- **NavEvent** — `{ kind, direction, from, to, family, uaTransition, delta?, legacyEntry? }`,
+  dispatched as `window` `'atwe:navigate'` and kept in `AtweHistory.log` (last 60). Kinds:
+  `initial reload restore push replace root-change traverse dismiss exit-guard`.
+  `uaTransition` carries `PopStateEvent.hasUAVisualTransition` so the future motion layer
+  can skip its own animation after a browser swipe. **Infrastructure only: nothing
+  listens to it yet and no navigation depends on it.**
+
+**BOOT NEVER PUSHES — a real behaviour fix (the audit's B4), and why.** Boot used to push
+the default world (`appTab`) and then push the deep link, so a fresh `/settings` link left
+THREE entries, every reload added TWO more, and browser Back from a shared link landed on a
+Home the member never visited. Until boot has applied its route (`consumePendingRoute` ends
+the phase ~500ms later), or the member's first trusted gesture, or a 10s failsafe, a push
+is written as a replace. **Consequence, as the approved model says:** browser Back from a
+freshly opened deep link now leaves Atwe (real history) instead of landing on a fabricated
+Home entry, and closing a deep-linked panel rewrites the address in place (`_histDepth` is
+0) rather than walking back. In-app Back (`appGoBack`) is untouched.
+
+Guarded by `scratchpad/histv2.js` (76 checks, 390 and 1440): push/replace/reload/Back/
+Forward/`go(-2)`, v1 and `{}` entries, key uniqueness, path never stale, UA transition,
+deep-link boots with one entry, reloads add none, and the 1874 Settings Back/Forward still
+land correctly. `--break` makes direction always "back" and fails the Forward checks.
+
 ## Search & typeahead
 
 **Two separate things, one rule each.**
