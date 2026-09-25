@@ -19,6 +19,10 @@
 
 const path = require('path');
 const guard = require(path.join(__dirname, '..', 'tools', 'seed-guard.js'));
+// The one route registry (public/atwe-routes.js) via routes.js — the same source the
+// server's new-username gate reads, so this tool cannot drift from the app.
+const { ALLOCATION_RESERVED, REGISTRY: ROUTE_REGISTRY } = require(path.join(__dirname, '..', 'routes.js'));
+const NEW_NAME_RESERVED = new Set(ALLOCATION_RESERVED);
 
 const TAG = 'beta';
 
@@ -73,6 +77,10 @@ function identityProblem(raw) {
   if (!raw.username || !/^[a-z0-9_]{2,24}$/i.test(String(raw.username))) {
     return '"username" is required and must be 2-24 characters, letters/numbers/underscore only';
   }
+  /* The app's own rule for a NEW username (Route Audit batch 1), from the one route
+     registry the server uses too: starts and ends with a letter or a number, and so on. */
+  const shape = ROUTE_REGISTRY.usernameShapeError(String(raw.username).trim());
+  if (shape) return '"username": ' + shape;
   if (!raw.name || !String(raw.name).trim()) return 'a "name" is required';
   if (raw.accountType != null && !ACCOUNT_TYPES.includes(raw.accountType)) {
     return `"accountType" must be one of: ${ACCOUNT_TYPES.join(', ')}`;
@@ -175,6 +183,11 @@ async function findEmailOwners(db, email, exceptId = null) {
    The reservation row is deliberately LEFT IN PLACE: a name somebody already
    holds is unaffected by it, so the name stays locked against everyone else. */
 async function reservationFor(db, username) {
+  /* The locked TABLE only holds the words the router owns today. The route registry's
+     wider new-username set (every approved future route root, the server's own roots,
+     the near-term namespaces) is enforced in code by the app, so it is asked here too:
+     this tool writes users directly and would otherwise be the one door around it. */
+  if (NEW_NAME_RESERVED.has(String(username || '').trim().toLowerCase())) return true;
   try {
     const r = await db.query(
       `SELECT username FROM reserved_usernames WHERE lower(username) = lower($1)`,
