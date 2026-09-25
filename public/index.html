@@ -24044,7 +24044,7 @@ async function resendVerification() {
   } catch (e) { showNotif(e.message || 'Could not send verification email.'); }
 }
 
-function stripParam() { history.replaceState({}, '', location.pathname); }
+function stripParam() { try { AtweHistory.write(location.pathname, false, {}); } catch (e) { history.replaceState({}, '', location.pathname); } }
 
 // Handle ?verify= / ?reset= / ?checkout= links. Returns true if the reset
 // flow took over the boot sequence.
@@ -24496,11 +24496,171 @@ function acSetCanonical(path) {
     if (og) og.setAttribute('content', href);
   } catch (e) {}
 }
+/* ═══ HISTORY V2 — navigation-entry BOOKKEEPING (Route Audit batch 2) ═══════════
+   Every history entry Atwe writes now carries
+       { atwe: 2, idx, key, route, path, ...legacy }
+     idx    a position in this tab's history. ONE monotonic sequence per tab, kept in
+            sessionStorage (which survives a reload and is per-tab by definition). A
+            push takes the next number; a replace KEEPS the entry's number.
+     key    a unique id for THIS entry (future per-entry scroll/tab stash; unused yet).
+     route  the route-registry NAME of the URL — debug/assert information only.
+     path   the entry's own URL, and now ALWAYS equal to it. It used to go stale: a
+            replace reused the previous state wholesale, so an entry at /u_7facd7b5 or
+            /marketplace still said path "/". Nothing reads it; it is kept only so a
+            snapshot is self-describing, and retires with the legacy fields below.
+     legacy the 1874 Settings bookkeeping (setPage / via) rides along UNCHANGED. It is
+            destination state in history, which the architecture forbids, and it goes
+            when /settings/<page> becomes a real URL (route batch 4). Nothing else may
+            be added here: the URL alone says WHAT is shown.
+
+   With an index on both ends, a popstate can finally say which way it went:
+   new idx < old = back, > = forward (by any number of steps: history.go(-2) is
+   -2), equal = none, and anything without an idx (an older build's {atwe:1},
+   stripParam's old {}, another site's state) = UNKNOWN — never guessed.
+
+   Every navigation is announced as ONE NavEvent (window 'atwe:navigate', plus a
+   ring buffer in AtweHistory.log for tests). INFRASTRUCTURE ONLY in this batch:
+   nothing listens to it, nothing animates on it, and no navigation depends on it.
+
+   BOOT NEVER PUSHES. The entry the member arrived on is the entry boot is building:
+   the default world (appTab) and then the deep link each used to PUSH, so a fresh
+   /settings link left three entries and a reload two more, and browser Back from a
+   link landed on a Home nobody had visited. Until boot has applied its route (or the
+   member touches anything), a push is written as a replace. */
+const AtweHistory = (() => {
+  const MAX_KEY = 'atwe_hist_max';
+  let memMax = 0;          // fallback when sessionStorage is unavailable
+  let cur = null;          // { idx, key, route, path } of the entry this document is on
+  let booting = true;
+  const log = [];
+  const readMax = () => { try { return parseInt(sessionStorage.getItem(MAX_KEY), 10) || 0; } catch (e) { return 0; } };
+  const nextIdx = () => {
+    const m = Math.max(readMax(), memMax, cur ? cur.idx : 0) + 1;
+    memMax = m;
+    try { sessionStorage.setItem(MAX_KEY, String(m)); } catch (e) {}
+    return m;
+  };
+  const bumpMax = (i) => {
+    if (i > memMax) memMax = i;
+    try { if (i > readMax()) sessionStorage.setItem(MAX_KEY, String(i)); } catch (e) {}
+  };
+  const newKey = () => {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID().slice(0, 12); } catch (e) {}
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  };
+  const routeOf = (path) => {
+    try { const m = window.ATWE_ROUTES && ATWE_ROUTES.match(path); return m ? m.name : null; } catch (e) { return null; }
+  };
+  /* Is this a state WE wrote, with a usable position? */
+  const owned = (st) => !!(st && st.atwe === 2 && Number.isInteger(st.idx) && st.idx > 0 && typeof st.key === 'string');
+  /* Fields a caller may carry forward — everything except our bookkeeping. */
+  const legacyOf = (st) => {
+    const out = {};
+    if (st && typeof st === 'object') for (const k of Object.keys(st)) if (!['atwe', 'idx', 'key', 'route', 'path'].includes(k)) out[k] = st[k];
+    return out;
+  };
+  const snap = (e) => (e ? { idx: e.idx, key: e.key, route: e.route, path: e.path } : null);
+  const worldOf = (name) => { try { const r = window.ATWE_ROUTES && ATWE_ROUTES.get(name); return r ? r.world : null; } catch (e) { return null; } };
+  const familyOf = (name) => { try { const r = window.ATWE_ROUTES && ATWE_ROUTES.get(name); return r ? r.family : null; } catch (e) { return null; } };
+  function emit(kind, direction, from, to, extra) {
+    let family = familyOf(to && to.route);
+    if (kind === 'push' && from && to && from.route && to.route && worldOf(from.route) !== worldOf(to.route) && family === 'root') kind = 'root-change';
+    if (kind === 'root-change') family = 'root';
+    const ev = Object.assign({ kind, direction, from: snap(from), to: snap(to), family: family || null, uaTransition: false, t: Date.now() }, extra || {});
+    log.push(ev); if (log.length > 60) log.shift();
+    try { window.dispatchEvent(new CustomEvent('atwe:navigate', { detail: ev })); } catch (e) {}
+    return ev;
+  }
+  /* Build the state object for a write. mode 'push' → a new position; 'replace' → the
+     current entry's position (allocating one if the entry was never ours). */
+  function stateFor(path, mode, carry) {
+    let idx, key;
+    if (mode === 'push' || !cur) { idx = nextIdx(); key = newKey(); }
+    else { idx = cur.idx; key = cur.key; }
+    return Object.assign(legacyOf(carry), { atwe: 2, idx, key, route: routeOf(path), path });
+  }
+  function commit(st) { cur = { idx: st.idx, key: st.key, route: st.route, path: st.path }; bumpMax(st.idx); }
+
+  return {
+    log,
+    get current() { return snap(cur); },
+    get booting() { return booting; },
+    owned,
+    /* Boot is over: the arrival entry is built. Called once the pending route has been
+       applied, or on the member's first real gesture, whichever is first. */
+    endBoot() { booting = false; },
+    /* Adopt (reload / back-forward into this document) or claim (a fresh load) the
+       entry the document started on. Replaces its state, keeping ONLY our bookkeeping
+       — exactly as navInit always did — so a reload never carries stale sub-state. */
+    init() {
+      const st = history.state;
+      let kind = 'initial';
+      try {
+        const nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+        if (owned(st)) kind = nav && nav.type === 'reload' ? 'reload' : 'restore';
+      } catch (e) { if (owned(st)) kind = 'restore'; }
+      const path = location.pathname;
+      const next = owned(st)
+        ? { atwe: 2, idx: st.idx, key: st.key, route: routeOf(path), path }
+        : (cur = null, stateFor(path, 'push', null));
+      try { history.replaceState(next, ''); } catch (e) {}
+      commit(next);
+      return emit(kind, kind === 'initial' ? 'none' : 'unknown', null, cur);
+    },
+    /* The single writer. Returns true when a NEW entry was pushed. */
+    write(path, push, carry) {
+      const from = cur;
+      const asPush = !!push && !booting;
+      const st = stateFor(path, asPush ? 'push' : 'replace', carry);
+      if (asPush) history.pushState(st, '', path); else history.replaceState(st, '', path);
+      commit(st);
+      emit(asPush ? 'push' : 'replace', asPush ? 'forward' : 'none', from, cur, push && !asPush ? { bootReplace: true } : null);
+      return asPush;
+    },
+    /* Same-URL write (the 1874 Settings page entries). */
+    writeState(push, carry) { return this.write(location.pathname, push, carry); },
+    /* Re-push the entry a Back only DISMISSED a sheet from: same position, same key,
+       so the direction arithmetic stays true across the cancel. */
+    repush(carry, stayOn, why) {
+      const was = stayOn || cur;
+      const from = cur;
+      const st = Object.assign(legacyOf(carry), { atwe: 2, idx: was ? was.idx : nextIdx(), key: was ? was.key : newKey(),
+        route: routeOf(location.pathname), path: location.pathname });
+      try { history.pushState(st, ''); } catch (e) {}
+      commit(st);
+      emit(why || 'dismiss', 'none', from, cur);
+      return st;
+    },
+    /* A popstate: which way did the browser go? */
+    traverse(ev) {
+      const st = history.state;
+      const from = cur;
+      let direction = 'unknown', delta = null;
+      if (owned(st) && from && Number.isInteger(from.idx)) {
+        delta = st.idx - from.idx;
+        direction = delta < 0 ? 'back' : delta > 0 ? 'forward' : 'none';
+      }
+      const ua = !!(ev && 'hasUAVisualTransition' in ev && ev.hasUAVisualTransition === true);
+      const path = location.pathname;
+      cur = owned(st) ? { idx: st.idx, key: st.key, route: routeOf(path), path } : null;
+      if (cur) bumpMax(cur.idx);
+      const out = emit('traverse', direction, from, cur || { idx: null, key: null, route: routeOf(path), path },
+        { delta, uaTransition: ua, legacyEntry: !owned(st) });
+      return out;
+    },
+    /* The document came back out of the back/forward cache. */
+    restored() { return emit('restore', 'unknown', null, cur); },
+  };
+})();
+try { window.AtweHistory = AtweHistory; } catch (e) {}
+
 function acSetPath(path, opts) {
   try {
     if (location.pathname === path) return;
-    if (opts && opts.push) { history.pushState({ atwe: 1, path }, '', path); _histDepth++; }
-    else history.replaceState(history.state || { atwe: 1, path }, '', path);
+    /* Through the ONE writer. A replace carries the entry's legacy fields forward exactly
+       as before (history.state wholesale), but `path` is now the real URL, never stale. */
+    const push = !!(opts && opts.push);
+    if (AtweHistory.write(path, push, push ? null : history.state)) _histDepth++;
     acSetCanonical(path);
   } catch (e) {}
 }
@@ -24510,6 +24670,9 @@ let _pendingPool = null;      // a ?pool=<id> to open after auth
 let _pendingWaitlist = null;  // a ?waitlist=<slug> to open after auth
 let _pendingCallLink = null;  // a ?call=<code> call link to open after auth
 function consumePendingRoute() {
+  /* The arrival entry is built once whatever this schedules has run (the latest opener
+     below fires at +220ms; a Settings deep link adds +60ms and a frame). */
+  setTimeout(() => { try { AtweHistory.endBoot(); } catch (e) {} }, 500);
   try {
     const pc = JSON.parse(localStorage.getItem('atwe_coupon_pending') || 'null');
     if (pc && pc.code) { localStorage.removeItem('atwe_coupon_pending'); setTimeout(() => acOpenCouponLanding(pc), 200); }
@@ -28231,10 +28394,9 @@ function _setHistWrite(prev, page, opts) {
     if (_histRestoring || _setPage !== page || location.pathname !== '/settings') return;
     const so = document.getElementById('settingsOverlay');
     if (!so || so.classList.contains('hidden') || so.classList.contains('closing')) return;
-    const st = { atwe: 1, path: '/settings', setPage: page, via };
+    const st = { setPage: page, via };
     try {
-      if (via === 'push' && prev === 'hub') { history.pushState(st, ''); _histDepth++; }
-      else history.replaceState(st, '');
+      if (AtweHistory.writeState(via === 'push' && prev === 'hub', st)) _histDepth++;
     } catch (e) {}
   });
 }
@@ -28260,7 +28422,7 @@ function setBack() {
       try { history.back(); return; } catch (e) {}
     }
     setNav('hub', { back: true });
-    if (st && st.setPage && location.pathname === '/settings') { try { history.replaceState({ atwe: 1, path: '/settings' }, ''); } catch (e) {} }
+    if (st && st.setPage && location.pathname === '/settings') { try { AtweHistory.writeState(false, {}); } catch (e) {} }
   }
   else closeSettings();
 }
@@ -68729,10 +68891,20 @@ function _navApplyUrl() {
 
 function navInit() {
   if (_navReady) return; _navReady = true;
-  try { history.replaceState({ atwe: 1, path: location.pathname }, ''); } catch (e) {}
-  window.addEventListener('popstate', () => {
-    // A menu / dialog / call is open → Back cancels THAT, and the page stays put.
-    if (_navDismissModal()) { try { history.pushState(_histEntry(), ''); } catch (e) {} return; }
+  try { AtweHistory.init(); } catch (e) {}
+  /* Boot never pushes (see AtweHistory). It ends when the pending route has been applied
+     (consumePendingRoute), on the member's first real gesture, or — failsafe — 10s in. */
+  const _endBoot = () => AtweHistory.endBoot();
+  ['pointerdown', 'keydown', 'touchstart'].forEach((t) => window.addEventListener(t, (e) => { if (e.isTrusted) _endBoot(); }, { capture: true, passive: true, once: true }));
+  setTimeout(_endBoot, 10000);
+  window.addEventListener('pageshow', (e) => { if (e.persisted) { try { AtweHistory.restored(); } catch (x) {} } });
+  window.addEventListener('popstate', (e) => {
+    // Bookkeeping first: which way did the browser go, and by how many steps?
+    const _stay = AtweHistory.current;
+    try { AtweHistory.traverse(e); } catch (x) {}
+    // A menu / dialog / call is open → Back cancels THAT, and the page stays put. The
+    // entry is put back with the position the member is still standing on.
+    if (_navDismissModal()) { try { AtweHistory.repush(_histEntry(), _stay, 'dismiss'); } catch (x) { try { history.pushState(_histEntry(), ''); } catch (y) {} } return; }
     // Otherwise this is a genuine page move. The browser has already restored the
     // URL; honour it, and suppress the pushes that landing there would normally
     // make — or Back would mint a fresh entry each time and never let you out.
@@ -68748,7 +68920,7 @@ function navInit() {
       if (_exitArmed) { _exitArmed = false; return; }
       _exitArmed = true; showNotif('Press back again to exit');
       clearTimeout(_exitTimer); _exitTimer = setTimeout(() => { _exitArmed = false; }, 2000);
-      try { history.pushState({ atwe: 1, path: location.pathname }, ''); } catch (e) {}
+      try { AtweHistory.repush({}, AtweHistory.current, 'exit-guard'); } catch (e) {}
     }
   });
 }
