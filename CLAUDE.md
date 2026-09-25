@@ -8456,6 +8456,40 @@ is no build step, so a file valid in both worlds is the only way to have ONE sou
 - **Retirement path:** when the runtime reads routes from here (route batch 3+), the data
   tables in `index.html` are deleted and `APP_ROUTES` shrinks to name → `open()`.
 
+### The new-username gate — `newUsernameError()` (Route Audit batch 1)
+
+A handle is a claim on the ROOT of the site (atwe.com/<username>), so every path that
+gives an account a name it did not already hold goes through ONE function in
+`server.js`: signup (legacy + wizard + verify), Google/Apple completion, a profile
+username change, bots, staff system accounts, **staff handle assignment** (it could
+hand out `wallet` before), **paid handle claims + lookup**, the generated fallback name,
+and — via the same registry — `seed/beta-account.js`. `/api/auth/exists` reports a
+refused name as `reserved` so the signup screen says so up front.
+
+- **Shape** (`ROUTE_REGISTRY.usernameShapeError`): starts and ends with a letter or a
+  number, ASCII `[A-Za-z0-9._-]`, no `..`, and never ends like a file (`FILE_EXT_RE`) —
+  `express.static` serves `/public` before the app, so `atwe.com/x.png` is a file.
+- **System words** (`ALLOCATION_RESERVED`): router-reserved words + every route root
+  including the approved FUTURE ones (`beam`, `engine`, `account`, `service` …) + the
+  server's own roots (`go`, `s`, `catalog`, `_diag`, `__shell`, `.well-known`) + the
+  near-term namespaces. Plus every file actually in `/public`, listed at boot.
+- **GRANDFATHERED, and that is the caller's job:** pass the account's current username
+  and the name it already holds always passes. Nobody is renamed; saving a profile never
+  fails because a handle predates the rule.
+- **The DATABASE SEED IS UNCHANGED.** `routes.js` `SYSTEM_ROUTES` (seeded into
+  `reserved_usernames` on every boot) is still exactly the router's 136 words; the wider
+  set is enforced in code only, so a deploy writes no new rows and nobody who already
+  holds e.g. `shop` loses anything. `test/usernames.test.js` asserts this.
+- **Production release gate:** `node tools/reserved-collisions.js <database-url>` runs the
+  approved Route Audit §45 query inside `BEGIN READ ONLY` and lists every existing handle
+  the gate would refuse for a NEW account. No default database, on purpose. Hits are
+  grandfathered and resolved individually, never by an automatic rename. **Not yet run
+  against production.**
+- `test/usernames.test.js` (21): the rules, every `/public` file refused, case, ordinary
+  names still pass, grandfathering, signup/exists/admin-assign/system-account/paid-claim
+  over real HTTP, and a source check that every write door calls the gate. Self-tested:
+  removing the admin-assign guard or the grandfather clause fails it by name.
+
 ## Search & typeahead
 
 **Two separate things, one rule each.**
