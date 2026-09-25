@@ -23,7 +23,7 @@ const apple = require('./apple');
 const demo = require('./demo');
 const betaAccess = require('./beta-access');   // Admin -> Beta Access (beta deployments only)
 const reservedSeed = require('./reserved-seed');
-const { SYSTEM_ROUTES } = require('./routes');   // words that are real URLs — never usernames
+const { SYSTEM_ROUTES, ALLOCATION_RESERVED, REGISTRY: ROUTE_REGISTRY } = require('./routes');   // words that are real URLs — never usernames
 const FEATURE_CONTROLS = require('./feature-controls-data');
 const { HELP_ARTICLES } = require('./help-content');
 const tz = require('./timezones');
@@ -6037,14 +6037,62 @@ function ageFromDob(dob) {
   return age;
 }
 // X-style auto handle: the name (sanitized) + random digits, guaranteed unique.
+/* ═══ THE NEW-USERNAME GATE (Route Audit batch 1) ═══
+   A person's public address is atwe.com/<username>, so a handle is a claim on the
+   root of the site. Every path that GIVES an account a username it did not already
+   hold goes through newUsernameError(): signup (both flows), Google/Apple completion,
+   a profile username change, bots, staff system accounts, staff handle assignment,
+   paid handle claims and the generated fallback. ONE function, so the rule cannot be
+   applied five different ways.
+
+   It checks three things, cheapest first:
+     1. SHAPE — the registry's usernameShapeError(): starts and ends with a letter or
+        a number, ASCII letters/digits/._- only, no "..", never ends like a file name
+        (express.static serves /public BEFORE the app, so atwe.com/x.png is a file).
+     2. SYSTEM WORDS — the registry's allocationReserved(): every word the router owns,
+        every approved future route root, the server's own roots (/go, /s, /catalog,
+        /_diag, /__shell, /.well-known) and the near-term namespaces, case-insensitive.
+     3. THE PUBLIC DIRECTORY — every file name actually in /public, read at boot, so a
+        file added tomorrow is protected without anyone remembering to list it.
+   Admin-locked premium names (the reserved_usernames TABLE) are a separate, existing
+   check (usernameReserved) that callers keep making — staff may hand those out.
+
+   GRANDFATHERING IS THE CALLER'S JOB AND IT IS NOT OPTIONAL: pass the account's
+   current username and a name it already holds is always accepted. Nobody is renamed,
+   and nobody who registered a now-reserved word before this rule loses anything. */
+const _NEW_NAME_RESERVED = new Set(ALLOCATION_RESERVED);
+const _PUBLIC_ROOT_FILES = (() => {
+  try { return new Set(require('fs').readdirSync(path.join(__dirname, 'public')).map((f) => f.toLowerCase())); }
+  catch (e) { return new Set(); }
+})();
+function isSystemUsername(name) {
+  const n = String(name || '').trim().replace(/^@/, '').toLowerCase();
+  return _NEW_NAME_RESERVED.has(n) || _PUBLIC_ROOT_FILES.has(n);
+}
+function newUsernameError(name, currentUsername) {
+  const n = String(name || '').trim().replace(/^@/, '');
+  if (currentUsername && n.toLowerCase() === String(currentUsername).toLowerCase()) return null; // grandfathered
+  const shape = ROUTE_REGISTRY.usernameShapeError(n);
+  if (shape) return shape;
+  if (isSystemUsername(n)) return 'That username isn’t available.';
+  return null;
+}
+
+/* A generated username (Google/Apple/"skip this step") has to pass the same gate a
+   typed one does: the name is folded to ASCII, every character outside the handle set
+   is dropped, leading/trailing punctuation is trimmed and dot runs are collapsed, so
+   the result always starts with a letter or a number. The digits appended below make
+   it end with one. */
 function baseUsernameFromName(name) {
   let base = (name || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9._-]/g, '');
-  return (base || 'user').slice(0, 20);
+  base = base.replace(/\.{2,}/g, '.').replace(/^[._-]+/, '').replace(/[._-]+$/, '');
+  return (base || 'user').slice(0, 20).replace(/[._-]+$/, '') || 'user';
 }
 async function generateUsername(name) {
   const base = baseUsernameFromName(name);
   for (let i = 0; i < 15; i++) {
     const cand = base + Math.floor(1000 + Math.random() * 90000);
+    if (newUsernameError(cand)) continue;
     const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [cand]);
     if (!taken.rowCount) return cand;
   }
@@ -6112,7 +6160,11 @@ app.post('/api/auth/exists', rateLimit(20, 60000, 'exists'), async (req, res) =>
     // An admin-locked (reserved) username is unavailable for signup even though no
     // account holds it — surface it here so the username step rejects it up front
     // instead of bouncing the user back after the whole wizard.
-    const reserved = await usernameReserved(identifier);
+    // A handle nobody holds is also unavailable when the new-username gate refuses it
+    // (a system word, a file-shaped name). Only for a handle nobody holds: an existing
+    // member typing their own username to SIGN IN must not be told it is "reserved".
+    const reserved = (await usernameReserved(identifier))
+      || (rowCount === 0 && !identifier.includes('@') && !!newUsernameError(identifier));
     res.json({ exists: rowCount > 0, reserved });
   } catch (err) {
     console.error(err);
@@ -6145,10 +6197,8 @@ app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), requireFeature('sig
   const accountType = req.body.accountType === 'business' ? 'business' : 'personal';
   let wantUser = (req.body.username || '').trim().replace(/^@/, '');
   if (wantUser) {
-    if (wantUser.length > 40) return res.status(400).json({ error: 'Username is too long.' });
-    if (!/^[a-zA-Z0-9._-]+$/.test(wantUser)) {
-      return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
-    }
+    const nameErr = newUsernameError(wantUser);
+    if (nameErr) return res.status(400).json({ error: nameErr });
   }
 
   try {
@@ -6200,7 +6250,7 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
       return res.status(400).json({ error: 'That code is incorrect. Please try again.' });
     }
     // Code is good — create the verified account.
-    if (pend.username && await usernameReserved(pend.username)) {
+    if (pend.username && (newUsernameError(pend.username) || await usernameReserved(pend.username))) {
       return res.status(409).json({ error: 'That username isn’t available. Please choose another.' });
     }
     let username = pend.username || await generateUsername(pend.name);
@@ -6339,8 +6389,7 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
   if (age === null || age > 120) return res.status(400).json({ error: 'Please enter a valid date of birth.' });
   if (age < 18) return res.status(403).json({ error: 'You must be at least 18 years old to create an account.' });
   if (!wantUser) return res.status(400).json({ error: 'Please choose a username.' });
-  if (wantUser.length > 40) return res.status(400).json({ error: 'Username is too long.' });
-  if (!/^[a-zA-Z0-9._-]+$/.test(wantUser)) return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
+  { const nameErr = newUsernameError(wantUser); if (nameErr) return res.status(400).json({ error: nameErr }); }
   if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit code from your email.' });
   try {
     const p = await db.query('SELECT code_hash, expires_at FROM pending_signups WHERE email = $1', [email]);
@@ -6492,7 +6541,7 @@ app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => 
   if (age < 18) return res.status(400).json({ error: 'You must be at least 18 years old.' });
   // Username — required + valid + available.
   const username = String(req.body.username || '').trim().replace(/^@/, '');
-  if (!username || username.length > 40 || !/^[a-zA-Z0-9._-]+$/.test(username)) return res.status(400).json({ error: 'Choose a valid username.' });
+  { const nameErr = newUsernameError(username); if (nameErr) return res.status(400).json({ error: nameErr }); }
   if (await usernameReserved(username)) return res.status(409).json({ error: 'That username isn’t available.' });
   // Password — optional (the user may skip it).
   const pwRaw = String(req.body.password || '');
@@ -6576,7 +6625,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
   if (age === null) return res.status(400).json({ error: 'Enter a valid date of birth.' });
   if (age < 18) return res.status(400).json({ error: 'You must be at least 18 years old.' });
   const username = String(req.body.username || '').trim().replace(/^@/, '');
-  if (!username || username.length > 40 || !/^[a-zA-Z0-9._-]+$/.test(username)) return res.status(400).json({ error: 'Choose a valid username.' });
+  { const nameErr = newUsernameError(username); if (nameErr) return res.status(400).json({ error: nameErr }); }
   if (await usernameReserved(username)) return res.status(409).json({ error: 'That username isn’t available.' });
   const pwRaw = String(req.body.password || '');
   let hasPassword = false, passwordHash;
@@ -7023,6 +7072,14 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if (username.length > 40) return res.status(400).json({ error: 'Username is too long.' });
   if (username && !/^[a-zA-Z0-9._-]+$/.test(username)) {
     return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
+  }
+  // A CHANGE of username goes through the new-username gate. The name this account
+  // already holds is grandfathered, so saving a profile never fails because an old
+  // handle predates today's rules — nobody is forced to rename.
+  if (username) {
+    const curU = (await db.query('SELECT username FROM users WHERE id = $1', [req.user.id]).catch(() => ({ rows: [] }))).rows[0];
+    const nameErr = newUsernameError(username, curU && curU.username);
+    if (nameErr) return res.status(400).json({ error: nameErr });
   }
   // Block switching to an admin-locked username (but let the holder keep one
   // that was locked after they already had it).
@@ -14769,7 +14826,7 @@ app.post('/api/bots', auth.requireAuth, rateLimit(10, 3600000, 'bot-create'), as
   try {
     const n = (await db.query('SELECT COUNT(*)::int AS n FROM bots WHERE owner_id = $1', [req.user.id])).rows[0].n;
     if (n >= BOT_CAP) return res.status(400).json({ error: 'You can have ' + BOT_CAP + ' bots.' });
-    if (usernameReserved && await usernameReserved(handle)) return res.status(409).json({ error: 'That handle is not available.' });
+    if (newUsernameError(handle) || await usernameReserved(handle)) return res.status(409).json({ error: 'That handle is not available.' });
     const taken = (await db.query('SELECT 1 FROM users WHERE lower(username) = $1', [handle])).rows[0];
     if (taken) return res.status(409).json({ error: 'That handle is taken.' });
     const avatar = req.body.avatar ? await offloadMedia(cleanImage(req.body.avatar) || null, 'bot') : null;
@@ -43684,9 +43741,7 @@ app.post('/api/admin/system-accounts', auth.requireAdmin, async (req, res) => {
   const username = String(req.body.username || '').trim().replace(/^@/, '');
   const name = (String(req.body.name || '').trim() || ('@' + username)).slice(0, 80);
   const password = String(req.body.password || '');
-  if (!username || username.length > 40 || !/^[a-zA-Z0-9._-]+$/.test(username)) {
-    return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
-  }
+  { const nameErr = newUsernameError(username); if (nameErr) return res.status(400).json({ error: nameErr }); }
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   try {
     if (await usernameReserved(username)) return res.status(409).json({ error: 'That username is reserved.' });
@@ -44256,6 +44311,12 @@ app.post('/api/admin/username-locks/:username/assign', auth.requirePerm('handles
   const toRaw = (req.body.toUsername || req.body.to || '').toString().trim().replace(/^@/, '');
   const toId = parseInt(req.body.toId, 10);
   if (!username) return res.status(400).json({ error: 'No username given.' });
+  /* A staffer may hand out an admin-LOCKED premium name — that is what this route is
+     for — but never a SYSTEM word (a route, a server root, a file): assigning `wallet`
+     would give someone a profile at atwe.com/wallet that can never be reached, and the
+     next boot would re-lock the name under them. The locked-names table is exactly what
+     this route is allowed to bypass; the new-username gate is not. */
+  { const nameErr = newUsernameError(username); if (nameErr) return res.status(409).json({ error: 'That is a system name and can’t be assigned to an account. ' + nameErr }); }
   try {
     const held = (await db.query('SELECT id FROM users WHERE lower(username) = $1', [username])).rows[0];
     if (held) return res.status(409).json({ error: 'That name is already held by an account. Unlock it or pick another.' });
@@ -44367,6 +44428,7 @@ app.get('/api/handles/:username', auth.requireAuth, async (req, res) => {
   try {
     const held = await db.query('SELECT 1 FROM users WHERE lower(username) = $1', [username]);
     if (held.rowCount) return res.json({ username, claimable: false, reason: 'taken' });
+    if (newUsernameError(username)) return res.json({ username, claimable: false, reason: 'reserved' }); // a system word is never for sale
     const r = (await db.query('SELECT price_cents FROM reserved_usernames WHERE username = $1', [username])).rows[0];
     if (!r) return res.json({ username, claimable: false, reason: 'available' }); // not reserved → normal signup/change path
     if (r.price_cents == null) return res.json({ username, claimable: false, reason: 'reserved' }); // reserved, not for sale
@@ -44377,6 +44439,9 @@ app.get('/api/handles/:username', auth.requireAuth, async (req, res) => {
 app.post('/api/handles/claim', auth.requireAuth, blockImpersonation, rateLimit(15, 60000, 'handle-claim'), async (req, res) => {
   const username = (req.body.username || '').trim().replace(/^@/, '').toLowerCase();
   if (!username || !/^[a-z0-9._-]{1,40}$/.test(username)) return res.status(400).json({ error: 'Enter a valid username.' });
+  // A system word (a route, a server root, a file) is never sold, even if a staffer
+  // put a price on its lock row. Checked before anything touches the wallet.
+  if (newUsernameError(username)) return res.status(400).json({ error: 'That handle isn’t for sale.' });
   const expectedPrice = parseHandlePrice(req.body.priceCents); // optional client-quoted price (guards a price change)
   const cid = req.body.clientId;
   try {
