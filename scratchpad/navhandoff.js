@@ -149,6 +149,10 @@ function cases(F) {
     el.click(); return true;
   }, [sel, within || null]);
 
+  /* Cases 4 and 5 run from a LISTING sheet, which owns its own address since route
+     batch 3 (/listing/<id>). They used to expect /marketplace here — the B2 bug itself:
+     the browse surface's queued sync overwrote the sheet's URL. The listing is the
+     member's real parent, so it is the address the case must start on and return to. */
   return [
     ['1. Business directory -> seller profile', 'bizDirectory', '/businesses', 'bizDirectory', openDirectory,
       click('.ac-item', '#bizDirectoryBody'), 'acProfileScreen'],
@@ -156,7 +160,7 @@ function cases(F) {
       click('.wtxd-peer', '#walletTxView'), 'acProfileScreen'],
     ['3. Marketplace card head -> seller profile', 'marketplaceView', '/marketplace', 'marketplaceView', openMarket,
       click('.mkt-head', '#marketplaceView'), 'acProfileScreen'],
-    ['4. Listing "Visit store" -> seller profile', 'marketplaceView', '/marketplace', 'listingView', openListing,
+    ['4. Listing "Visit store" -> seller profile', 'marketplaceView', '/listing/' + F.product, 'listingView', openListing,
       // selected by its VISIBLE TEXT, not by its onclick: an onclick selector stops
       // matching under --break and the case would report "could not drive" instead of
       // failing, which is the difference between a self-test and a blind spot.
@@ -164,7 +168,7 @@ function cases(F) {
         const b = [...document.querySelectorAll('#listingView .ac-pill-btn')].find((x) => /^Visit\b/.test((x.textContent || '').trim()));
         if (!b) return false; b.click(); return true;
       }), 'acProfileScreen'],
-    ['5. Listing detail head -> seller profile', 'marketplaceView', '/marketplace', 'listingView', openListing,
+    ['5. Listing detail head -> seller profile', 'marketplaceView', '/listing/' + F.product, 'listingView', openListing,
       (p) => p.evaluate(() => {
         const v = document.getElementById('listingView');
         const h = v && v.querySelector('.mkt-detail-head');
