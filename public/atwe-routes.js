@@ -87,7 +87,7 @@
   const ROUTES = [
     /* The five worlds (+ the AI inside page). Today's world URLs keep working; the
        approved canonical roots are recorded in `next` and are NOT switched on yet. */
-    r('home',      '/',          { world: 'home', family: 'root', parent: null, aliases: ['/feed', '/home'], native: '/' }),
+    r('home',      '/',          { world: 'home', family: 'root', parent: null, aliases: ['/feed', '/home', '/go'], native: '/' }),
     r('messages',  '/messages',  { world: 'beam', family: 'root', parent: null, aliases: ['/beam'], next: '/beam' }),
     r('search',    '/search',    { world: 'engine', family: 'root', parent: null, aliases: ['/engine'], next: '/engine', seo: 'noindex' }),
     r('me',        '/me',        { world: 'account', family: 'root', parent: null, aliases: ['/profile'], next: '/account' }),
