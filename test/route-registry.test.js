@@ -31,7 +31,7 @@ function appRouter() {
   vm.createContext(ctx);
   vm.runInContext(html.slice(i, j) +
     '\nthis.__t = { parse: () => parseDeepLink(), reserved: [...RESERVED_PATHS], app: APP_ROUTES,' +
-    ' settings: SETTINGS_ROUTES, sections: PROFILE_SECTIONS, auth: AUTH_ROUTES, entities: ENTITY_ROUTES };' +
+    ' settings: SETTINGS_ROUTES, leaves: Object.keys(SETTINGS_LEAVES), sections: PROFILE_SECTIONS, auth: AUTH_ROUTES, entities: ENTITY_ROUTES };' +
     '\nthis.__legacy = ' + lw[1] + ';', ctx);
   const t = ctx.__t;
   return {
@@ -39,6 +39,7 @@ function appRouter() {
     reserved: JSON.parse(JSON.stringify(t.reserved)),
     app: t.app,
     settings: JSON.parse(JSON.stringify(t.settings)),
+    leaves: JSON.parse(JSON.stringify(t.leaves)),
     sections: JSON.parse(JSON.stringify(t.sections)),
     auth: JSON.parse(JSON.stringify(t.auth)),
     entities: JSON.parse(JSON.stringify(t.entities)),
@@ -52,7 +53,8 @@ function appName(d) {
   if (!d) return null;
   switch (d.type) {
     case 'route': return (d.key === '' || d.key === 'feed' || d.key === 'home' || d.key === 'go') ? 'home' : d.key;
-    case 'settings': return 'settings-page';
+    // Route batch 4: the Settings tree is explicit routes; an unknown node matches nothing.
+    case 'settings': return d.unknown ? null : d.page === 'hub' ? 'settings' : 'settings-' + d.page + (d.leaf ? '-' + d.leaf : '');
     case 'auth': return d.page;
     case 'profile': return d.section ? 'profile-section' : 'profile';
     default: return d.type; // post, job, listing, event, group, circle
@@ -68,7 +70,6 @@ function appParams(d) {
     else out.username = String(d.username).toLowerCase();
   }
   if (d.id !== undefined) out.id = String(d.id);
-  if (d.page !== undefined && d.type === 'settings') out.page = d.page;
   if (d.section !== undefined) out.section = d.section;
   return out;
 }
@@ -131,7 +132,7 @@ test('aliases never collide with a canonical pattern or another alias', () => {
 test('no two live routes render the same overlay (one destination, one canonical)', () => {
   const seen = new Map();
   for (const x of live) {
-    if (!x.view || x.name === 'settings-page') continue; // a Settings page IS the Settings overlay on a page
+    if (!x.view || x.view === 'settingsOverlay') continue; // the hub and every page ARE the Settings overlay, on a page
     assert.ok(!seen.has(x.view), x.view + ' is rendered by both ' + seen.get(x.view) + ' and ' + x.name);
     seen.set(x.view, x.name);
   }
@@ -154,7 +155,7 @@ test('a builder refuses planned routes and bad parameters instead of inventing a
   assert.throws(() => R.build('beam-dm', { username: 'john' }), /planned/);
   assert.throws(() => R.build('listing', {}), /missing id/);
   assert.throws(() => R.build('listing', { id: 'abc' }), /invalid id/);
-  assert.throws(() => R.build('settings-page', { page: 'nope' }), /invalid page/);
+  assert.throws(() => R.build('profile-section', { username: 'john', section: 'nope' }), /invalid section/);
   assert.throws(() => R.build('nope'), /unknown route/);
 });
 
@@ -173,7 +174,8 @@ test('malformed paths reject cleanly (no throw, no wrong destination)', () => {
 /* THE PARITY TEST. The registry must say exactly what the running app says. */
 function corpus() {
   const out = new Set(['/', '/settings', '/settings/security', '/settings/SECURITY', '/settings/unknown',
-    '/settings/security/devices', '/job/5', '/job/5/extra', '/listing/15', '/event/3', '/post/12', '/post/x',
+    '/settings/security/devices', '/settings/security/devices/x', '/settings/security/nope', '/settings/nope/devices',
+    '/Settings/Privacy/Muted-Words', '/settings/about/whats-new', '/devices', '/DEVICES', '/devices/x', '/settings/', '/job/5', '/job/5/extra', '/listing/15', '/event/3', '/post/12', '/post/x',
     '/john', '/John', '/@john', '/john/post/7', '/john/post/x', '/john/post/7/photo/1', '/john/media',
     '/john/MEDIA/x', '/john/nothing', '/company/Acme', '/company/acme/x', '/group/Foo', '/group/@foo',
     '/circle/accounting', '/circle/a/b', '/login', '/signup', '/verify-email', '/reset-password',
@@ -278,7 +280,7 @@ test('the public identity root stays protected', () => {
 test('the critical URLs of today are all still represented', () => {
   const must = {
     '/': 'home', '/messages': 'messages', '/search': 'search', '/me': 'me', '/notifications': 'notifications',
-    '/settings': 'settings', '/settings/security': 'settings-page', '/devices': 'devices', '/wallet': 'wallet',
+    '/settings': 'settings', '/settings/security': 'settings-security', '/devices': 'settings-security-devices', '/wallet': 'wallet',
     '/marketplace': 'marketplace', '/listing/1': 'listing', '/job/1': 'job', '/event/1': 'event',
     '/post/1': 'post', '/john/post/1': 'post', '/john': 'profile', '/john/media': 'profile-section',
     '/company/john': 'profile', '/group/x': 'group', '/circle/x': 'circle', '/login': 'login',
@@ -310,4 +312,92 @@ test('the page loads the registry at the build it was shipped with', () => {
   assert.ok(tag, 'index.html does not load /atwe-routes.js?v=<build>');
   assert.strictEqual(tag[1], build, 'atwe-routes.js?v= must equal ATWE_BUILD, or the service worker can serve a stale registry');
   assert.ok(tag.index < html.indexOf('const APP_ROUTES = {'), 'the registry must load before the app script');
+});
+
+/* ── Route batch 4 — Settings is a real URL hierarchy ─────────────────────────── */
+const SET_PAGES = ['account', 'privacy', 'security', 'notifications', 'premium', 'display', 'assistant', 'data', 'about'];
+const SET_LEAVES = ['account/delete', 'privacy/contact', 'privacy/blocked', 'privacy/muted', 'privacy/muted-words',
+  'privacy/last-seen', 'security/devices', 'security/2fa', 'security/passkeys', 'security/locks', 'notifications/phone',
+  'premium/creator', 'display/language', 'display/currency', 'data/history', 'about/whats-new'];
+
+test('batch 4: the approved Settings tree, exactly — every node build→parse round-trips, in the app too', () => {
+  const settingsRoutes = live.filter((x) => x.world === 'settings').map((x) => x.name).sort();
+  const want = ['settings'].concat(SET_PAGES.map((p) => 'settings-' + p), SET_LEAVES.map((l) => 'settings-' + l.replace('/', '-'))).sort();
+  assert.deepStrictEqual(settingsRoutes, want, 'the live Settings routes are not the approved tree');
+  for (const name of want) {
+    const p = R.build(name);
+    assert.strictEqual(R.match(p).name, name, p);
+    assert.strictEqual(appName(APP.parse(p)), name, 'app parses ' + p + ' as ' + appName(APP.parse(p)));
+    const r = R.get(name);
+    assert.strictEqual(r.auth, 'account', name + ' needs an account');
+    assert.strictEqual(r.privacy, 'private', name + ' is private');
+    assert.strictEqual(r.seo, 'private', name + ' is not indexed');
+    assert.strictEqual(r.family, 'hierarchy', name);
+    assert.ok(r.title, name + ' declares a title');
+    assert.ok(r.view, name + ' declares the surface that renders it');
+  }
+});
+
+test('batch 4: every Settings parent is a real route one level up', () => {
+  for (const p of SET_PAGES) assert.strictEqual(R.get('settings-' + p).parent, 'settings');
+  for (const l of SET_LEAVES) {
+    const [page] = l.split('/');
+    const r = R.get('settings-' + l.replace('/', '-'));
+    assert.strictEqual(r.parent, 'settings-' + page, l + ' parent');
+    assert.ok(R.get(r.parent), l + ' parent exists');
+    assert.strictEqual(R.build(r.parent), '/settings/' + page);
+  }
+});
+
+test('batch 4: the app binds an opener to exactly the registry\'s leaves (no second route table)', () => {
+  assert.deepStrictEqual([...APP.leaves].sort(), [...SET_LEAVES].sort());
+  assert.deepStrictEqual(R.SETTINGS_LEAVES.map(([p, l]) => p + '/' + l).sort(), [...SET_LEAVES].sort());
+  const views = R.SETTINGS_LEAVES.map((x) => x[2]);
+  assert.strictEqual(new Set(views).size, views.length, 'two leaves share a sheet');
+  for (const v of views) assert.ok(html.includes('id="' + v + '"') || html.includes("id = '" + v + "'"), v + ' is not a sheet in the app');
+});
+
+test('batch 4: /devices is an alias of settings-security-devices, and stays reserved', () => {
+  const m = R.match('/devices');
+  assert.strictEqual(m.name, 'settings-security-devices');
+  assert.strictEqual(m.alias, true);
+  assert.deepStrictEqual(APP.parse('/devices'), { type: 'settings', page: 'security', leaf: 'devices', alias: true });
+  assert.ok(R.parseReserved().includes('devices'));
+  assert.ok(APP.reserved.includes('devices'));
+  assert.strictEqual(R.NOTIF_TARGETS.devices, 'settings-security-devices');
+  assert.strictEqual(R.get('devices'), null, 'the old standalone devices route is gone');
+});
+
+test('batch 4: transient Settings flows have NO address', () => {
+  const TRANSIENT = ['change-email', 'email', 'change-username', 'username', 'change-password', 'password', 'pause',
+    'deactivate', 'link', 'link-device', 'qr', 'feedback', 'report', 'theme', 'appearance', 'wallet', 'plan', 'store'];
+  for (const page of SET_PAGES) for (const t of TRANSIENT) {
+    const p = '/settings/' + page + '/' + t;
+    assert.strictEqual(R.match(p), null, p + ' became a route');
+    assert.strictEqual(appName(APP.parse(p)), null, p + ' is a route in the app');
+  }
+  for (const t of TRANSIENT) assert.ok(!R.ROUTES.some((x) => x.world === 'settings' && x.pattern.endsWith('/' + t)), t);
+  assert.strictEqual(R.match('/settings/assistant/ask'), null, 'Assistant has no leaves');
+});
+
+test('batch 4: malformed or unknown Settings paths never become another page or a profile', () => {
+  const cases = ['/settings/nope', '/settings/security/nope', '/settings/security/devices/x', '/settings/nope/devices',
+    '/settings/privacy/muted/words', '/settings//security', '/settings/%2e%2e', '/settings/security/devices%2Fx'];
+  for (const p of cases) {
+    const m = R.match(p), d = APP.parse(p);
+    const a = appName(d);
+    assert.strictEqual(m ? m.name : null, a, p + ': registry ' + (m && m.name) + ' vs app ' + a);
+    assert.ok(!m || m.name.startsWith('settings'), p + ' left the Settings namespace: ' + (m && m.name));
+    assert.ok(!d || d.type === 'settings', p + ' parsed as ' + (d && d.type));
+  }
+  assert.strictEqual(APP.parse('/settings/nope').unknown, true);
+  assert.strictEqual(APP.parse('/settings/security/nope').unknown, true);
+  assert.strictEqual(APP.parse('/settings/security/devices/x').unknown, true);
+});
+
+test('batch 4: no history.state Settings routing is left in the app', () => {
+  assert.ok(!/history\.state[^;\n]*setPage/.test(html), 'something still reads setPage out of history.state');
+  assert.ok(!/_setHistWrite|_histEntry\(|writeState\(/.test(html), 'a legacy Settings history writer survived');
+  assert.ok(!/\{\s*land:\s*true\s*\}|\{\s*deep:\s*true\s*\}/.test(html), 'a land/deep Settings entry survived');
+  assert.ok(/'prev', 'setPage', 'via'\]\.includes\(k\)/.test(html), 'legacyOf must strip setPage/via so nothing can write them');
 });

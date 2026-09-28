@@ -78,7 +78,10 @@ async function freshPage(browser, u, viewport) {
 }
 
 const CHILDREN = [
-  ['Devices & sessions', '/devices', 'devicesOverlay',
+  /* Route batch 4: Devices is the leaf /settings/security/devices (its old /devices is an
+     alias), and Settings' own address is the page it shows, so the parent here is
+     /settings/security, not the bare /settings. */
+  ['Devices & sessions', '/settings/security/devices', 'devicesOverlay',
    (p) => p.evaluate(() => {
      const b = [...document.querySelectorAll('#settingsOverlay .iset-body')].find((x) => getComputedStyle(x).display !== 'none');
      const r = b && [...b.querySelectorAll('.iset-row')].find((x) => (x.textContent || '').trim().startsWith('Devices & sessions'));
@@ -114,7 +117,8 @@ async function drive(browser, u, viewport, tag) {
     if (!drove) { say(false, `${tag} Settings -> ${label}: could not drive its real row`); await ctx.close(); continue; }
     const child = await state(p);
     const ledger = await p.evaluate(() => window.__L);
-    say(atSettings.path === '/settings' && atSettings.open.includes('settingsOverlay'), `${tag} Settings -> ${label}: Settings was open on /settings first`, JSON.stringify(atSettings));
+    const parent = page ? '/settings/' + page : '/settings';
+    say(atSettings.path === parent && atSettings.open.includes('settingsOverlay'), `${tag} Settings -> ${label}: Settings was open on ${parent} first`, JSON.stringify(atSettings));
     say(child.open.includes(view) && child.path === route, `${tag} Settings -> ${label}: the child opens on ${route}`, JSON.stringify(child));
 
     /* THE LEDGER IS THE ROOT CAUSE MADE VISIBLE: the child must PUSH its own entry,
@@ -133,7 +137,7 @@ async function drive(browser, u, viewport, tag) {
       await act(); await p.waitForTimeout(2300);
       const b = await state(p);
       say(b.open.includes('settingsOverlay'), `${tag} Settings -> ${label}: ${how} Back restores SETTINGS`, JSON.stringify(b));
-      say(b.path === '/settings', `${tag} Settings -> ${label}: ${how} Back restores /settings`, b.path);
+      say(b.path === parent, `${tag} Settings -> ${label}: ${how} Back restores ${parent}`, b.path);
       say(!b.open.includes(view), `${tag} Settings -> ${label}: ${how} Back closes the child`);
       say(b.dupes.length === 0 && b.trapping.length === 0, `${tag} Settings -> ${label}: ${how} Back leaves no duplicate/trapping overlay`, JSON.stringify([b.dupes, b.trapping]));
     }
