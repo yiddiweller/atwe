@@ -88,8 +88,10 @@ async function run(browser, token, viewport) {
   const sSettings = (await st(p)).state; keys.add(sSettings.key);
   await p.evaluate(() => setNav('security')); await settle(p);
   const sSec = (await st(p)).state; keys.add(sSec.key);
-  say(sSec.idx === sSettings.idx + 1 && sSec.setPage === 'security' && sSec.path === '/settings',
-    tag + ' 3d. a same-URL Settings page is a real position (1874 bookkeeping kept)', [sSettings.idx, sSec.idx, sSec.setPage]);
+  /* Route batch 4: a Settings page is its own URL now, and history.state carries no
+     setPage/via — the 1874 same-URL bookkeeping is retired. */
+  say(sSec.idx === sSettings.idx + 1 && !('setPage' in sSec) && !('via' in sSec) && sSec.path === '/settings/security' && sSettings.path === '/settings',
+    tag + ' 3d. a Settings page is a real position at its own URL, no setPage/via', [sSettings.idx, sSec.idx, sSec.path, sSec.setPage]);
   say(sSearch.idx < sSettings.idx && sSettings.idx < sSec.idx, tag + ' 3e. positions only ever increase', [sSearch.idx, sSettings.idx, sSec.idx]);
 
   // 12. keys unique per pushed entry
@@ -104,7 +106,7 @@ async function run(browser, token, viewport) {
   let ev = await lastEvent(p, 'traverse');
   say(ev && ev.direction === 'back' && ev.delta === -1, tag + ' 6. browser Back reports back, delta -1', ev && [ev.direction, ev.delta]);
   const setPage = await p.evaluate(() => _setPage);
-  say(setPage === 'hub', tag + ' 6b. ...and the 1874 behaviour is intact: Back from Security shows the Settings hub', setPage);
+  say(setPage === 'hub', tag + ' 6b. ...and Back from Security shows the Settings hub', setPage);
 
   // 7. Forward reports forward
   await p.goForward(); await settle(p);
@@ -208,7 +210,9 @@ function sourceChecks() {
   const script = html.slice(html.indexOf('</head>'));
   say(!/history\.state\.(route|idx|key|path)\b/.test(script), 'S1. no app code reads route/idx/key/path back out of history.state');
   const writers = (script.match(/history\.(pushState|replaceState)\(/g) || []).length;
-  say(writers <= 6, 'S2. every history write is inside AtweHistory (or its fallbacks)', writers);
+  /* 7 since route batch 4: AtweHistory.rewriteLegacy, the one-time in-place conversion of
+     an old tab's Settings entry, is a write of its own — and it lives inside AtweHistory. */
+  say(writers <= 7, 'S2. every history write is inside AtweHistory (or its fallbacks)', writers);
 }
 
 (async () => {

@@ -59,8 +59,37 @@
     idslug: { test: (s) => /^\d{1,12}(-[a-z0-9-]{1,80})?$/.test(s), norm: (s) => s },
   };
 
-  const SETTINGS_PAGES = ['account', 'privacy', 'security', 'notifications',
-    'premium', 'display', 'assistant', 'data', 'about'];
+  /* The Settings tree (route batch 4). A page is /settings/<page>; its title is the
+     page's own header. A leaf is /settings/<page>/<leaf>, rendered by its own sheet
+     (`view`), and its logical parent is its page. Only the approved leaves are here:
+     transient flows (change email / username / password, pause, deactivate, link a
+     device, feedback, the theme and ordinary switches) deliberately have NO address. */
+  const SETTINGS_TREE = [
+    ['account', 'Your account'], ['privacy', 'Privacy & safety'], ['security', 'Security & access'],
+    ['notifications', 'Notifications'], ['premium', 'Premium'], ['display', 'Display & accessibility'],
+    ['assistant', 'Atwe Assistant'], ['data', 'Your data & storage'], ['about', 'About'],
+  ];
+  const SETTINGS_PAGES = SETTINGS_TREE.map((x) => x[0]);
+  const SETTINGS_LEAVES = [
+    ['account', 'delete', 'deleteAccountOverlay', 'Delete account'],
+    ['privacy', 'contact', 'privacyOverlay', 'Who can contact you'],
+    ['privacy', 'blocked', 'blockedOverlay', 'Blocked accounts'],
+    ['privacy', 'muted', 'mutedOverlay', 'Muted accounts'],
+    ['privacy', 'muted-words', 'mutedWordsOverlay', 'Muted words'],
+    ['privacy', 'last-seen', 'lastSeenHiddenOverlay', 'Hidden from'],
+    /* /devices is the pre-batch-4 address; it stays an ALIAS so every link already issued
+       keeps working, and the app canonicalises it here. (The server-side 301 is batch 9.) */
+    ['security', 'devices', 'devicesOverlay', 'Devices & sessions', { aliases: ['/devices'] }],
+    ['security', '2fa', 'twoFaView', 'Two-factor authentication'],
+    ['security', 'passkeys', 'passkeysView', 'Passkeys'],
+    ['security', 'locks', 'lockedSectionsOverlay', 'Locked sections'],
+    ['notifications', 'phone', 'phoneOverlay', 'Your number'],
+    ['premium', 'creator', 'creatorSubView', 'Creator subscriptions'],
+    ['display', 'language', 'langView', 'Language'],
+    ['display', 'currency', 'currencyView', 'Currency'],
+    ['data', 'history', 'historyView', 'Posts you’ve read'],
+    ['about', 'whats-new', 'changelogView', 'What’s new'],
+  ];
   const PROFILE_SECTIONS = ['posts', 'replies', 'media', 'likes', 'about', 'connections'];
 
   /* ── The routes ────────────────────────────────────────────────────────────
@@ -80,7 +109,7 @@
   const L = 'live', P = 'planned';
   const r = (name, pattern, o) => Object.assign({ name, pattern, status: L, tail: false,
     world: 'global', view: null, auth: 'account', privacy: 'private', seo: 'private',
-    family: 'hierarchy', parent: 'history', aliases: [], next: null, native: null, params: {} }, o || {});
+    family: 'hierarchy', parent: 'history', aliases: [], next: null, native: null, params: {}, title: null }, o || {});
   const pub = { auth: 'public', privacy: 'public', seo: 'index' };
   const acct = (view, next, o) => Object.assign({ world: 'account', view, next, parent: 'me' }, o || {});
 
@@ -94,14 +123,16 @@
     r('notifications', '/notifications', { world: 'notifications', family: 'root', parent: null, view: 'notifOverlay', native: '/notifications' }),
     r('ai',        '/ai',        { world: 'ai', parent: 'history' }),
 
-    /* Settings — its own global namespace (Route Audit §19, option B). */
-    /* settings-page is listed BEFORE settings on purpose: both match /settings/security,
-       and the page is the more specific answer. /settings/<unknown> falls through to
-       plain `settings` (tail), exactly as the app's parser does today. */
-    r('settings-page',  '/settings/:page', { world: 'settings', view: 'settingsOverlay', tail: true, parent: 'settings',
-                                             params: { page: SETTINGS_PAGES } }),
-    r('settings',       '/settings',       { world: 'settings', view: 'settingsOverlay', tail: true, native: '/settings' }),
-    r('devices',        '/devices',        { world: 'settings', view: 'devicesOverlay', parent: 'settings-page', next: '/settings/security/devices' }),
+    /* Settings — its own global namespace (Route Audit §19, option B), and since route
+       batch 4 a real URL HIERARCHY: the hub, nine pages, and the approved leaves. The URL
+       alone names the destination. Nothing here is a tail route any more: an unknown
+       /settings/<x> or /settings/<page>/<x> matches NOTHING, so it can never silently
+       render some other valid page. */
+    r('settings',       '/settings',       { world: 'settings', view: 'settingsOverlay', native: '/settings', title: 'Settings' }),
+    ...SETTINGS_TREE.map(([page, title]) => r('settings-' + page, '/settings/' + page,
+      { world: 'settings', view: 'settingsOverlay', parent: 'settings', title })),
+    ...SETTINGS_LEAVES.map(([page, leaf, view, title, extra]) => r('settings-' + page + '-' + leaf, '/settings/' + page + '/' + leaf,
+      Object.assign({ world: 'settings', view, parent: 'settings-' + page, title }, extra || {}))),
     r('help',           '/help',           Object.assign({ view: 'helpOverlay', world: 'global' }, pub)),
 
     /* Network & work */
@@ -185,8 +216,6 @@
     r('account-section','/account/:section',            { status: P, world: 'account', parent: 'me',
       params: { section: ['profile', 'money', 'selling', 'customers', 'marketing', 'jobs', 'library', 'planning', 'creating', 'ai', 'help'] } }),
     r('order-detail',   '/account/orders/:ref',         { status: P, world: 'account', params: { ref: 'slug' }, parent: 'orders' }),
-    r('settings-leaf',  '/settings/:page/:leaf',        { status: P, world: 'settings', parent: 'settings-page',
-      params: { page: SETTINGS_PAGES, leaf: 'slug' } }),
     r('live',           '/live/:id',                    { status: P, world: 'home', params: { id: 'slug' }, seo: 'noindex' }),
     r('media',          '/:username/post/:id/photo/:n', { status: P, world: 'home', params: { username: 'handle', id: 'int', n: 'int' },
                                                           parent: 'post', family: 'modal', seo: 'noindex' }),
@@ -377,13 +406,13 @@
   const NOTIF_TARGETS = {
     post: 'post', profile: 'profile', listing: 'listing', job: 'job', event: 'event',
     group: 'group', circle: 'circle', wallet: 'wallet', orders: 'orders', order: 'order-detail',
-    message: 'beam-dm', settings: 'settings', devices: 'devices', invoices: 'invoices',
+    message: 'beam-dm', settings: 'settings', devices: 'settings-security-devices', invoices: 'invoices',
     quotes: 'quotes', calendar: 'calendar', store: 'store', analytics: 'analytics',
   };
 
   return {
     version: 1,
-    ROUTES, PARAM_TYPES, SETTINGS_PAGES, PROFILE_SECTIONS, PARSE_DEFENSIVE, SERVER_ROOTS,
+    ROUTES, PARAM_TYPES, SETTINGS_PAGES, SETTINGS_TREE, SETTINGS_LEAVES, PROFILE_SECTIONS, PARSE_DEFENSIVE, SERVER_ROOTS,
     NEAR_TERM, FILE_EXT_RE, NOTIF_TARGETS,
     get, match, build, splitPath, firstLiteral, liveRoutes,
     parseReserved, routeRoots, allocationReserved, usernameShapeError,

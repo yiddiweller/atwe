@@ -8511,9 +8511,12 @@ defined just above `acSetPath`). `acSetPath`, the 1874 Settings entries, `setBac
   reads `route/idx/key/path` back out of `history.state`.
 - **`path`** — now always the entry's real URL. It used to go stale (a replace reused the
   previous state wholesale, so an entry at `/marketplace` still said `/`).
-- **legacy** — the 1874 Settings `setPage`/`via` ride along unchanged. That is destination
-  state in history, which the architecture forbids; it retires with `/settings/<page>`
-  URLs (route batch 4). **Add nothing else there** — the URL alone says what is shown.
+- **`prev`** (route batch 4) — the `idx` of the Atwe entry directly behind this one when we
+  pushed it, `null` otherwise (a direct link, another site). `AtweHistory.hasPrev()` reads it,
+  so a Settings Back walks real history only when real history exists.
+- **legacy** — the 1874 Settings `setPage`/`via` are GONE (route batch 4). `legacyOf()`
+  strips both, so no write can carry them again. **Add nothing else there** — the URL
+  alone says what is shown.
 - **NavEvent** — `{ kind, direction, from, to, family, uaTransition, delta?, legacyEntry? }`,
   dispatched as `window` `'atwe:navigate'` and kept in `AtweHistory.log` (last 60). Kinds:
   `initial reload restore push replace root-change traverse dismiss exit-guard`.
@@ -8576,6 +8579,63 @@ land correctly. `--break` makes direction always "back" and fails the Forward ch
 - Guarded by `scratchpad/route3.js` (166 checks, 390 and 1440, owns its fixtures).
   `--break` restores the build-1874 listing opener and profile replace (28 named fails);
   `--break=apply` removes only the restore fix above and fails exactly 7d at both widths.
+
+### Settings canonical hierarchy (Route Audit batch 4)
+
+**The URL is the Settings destination.** `history.state` is bookkeeping only; nothing reads a
+page out of it, and the same address always rebuilds the same node from any starting point.
+
+| address | node |
+|---|---|
+| `/settings` | the hub |
+| `/settings/<page>` | account · privacy · security · notifications · premium · display · assistant · data · about |
+| `/settings/account/delete` | the only routed Account leaf |
+| `/settings/privacy/{contact,blocked,muted,muted-words,last-seen}` | |
+| `/settings/security/{devices,2fa,passkeys,locks}` | `/devices` is an ALIAS, canonicalised in place |
+| `/settings/notifications/phone` · `/settings/premium/creator` | |
+| `/settings/display/{language,currency}` · `/settings/data/history` · `/settings/about/whats-new` | What's new's row is on the hub; its address is under About |
+
+- **Transient on purpose, no address:** change email / username / password, pause,
+  deactivate, Link a device (QR), Report a problem, the theme cards and every switch. The
+  Wallet (Premium) and Manage store (hub) are handoffs to their own routes, not children.
+- **One description, in the registry.** `public/atwe-routes.js` `SETTINGS_TREE` /
+  `SETTINGS_LEAVES` declare every node (pattern, title, view, parent: a leaf's parent is its
+  page, a page's is `settings`). The app's `SETTINGS_LEAVES` is only the runtime binding of an
+  opener to each leaf, and `route-registry.test.js` requires the two lists to be identical.
+  No tail routes any more: an unknown `/settings/<x>` or `/settings/<page>/<x>` matches
+  nothing; the app says "That settings page doesn't exist" and the address corrects to the
+  nearest real node, never keeps a URL naming something that is not on screen.
+- **How the address is kept:** `acSyncPath` gives `#settingsOverlay` the path of `_setPage`;
+  a leaf sheet gets `_ownPath` in `showOverlay` (`acSettingsLeafByView`, from the registry) —
+  batch 3's entity-sheet mechanism, so close-walks-back, the popstate close and the path sync
+  all apply unchanged. `setNav` PUSHES `/settings/<page>` for a tap and REPLACES for a Back to
+  the logical parent; `openSettings(page, leaf)` opens straight onto a node (one push, or a
+  replace while restoring/booting). A leaf always sits OVER its page (Devices no longer
+  closes Settings, and the `_setReturn` timer that reopened Settings is gone).
+- **Settings Back** (`setBack`, and device Back through it): search open → clear; on a page
+  with a real Atwe entry behind (`AtweHistory.hasPrev()`) → `history.back()`; otherwise →
+  the hub by REPLACE; on the hub → close. A Settings node's close only walks history when
+  `hasPrev()` is true, so a direct link's Back chain is leaf → page → hub → close, and never
+  leaves Atwe or fabricates history. Browser Back from a direct link leaves Atwe.
+- **Old tabs:** `_setLegacyBridge()` runs before `AtweHistory.init()` and before every
+  `traverse()`: an entry at the bare `/settings` carrying `setPage` is rewritten ONCE in place
+  (`AtweHistory.rewriteLegacy`) to the page's real URL, `setPage`/`via` dropped, and is an
+  ordinary URL-routed entry from then on. It emits no NavEvent of its own.
+- **Titles:** a Settings route declares `title` in the registry; `acSyncTabTitle` shows
+  `<title> · Atwe` (unread count still leads). No other route declares one yet.
+- **Known, pre-existing (batch 2), left alone:** a direct deep link's boot first replaces the
+  address to the default world's (`appTab` at boot), then to the link. It never pushes and
+  the address settles on the link; it applies to every deep link, not only Settings.
+- `SYSTEM_ROUTES` is unchanged (137): no new first segment; `devices` stays reserved via its
+  alias. **Beta promotion needs the next build/cache bump** (`ATWE_BUILD`, `sw.js` `CACHE`
+  and `atwe-routes.js?v=` in lockstep) — the registry changed shape.
+- Guarded by `scratchpad/setroutes.js` (494 checks, owns its fixture; the 390 and 1440
+  passes run side by side, ~1350s). `--break` takes the page's own address out of the path
+  sync and the leaves' `_ownPath` out of `showOverlay` (the pre-batch-4 shape): 374 named
+  fails. `setpush.js` and `histv2.js` 3d/S2 were updated from the old `/devices` / same-URL
+  model; `setdeep.js --break` now cuts the batch-4 code. `route-registry.test.js` gained 7
+  tests (the tree, parents, the opener binding, `/devices`, transient flows, malformed paths,
+  no `history.state` Settings routing left).
 
 ## Search & typeahead
 

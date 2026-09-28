@@ -25,7 +25,8 @@
  *
  * Run:  DATABASE_URL=... JWT_SECRET=... node setdeep.js [--only=<chain prefix>] [--break]
  *       --break serves the page with the fix's three load-bearing parts removed
- *       (page history entries, restore-to-page, device Back through setBack).
+ *       (since route batch 4: the page's own URL, reopening on the URL's page, and
+ *       device Back through setBack).
  */
 'use strict';
 const path = require('path');
@@ -45,8 +46,9 @@ async function serveOld(ctx) {
     const res = await route.fetch();
     let html = await res.text();
     const cuts = [
-      ['  _setHistWrite(prevPage, pageName, opts);\n', ''],
-      ["  if (_histRestoring && location.pathname === '/settings') {", '  if (false) {'],
+      /* route batch 4: the page's own address, and reopening on the URL's page */
+      ["        if (open[i].id === 'settingsOverlay') { acSetPath(acSettingsPath(_setPage), { push }); return; }\n", ''],
+      ["  const target = SETTINGS_ROUTES.includes(page) ? page : 'hub';", "  const target = 'hub';"],
       ["  if (ov && ov.id === 'settingsOverlay') { setBack(); return 'x'; }\n", ''],
     ];
     for (const [a, b] of cuts) { if (!html.includes(a)) throw new Error('--break could not find: ' + a.slice(0, 50)); html = html.replace(a, b); }
