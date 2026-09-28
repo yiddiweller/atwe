@@ -51,7 +51,7 @@ const APP = appRouter();
 function appName(d) {
   if (!d) return null;
   switch (d.type) {
-    case 'route': return (d.key === '' || d.key === 'feed' || d.key === 'home') ? 'home' : d.key;
+    case 'route': return (d.key === '' || d.key === 'feed' || d.key === 'home' || d.key === 'go') ? 'home' : d.key;
     case 'settings': return 'settings-page';
     case 'auth': return d.page;
     case 'profile': return d.section ? 'profile-section' : 'profile';

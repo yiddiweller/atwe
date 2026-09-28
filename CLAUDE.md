@@ -8073,9 +8073,10 @@ refused name as `reserved` so the signup screen says so up front.
   and the name it already holds always passes. Nobody is renamed; saving a profile never
   fails because a handle predates the rule.
 - **The DATABASE SEED IS UNCHANGED.** `routes.js` `SYSTEM_ROUTES` (seeded into
-  `reserved_usernames` on every boot) is still exactly the router's 136 words; the wider
-  set is enforced in code only, so a deploy writes no new rows and nobody who already
-  holds e.g. `shop` loses anything. `test/usernames.test.js` asserts this.
+  `reserved_usernames` on every boot) is exactly the ROUTER's own set — 136 words in
+  batch 1, **137 since batch 3 made `/go` a route** (so a deploy seeds one new row,
+  `go`). The wider set is enforced in code only, so nobody who already holds e.g. `shop`
+  loses anything. `test/usernames.test.js` asserts SYSTEM_ROUTES == the router set.
 - **Production release gate:** `node tools/reserved-collisions.js <database-url>` runs the
   approved Route Audit §45 query inside `BEGIN READ ONLY` and lists every existing handle
   the gate would refuse for a NEW account. No default database, on purpose. Hits are
@@ -8130,6 +8131,47 @@ Guarded by `scratchpad/histv2.js` (76 checks, 390 and 1440): push/replace/reload
 Forward/`go(-2)`, v1 and `{}` entries, key uniqueness, path never stale, UA transition,
 deep-link boots with one entry, reloads add none, and the 1874 Settings Back/Forward still
 land correctly. `--break` makes direction always "back" and fails the Forward checks.
+
+### Live history ownership (Route Audit batch 3)
+
+- **B1 — a profile or a post opened in-app is a real entry.** `acGoProfile` and
+  `_acRenderPostView` push (`{ push: !_histRestoring }` — never while the browser is
+  restoring that very entry; boot turns it into a replace on its own). Browser Back from a
+  profile used to LEAVE Atwe because the open replaced the page underneath. A post whose
+  author is already in hand (`acFindPost` / `AC._postCache`) pushes its canonical
+  `/<author>/post/<id>` directly, so the later upgrade is a no-op and the open is ONE event.
+- **B2/B3 — an entity sheet owns its address.** `acOpenListing` / `acOpenJob` /
+  `acOpenEvent` set `el._ownPath` (registry-built) BEFORE `showOverlay`, and `acSyncPath`
+  honours `_ownPath` in the same top-down scan as a routed panel. The old order — show,
+  then `acSetPath` replace — rewrote the BROWSE entry's URL to the entity and then the
+  queued sync pushed `/marketplace` over it; a direct `/listing/15` collapsed to `/`.
+  An own-path sheet is treated like a routed panel everywhere: closing it walks history
+  back, `_navDismissModal` no longer treats it as a dismissable sheet, and `_navApplyUrl`
+  closes it when the restored URL is not its own. The old close-time rewrite to `/` is gone.
+- **A handover can land on a SCREEN now.** `closeOverlay`'s deferred walk-back already
+  kept the entry when the caller opened a panel (`_ovShows`); it now also keeps it when
+  the history position moved in the same task (a profile/post push), or the walk would
+  eat the entry the member just pushed.
+- **Back onto a panel no longer leaves a profile underneath it.** Once a profile is a real
+  entry, browser Back from it can land on a PANEL's address (Marketplace → seller → Back
+  lands on `/marketplace`), and `_navApplyUrl` reopened the panel over the profile screen,
+  which stayed underneath. When the restored address is a panel or an entity sheet and the
+  visible screen is self-routed (profile/post/circle/thread), `_navApplyUrl` now re-shows
+  the current world's root screen first (`appTab(_appTab)`). Found by `navhandoff`'s
+  browser-Back case on the first full run; guarded by `route3` 7b–7d.
+- **`navhandoff` cases 4 and 5 now start and end on `/listing/<id>`**, not `/marketplace`.
+  Their old precondition encoded the B2 bug itself; the listing sheet is the real parent.
+- **B9 — `/go` is a Home alias** (`APP_ROUTES.go` + the registry's home aliases), so it
+  can never be read as the profile `@go`; it settles on `/`.
+- **`acRoutePath(name, params, fallback)`** builds these paths through the registry, with
+  the pre-registry literal as the fallback if the registry script failed to load.
+- **Known interplay left for batch 6 (unified App Back):** the in-app Back arrows on a
+  profile/post still use the legacy memories (`_navStack`, `AC._profFrom`, `AC._postNav`)
+  and REPLACE the address, so after an in-app Back the entry just left is overwritten
+  rather than popped. Browser/device Back uses real history and is correct.
+- Guarded by `scratchpad/route3.js` (166 checks, 390 and 1440, owns its fixtures).
+  `--break` restores the build-1874 listing opener and profile replace (28 named fails);
+  `--break=apply` removes only the restore fix above and fails exactly 7d at both widths.
 
 ## Search & typeahead
 

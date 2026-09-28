@@ -24197,6 +24197,10 @@ const APP_ROUTES = {
   '':               { open: () => appTab('home'),                  canonical: '/' },
   'feed':           { open: () => appTab('home'),                  alias: '/' },
   'home':           { open: () => appTab('home'),                  alias: '/' },
+  /* /go is served by the SERVER as the no-store shell (a manual check that a deploy is
+     live). It is the app's front door, so it opens Home and canonicalises to / — and,
+     being a route, it is reserved: it can never be read as the profile @go (route batch 3, B9). */
+  'go':             { open: () => appTab('home'),                  alias: '/' },
   'messages':       { open: () => appTab('chat'),                  auth: true },
   'search':         { open: () => appTab('search') },
   'ai':             { open: () => appTab('ai'),                    auth: true },
@@ -24365,6 +24369,12 @@ function acSyncPath(opts) {
       // The top-most open panel that owns a route is what the person is looking at.
       const open = document.querySelectorAll('.overlay:not(.hidden):not(.closing)');
       for (let i = open.length - 1; i >= 0; i--) {
+        /* An ENTITY sheet (a listing, a job, an event) owns the address it was opened
+           with — set by its opener as `_ownPath` before showOverlay. It is honoured here,
+           in the same top-down scan as a routed panel, so the browse surface underneath
+           can never win: that was route batch 3's B2 (Marketplace -> listing showed
+           /marketplace) and B3 (a direct /listing/15 collapsed to /). */
+        if (open[i]._ownPath) { acSetPath(open[i]._ownPath, { push }); return; }
         const key = ROUTE_BY_VIEW[open[i].id];
         if (key) { acSetPath('/' + key, { push }); return; }
       }
@@ -24654,6 +24664,13 @@ const AtweHistory = (() => {
 })();
 try { window.AtweHistory = AtweHistory; } catch (e) {}
 
+/* A path for a route NAME, built by the route registry (public/atwe-routes.js) so no
+   caller concatenates a URL by hand. The fallback is the literal the app wrote before the
+   registry existed, used only if the registry script failed to load (offline, cold cache). */
+function acRoutePath(name, params, fallback) {
+  try { if (window.ATWE_ROUTES) return ATWE_ROUTES.build(name, params); } catch (e) {}
+  return fallback;
+}
 function acSetPath(path, opts) {
   try {
     if (location.pathname === path) return;
@@ -25347,8 +25364,6 @@ function hideAll() {
 function closeOverlay(id, noHistory) {
   const el = document.getElementById(id);
   if (!el || el.classList.contains('hidden')) return;
-  // The job/listing overlays own a shareable path while open — clear it on close.
-  if ((id === 'jobView' || id === 'listingView') && /^\/(job|listing)\/\d+$/.test(location.pathname)) acSetPath('/');
   // Notifications borrows the nav highlight while it is open — give it back.
   if (id === 'notifOverlay' && typeof acSyncNavActive === 'function') acSyncNavActive();
   el.classList.add('closing');
@@ -25370,7 +25385,11 @@ function closeOverlay(id, noHistory) {
   // that keeps the history clean and makes Forward re-open it, the way a modal
   // behaves on any real site. Landed here on a deep link (nothing of ours to walk
   // back to)? Just rewrite the address in place and stay put.
-  if (!noHistory && !_histRestoring && _histDepth > 0 && ROUTE_BY_VIEW[id] && location.pathname === '/' + ROUTE_BY_VIEW[id]) {
+  /* The address this panel owns: a routed panel's route, or an entity sheet's `_ownPath`
+     (route batch 3 — a listing, job or event now owns a REAL entry, so closing it walks
+     back to the entry it was opened from instead of rewriting the address to "/"). */
+  const _own = ROUTE_BY_VIEW[id] ? '/' + ROUTE_BY_VIEW[id] : (el._ownPath || null);
+  if (!noHistory && !_histRestoring && _histDepth > 0 && _own && location.pathname === _own) {
     /* THE WALK IS DEFERRED BY ONE MICROTASK, AND THAT IS THE WHOLE FIX FOR A HANDOVER.
        Half the rows in Manage store read `closeOverlay('storeManageView'); acOpenX()`.
        Walked synchronously, the popstate that back() schedules lands AFTER acOpenX has
@@ -25385,9 +25404,13 @@ function closeOverlay(id, noHistory) {
        nothing to walk back FROM, so keep the entry and let acSyncPath write the address
        for whatever is now open — the app's own rule that the address is DERIVED. */
     const shownBefore = _ovShows;
+    /* A handover can also land on a SCREEN, and since route batch 3 a profile or a post
+       opened in-app PUSHES its own entry synchronously. If the history position moved in
+       this task, the caller navigated: keep the entry being left, walk nothing back. */
+    const idxBefore = (AtweHistory.current || {}).idx;
     _histDepth--;
     Promise.resolve().then(() => {
-      if (_ovShows > shownBefore) { _histDepth++; acSyncPath(); return; }
+      if (_ovShows > shownBefore || (AtweHistory.current || {}).idx !== idxBefore) { _histDepth++; acSyncPath(); return; }
       try { history.back(); } catch (e) { acSyncPath(); }
     });
     return;
@@ -34040,7 +34063,7 @@ async function acEventSave() {
 }
 async function acOpenEvent(id) {
   AC._evId = id;
-  acSetPath('/event/' + id); // shareable + reload-safe event URL
+  document.getElementById('eventView')._ownPath = acRoutePath('event', { id }, '/event/' + id); // owns its URL (route batch 3)
   showOverlay('eventView');
   const body = document.getElementById('eventViewBody');
   body.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
@@ -35147,8 +35170,8 @@ async function acRepostJob(id) {
   }
 }
 async function acOpenJob(id) {
+  document.getElementById('jobView')._ownPath = acRoutePath('job', { id }, '/job/' + id); // owns its URL (route batch 3)
   showOverlay('jobView');
-  acSetPath('/job/' + id); // shareable + reload-safe job URL
   const body = document.getElementById('jobViewBody'); body.innerHTML = acSkelRows(3);
   try {
     const { job } = await API.req('GET', '/api/jobs/' + id);
@@ -40450,7 +40473,10 @@ function acGoProfile(username) {
   acStopMic();
   acShow('acProfileScreen', mine ? 'profile' : null);
   const handle = (username || myUsername).replace(/^@/, '');
-  if (handle) acSetPath('/' + handle);
+  /* A REAL entry (route batch 3, B1): it used to replace whatever was on screen, so
+     browser Back from a profile left Atwe. Never pushed while the browser is restoring an
+     entry (that IS this entry), and boot turns it into a replace on its own. */
+  if (handle) acSetPath(acRoutePath('profile', { username: handle }, '/' + handle), { push: !_histRestoring });
   acLoadProfile(username || myUsername, mine);
 }
 // Route back from another user's profile to wherever it was opened from.
@@ -44227,7 +44253,13 @@ function _acRenderPostView(id) {
   // isn't known until the post loads, so write the flat form now and upgrade it in
   // acLoadPostView. An old /post/<id> link therefore still works and quietly
   // becomes the canonical URL a moment later.
-  acSetPath('/post/' + id);
+  /* A REAL entry (route batch 3, B1). When the post is already in hand the canonical
+     /<author>/post/<id> is pushed directly, so the later upgrade in acLoadPostView is a
+     no-op and the navigation is ONE event; otherwise the legacy /post/<id> is pushed and
+     upgraded in place (a replace) once the author is known. */
+  const _cp = (typeof acFindPost === 'function' && acFindPost(id)) || (AC._postCache && AC._postCache[id]);
+  const _cu = _cp && _cp.author && _cp.author.username;
+  acSetPath(_cu ? acRoutePath('post', { username: _cu, id }, '/' + _cu + '/post/' + id) : '/post/' + id, { push: !_histRestoring });
   _acReplyImg = null;
   document.getElementById('acReplyInput').value = '';
   document.getElementById('acReplyImgPrev').classList.remove('show');
@@ -44243,7 +44275,7 @@ async function acLoadPostView(id) {
     AC._postData = d;
     // Upgrade the address to the canonical /<username>/post/<id> now the author is known.
     const _au = d.post && d.post.author && d.post.author.username;
-    if (_au) acSetPath('/' + _au + '/post/' + id);
+    if (_au) acSetPath(acRoutePath('post', { username: _au, id }, '/' + _au + '/post/' + id));
     // Count a view (once per session per post; the server ignores the author + dedups).
     // Called for YOUR posts too — the server still won't count a view on your
     // own post, but it does record it in your reading history, and "where was
@@ -47819,8 +47851,10 @@ async function acRestockAlert(id, on) {
   } catch (e) { showNotif(e.message || 'Could not update the alert.'); }
 }
 async function acOpenListing(id) {
+  /* The sheet OWNS /listing/<id> (route batch 3). Declared before showOverlay, whose
+     address sync then pushes exactly one entry for it; nothing queued can overwrite it. */
+  document.getElementById('listingView')._ownPath = acRoutePath('listing', { id }, '/listing/' + id);
   showOverlay('listingView');
-  acSetPath('/listing/' + id); // shareable + reload-safe listing URL
   const body = document.getElementById('listingBody'); body.innerHTML = acSkelRows(3);
   try {
     const { listing: l } = await API.req('GET', '/api/listings/' + id);
@@ -68868,7 +68902,7 @@ function _navDismissModal() {
   const NEVER_BACK = ['loginOverlay', 'signupOverlay', 'onboardingFlow', 'appLockView',
                       'splashOverlay', 'introSheet'];
   const sheets = [...document.querySelectorAll('.overlay:not(.hidden):not(.closing)')]
-    .filter((o) => !ROUTE_BY_VIEW[o.id] && !NEVER_BACK.includes(o.id));
+    .filter((o) => !ROUTE_BY_VIEW[o.id] && !o._ownPath && !NEVER_BACK.includes(o.id));
   if (sheets.length) {
     try { closeOverlay(sheets[sheets.length - 1].id, true); } catch (e) {}
     return true;
@@ -68882,8 +68916,21 @@ function _navDismissModal() {
 function _navApplyUrl() {
   const r = parseDeepLink();
   const wantView = r && r.type === 'route' && APP_ROUTES[r.key] && APP_ROUTES[r.key].view;
+  /* A SCREEN THAT OWNS ITS ADDRESS MUST NOT OUTLIVE IT (route batch 3). A profile or a
+     post opened in-app is now a real entry of its own, so Back from it can land on a
+     PANEL's address (/marketplace, /listing/15) — and the panel reopens over whatever
+     screen is showing, which is still that profile. Before batch 3 the profile REPLACED
+     the panel's entry, so this state could not arise. When the restored address belongs
+     to a panel or an entity sheet and the visible screen is a self-routed one, the
+     world's own root screen is put back first: the URL says what is on top, and the
+     world (unchanged, _appTab) says what is underneath. */
+  const _toSheet = !!wantView || !!(r && (r.type === 'listing' || r.type === 'job' || r.type === 'event'));
+  if (_toSheet) {
+    const _scr = AC_SCREENS.find((id) => { const e = document.getElementById(id); return e && !e.classList.contains('hidden'); });
+    if (SELF_ROUTED_SCREENS.includes(_scr)) { try { appTab(_appTab && _appTab !== 'ai' ? _appTab : 'home'); } catch (e) {} }
+  }
   document.querySelectorAll('.overlay:not(.hidden)').forEach((o) => {
-    if (ROUTE_BY_VIEW[o.id] && o.id !== wantView) { try { closeOverlay(o.id); } catch (e) {} }
+    if ((ROUTE_BY_VIEW[o.id] && o.id !== wantView) || (o._ownPath && o._ownPath !== location.pathname)) { try { closeOverlay(o.id); } catch (e) {} }
   });
   if (r) openDeepLink(r);
   else if (location.pathname === '/' || location.pathname === '') { try { appTab('home'); } catch (e) {} }
