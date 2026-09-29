@@ -8110,6 +8110,18 @@ defined just above `acSetPath`). `acSetPath`, the 1874 Settings entries, `setBac
 - **`prev`** (route batch 4) — the `idx` of the Atwe entry directly behind this one when we
   pushed it, `null` otherwise (a direct link, another site). `AtweHistory.hasPrev()` reads it,
   so a Settings Back walks real history only when real history exists.
+  **Its contract (route batch 4.1 audit): bookkeeping, never routing input.** It is read in
+  ONE place, inside `AtweHistory`, and only as a boolean through `hasPrev()`; the number is
+  never followed, compared or used to pick a page. `hasPrev()` has exactly two callers —
+  `setBack` and `closeOverlay`'s walk-back — and both only choose between WALKING real
+  history (`history.back()`) and REPLACING to the registry parent. What renders comes from
+  the URL + registry; the logical parent from the registry; so this is not a second
+  navigation graph. It lives per entry, not in `sessionStorage`, because "is an Atwe entry
+  behind THIS one" differs per entry and must survive Back/Forward and reload — a
+  per-session value cannot say it without a map keyed by position, i.e. history rebuilt.
+  Branch-safe (A→B→C, Back to B, push D ⇒ D.prev = B), reload-safe, and a v1/unknown entry
+  simply has none (→ the registry parent). `histv2.js` P1–P3 + S3 prove it: forging `prev`
+  to 9999 or a string renders the identical screen, and nothing outside `AtweHistory` reads it.
 - **legacy** — the 1874 Settings `setPage`/`via` are GONE (route batch 4). `legacyOf()`
   strips both, so no write can carry them again. **Add nothing else there** — the URL
   alone says what is shown.
