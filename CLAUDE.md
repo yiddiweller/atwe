@@ -9779,6 +9779,15 @@ both is exactly what made the login step fire `doLogin` TWICE and burn its rate 
 double speed. `suSyncPmUser` fills the username field when the step opens and again as the
 submit goes through, because the address is chosen a step earlier.
 
+**"Skip for now" on that step is bound by a LISTENER, never inline (build 1874, batch 4.1).**
+It carried `onclick="suPassSkip()"`, and an inline handler runs with its `<form>` in the
+scope chain — a form exposes every control it holds BY ID, so inside `#suPassStep` the name
+`suPassSkip` was the button, not the function, and a Google sign-up's tap threw *"suPassSkip
+is not a function"* and went nowhere. Turning a step into a `<form>` makes every id inside it
+a name its inline handlers can trip over. `scratchpad/suskip.js` presses it for real (tap,
+Enter, Space), checks Enter in the field still submits Continue, and scans EVERY form for a
+control named like a function its own inline handlers call; `--break` reproduces the throw.
+
 ### A phone turned sideways is still a phone
 
 The owner: *"when I turn the phone sideways I get the computer version, with all the options
