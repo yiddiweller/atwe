@@ -15432,7 +15432,7 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
          by itself, which is why the field's own Enter handler is gone (on the login step
          keeping both fired doLogin TWICE and burned the rate limit at double speed). -->
     <button type="submit" class="auth-btn auth-continue is-empty" id="suPassBtn" style="margin-top:auto;">Continue</button>
-    <button type="button" class="auth-skiplink hidden" id="suPassSkip" onclick="suPassSkip()">Skip for now</button>
+    <button type="button" class="auth-skiplink hidden" id="suPassSkip">Skip for now</button>
   </form>
 
   <!-- SU username -->
@@ -26145,6 +26145,15 @@ function suPassGoogleUI() {
 }
 // Google: skip setting a password now (they can add one later in Settings).
 function suPassSkip() { SU.password = ''; suGoToCategories(); }
+/* BOUND HERE, NOT INLINE. An inline handler runs with its <form> in the scope chain, and a
+   form exposes every control it holds by id — so inside #suPassStep the name `suPassSkip`
+   resolved to THIS BUTTON, not this function, and a tap threw "suPassSkip is not a
+   function" and went nowhere. A listener names the function directly and cannot collide.
+   A <button> fires click for Enter and Space too, so the keyboard needs nothing extra. */
+(function () {
+  const b = document.getElementById('suPassSkip');
+  if (b) b.addEventListener('click', (e) => { e.preventDefault(); suPassSkip(); });
+})();
 /* Name */
 function suNameToggle() { document.getElementById('suNameBtn').classList.toggle('is-empty', !(document.getElementById('suName').value || '').trim()); }
 function suNameContinue() {
