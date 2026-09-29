@@ -204,6 +204,58 @@ async function deepLink(browser, token, viewport) {
   }
 }
 
+/* `prev` (route batch 4) is BOOKKEEPING, never routing input (batch 4.1 conformance).
+   Its only reader is AtweHistory.hasPrev(), a yes/no that decides whether a Settings Back
+   WALKS real history or REPLACES to the registry parent. These checks prove (P1) it is
+   branch-correct, (P2) it survives a reload, and (P3) forging it — a number that points
+   nowhere, a string, nothing — changes nothing about WHAT renders at an address. */
+async function prevChecks(browser, token, viewport) {
+  const tag = viewport.width >= 1000 ? '[desktop]' : '[phone]';
+  let { ctx, p, errs } = await freshPage(browser, token, viewport);
+  const A = await st(p);
+  await p.evaluate(() => appTab('chat')); await settle(p);
+  const B = await st(p);
+  await p.evaluate(() => appTab('search')); await settle(p);
+  const C = await st(p);
+  await p.goBack({ timeout: 6000 }).catch(() => {}); await settle(p, 1200);
+  const back = await st(p);
+  await p.evaluate(() => appTab('profile')); await settle(p);
+  const D = await st(p);
+  say(B.state.prev === A.state.idx && C.state.prev === B.state.idx, tag + ' P1. each push records the entry behind it', [A.state.idx, B.state.prev, B.state.idx, C.state.prev]);
+  say(back.state.idx === B.state.idx && back.state.prev === A.state.idx, tag + ' P1b. Back to B adopts B\'s own prev', [back.state.idx, back.state.prev]);
+  say(D.state.prev === B.state.idx && D.state.idx > C.state.idx && D.len === C.len, tag + ' P1c. A→B→C, Back to B, push D: D sits on B (C truncated), idx still monotonic', [D.state.prev, B.state.idx, D.state.idx, C.state.idx, C.len, D.len]);
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await QA.waitUntil(p, () => !!(window.S && S.user && S.user.id), null, 25000); await settle(p, 1200);
+  const R = await st(p);
+  say(R.state.idx === D.state.idx && R.state.prev === D.state.prev && (await p.evaluate(() => AtweHistory.hasPrev())), tag + ' P2. a reload keeps idx and prev (hasPrev still true)', [R.state.idx, R.state.prev]);
+  say(errs.length === 0, tag + ' P2b. no JS errors', errs.slice(0, 2));
+  await ctx.close();
+
+  /* P3: the same address rendered with three different forged prev values must be the
+     same screen. Only the Back DECISION may differ, and only as walk-vs-replace. */
+  const shots = [];
+  for (const forged of [null, 9999, 'nonsense']) {
+    ({ ctx, p, errs } = await freshPage(browser, token, viewport, '/settings/security/devices'));
+    await p.evaluate((v) => history.replaceState(Object.assign({}, history.state, { prev: v }), ''), forged);
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await QA.waitUntil(p, () => !!(window.S && S.user && S.user.id), null, 25000); await settle(p, 1400);
+    shots.push(await p.evaluate(() => {
+      const vis = (id) => { const o = document.getElementById(id); return !!o && !o.classList.contains('hidden') && !o.classList.contains('closing'); };
+      return { path: location.pathname, page: _setPage, settings: vis('settingsOverlay'), devices: vis('devicesOverlay'),
+        open: [...document.querySelectorAll('.overlay:not(.hidden):not(.closing)')].map((o) => o.id).join(','),
+        hasPrev: AtweHistory.hasPrev() };
+    }));
+    say(errs.length === 0, tag + ' P3a. no JS errors with prev=' + JSON.stringify(forged), errs.slice(0, 2));
+    await ctx.close();
+  }
+  const same = (x, y) => x.path === y.path && x.page === y.page && x.settings === y.settings && x.devices === y.devices && x.open === y.open;
+  say(shots[0].path === '/settings/security/devices' && shots[0].devices && shots[0].page === 'security',
+    tag + ' P3. /settings/security/devices renders the Devices leaf over Security', shots[0]);
+  say(same(shots[0], shots[1]) && same(shots[0], shots[2]), tag + ' P3b. forging prev (9999, a string) renders the identical screen', shots);
+  say(shots[0].hasPrev === false && shots[1].hasPrev === true && shots[2].hasPrev === false,
+    tag + ' P3c. only hasPrev() reads it: a number = true, null/garbage = false', shots.map((x) => x.hasPrev));
+}
+
 /* The ban on hidden destination state is structural: nothing may read route bookkeeping back. */
 function sourceChecks() {
   const html = require('fs').readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
@@ -213,6 +265,18 @@ function sourceChecks() {
   /* 7 since route batch 4: AtweHistory.rewriteLegacy, the one-time in-place conversion of
      an old tab's Settings entry, is a write of its own — and it lives inside AtweHistory. */
   say(writers <= 7, 'S2. every history write is inside AtweHistory (or its fallbacks)', writers);
+  /* S3 (batch 4.1): `prev` is read in ONE place — inside AtweHistory — and only as a
+     boolean through hasPrev(). hasPrev() has exactly two callers, both Back DECISIONS
+     (walk real history vs. go to the registry parent), never a destination. */
+  const hStart = script.indexOf('const AtweHistory = (() => {');
+  const hEnd = script.indexOf('try { window.AtweHistory = AtweHistory; }');
+  const outside = script.slice(0, hStart) + script.slice(hEnd);
+  say(hStart > 0 && hEnd > hStart && !/(?<!dataset)\.prev\b/.test(outside.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')),
+    'S3. nothing outside AtweHistory reads .prev (a data-prev attribute on the applicants picker is unrelated)', [hStart, hEnd]);
+  const callers = (script.match(/AtweHistory\.hasPrev\(\)/g) || []).length;
+  say(callers === 2 && /function setBack\(\)[\s\S]{0,400}AtweHistory\.hasPrev\(\)/.test(script) && /_setNode \|\| AtweHistory\.hasPrev\(\)|!_setNode \|\| AtweHistory\.hasPrev\(\)/.test(script),
+    'S3b. hasPrev() has exactly two callers: setBack and closeOverlay\'s walk-back decision', callers);
+  say(/hasPrev\(\) \{ return !!\(cur && cur\.prev\); \}/.test(script), 'S3c. hasPrev() returns a boolean, never the idx it holds');
 }
 
 (async () => {
@@ -228,6 +292,7 @@ function sourceChecks() {
     for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
       await run(browser, token, vp);
       await deepLink(browser, token, vp);
+      await prevChecks(browser, token, vp);
     }
     sourceChecks();
   } finally { await browser.close(); }
