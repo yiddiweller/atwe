@@ -58,6 +58,9 @@ for f in qadsn profilemenu buttons rowsize notifscroll demomedia gutters sethand
     # route3 drives profile/post/listing/job/event journeys + direct loads + /go at two
     # viewports, each from a fresh signed-in page: 166 checks, measured at ~1380s.
     route3)     cap=1800 ;;
+    # histv2 walks the History v2 checks + the prev-conformance chains at two viewports,
+    # each from a fresh page: 101 checks, measured at ~894s (killed at 600s on a full run).
+    histv2)     cap=1800 ;;
     # setroutes walks all 26 Settings nodes in-app, by URL, Back/Forward and legacy entries,
     # both widths side by side (494 checks, ~1350s measured).
     setroutes)  cap=2400 ;;
