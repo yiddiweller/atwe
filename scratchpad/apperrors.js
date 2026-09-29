@@ -26,8 +26,34 @@ const BASE = process.env.BASE || 'http://localhost:3262';
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) { pass++; console.log('  ok   ' + m); } else { fail++; console.log('  FAIL ' + m + (x !== undefined ? ' :: ' + String(x).slice(0, 200) : '')); } };
 
+/* THIS RUN'S IDENTITY MUST SURVIVE THE SERVER'S OWN FINGERPRINT (batch 4.1).
+   The server groups faults by message with every run of digits flattened to '#' and the
+   whole lowercased (`FP_NORM` below mirrors it, and the self-test proves the server still
+   spells it that way). The tag used to be 'probe' + 8 hex characters, and hex is half
+   DIGITS: 'probe0d179969' and 'probe3d725121' both flatten to 'probe#d#', so a run could
+   land its error on an OLD run's row, whose stored message carries the OLD tag — the
+   lookup by this run's tag then found nothing and ten checks cascaded red on a working
+   app. A tag of lowercase LETTERS only is unchanged by that normalisation, so two runs can
+   only share a fingerprint if they drew the same 16 letters (26^16). */
+const FP_NORM = (s) => String(s).replace(/\d+/g, '#').toLowerCase();
+const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
+const probeTag = () => 'probe' + [...crypto.randomBytes(16)].map((x) => LETTERS[x % 26]).join('');
+
+function tagSelfTest() {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'server.js'), 'utf8');
+  ok(src.includes(".replace(/\\d+/g, '#').toLowerCase()).digest('hex')"),
+    'self-test: the server still fingerprints with digits -> # and lowercase (FP_NORM mirrors it)');
+  ok(FP_NORM('probe0d179969') === FP_NORM('probe3d725121'),
+    'self-test: the OLD hex tags really did collapse to one fingerprint (the bug this fixes)');
+  const seen = new Set(); let unchanged = true;
+  for (let i = 0; i < 5000; i++) { const t = probeTag(); if (FP_NORM(t) !== t) unchanged = false; seen.add(FP_NORM(t + ' broke on item 1')); }
+  ok(unchanged, 'self-test: a generated tag is untouched by the server normalisation');
+  ok(seen.size === 5000, 'self-test: 5000 generated tags give 5000 distinct fingerprints', seen.size);
+}
+
 (async () => {
-  const tag = 'probe' + crypto.randomUUID().slice(0, 8);        // unique, so runs never collide
+  tagSelfTest();
+  const tag = probeTag();        // letters only: unique AFTER the server's digit-flattening
   const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
   const p = await b.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await p.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
