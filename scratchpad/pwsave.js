@@ -8,19 +8,62 @@
  * content — no automated browser can see it. What is tested is every precondition the
  * browser looks at, and that sign-in still works, which is the real risk in touching this.
  *
- * NEEDS an account whose password it knows. Point PM_EMAIL / PM_PASS at one, or seed the
- * default with:
- *   node -e "const b=require('bcryptjs'),{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL});
- *   (async()=>{await p.query('UPDATE users SET password_hash=\$1, email=\$2 WHERE id=2166',
- *   [await b.hash('TestPass!2345',10),'pmtest@t.local']);await p.end();})()"
+ * IT OWNS ITS ACCOUNT. It needs one whose password it knows, and it used to demand that
+ * somebody create pmtest@t.local by hand (the old instructions repurposed a hardcoded
+ * user id). On a fresh database nobody had, so the email step never reached the password
+ * step and the probe died in a raw 15s waitForSelector stack — in EVERY full run since
+ * build 1874, unnoticed, because a stack trace carries no "FAILED" for a monitor to see.
+ * `ensureFixture` now upserts that one deterministic identity through the shared
+ * qa-fixture pool (the same database the server is using), hashed by the app's own
+ * auth.hashPassword, and then asks the SERVER whether it can see it. Any failure there is
+ * a named "FAILED fixture" line, never a stack. It is not a product assertion.
+ * PM_EMAIL / PM_PASS still point it at an existing account instead; nothing is seeded then.
  */
+const path = require('path');
+const QA = require(path.join(__dirname, 'qa-fixture.js'));
 const { chromium } = require(process.env.PW ? process.env.PW + '/node_modules/playwright-core' : 'playwright-core');
 const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const BASE = process.env.BASE || 'http://localhost:3262';
 const EMAIL = process.env.PM_EMAIL || 'pmtest@t.local';
 const PASS = process.env.PM_PASS || 'TestPass!2345';
 
+/* Test databases only: a local socket or localhost. The identity is on .local, which
+   cannot be a real member's deliverable address, and the upsert touches only the row
+   holding exactly that address. */
+async function ensureFixture() {
+  if (process.env.PM_EMAIL) return;                       // caller supplied an account
+  /* Parsed by hand: a socket-style address (`user:pass@/db?host=/dir`) has an empty host,
+     which the WHATWG URL parser rejects outright. */
+  const url = QA.dbUrl();
+  const host = ((url.match(/^[a-z]+:\/\/(?:[^@/]*@)?([^/:?]*)/i) || [])[1] || '').toLowerCase();
+  const sock = /[?&]host=\//.test(url);
+  if (!sock && !['localhost', '127.0.0.1', '::1', ''].includes(host)) {
+    throw new Error('refusing to seed a non-local database (' + host + ')');
+  }
+  const pool = QA.newPool();
+  try {
+    const hash = await require('/home/user/atwe/auth').hashPassword(PASS);
+    await pool.query(
+      `INSERT INTO users (name, email, password_hash, username, email_verified, onboarded, account_type)
+       VALUES ('PM Test', $1, $2, 'pmtest', true, true, 'personal')
+       ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash,
+         email_verified = true, status = 'active', deactivated = false, totp_enabled = false`,
+      [EMAIL, hash]);
+  } finally { await pool.end(); }
+  /* Prove the SERVER sees it — a fixture in one database and a server on another is the
+     exact mismatch qa-fixture.js exists to stop. */
+  const r = await fetch(BASE + '/api/auth/exists', { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: EMAIL }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.exists) throw new Error(`the server at ${BASE} does not see ${EMAIL} (HTTP ${r.status}) - is it on DATABASE_URL?`);
+}
+
 (async () => {
+  try { await ensureFixture(); } catch (e) {
+    console.log(`  FAILED fixture: could not provide the sign-in account ${EMAIL} — ${e.message}`);
+    console.log('\n1 FAILED (fixture/setup — no product assertion ran)');
+    process.exit(1);
+  }
   const b = await chromium.launch({ executablePath: CHROME });
   let bad = 0;
   const say = (ok, m) => { if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : '✗   '} ${m}`); };
