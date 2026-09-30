@@ -129,12 +129,12 @@ const FINGERPRINT = () => {
         notif:document.body.classList.contains('notif-tab'),
         mainH:Math.round(main.getBoundingClientRect().height)};
     });
-    /* Notifications is a PANEL, not a world — it never changes _appTab, so the world the
-       AI page was opened from is whatever the panel was covering (Home here). Landing on
-       Home with the panel closed is correct, not a miss. */
-    const want = w==='notifs' ? 'home' : w;
+    /* Route batch 6: App Back walks REAL history. Opened over the Alerts panel, the entry
+       behind /ai IS /notifications, so Back reopens the panel (over the world it covered, the
+       bar restored) — the way browser Back always did. */
+    const want = w;
     const got = back.notif ? 'notifs' : back.lit;
-    const label = w==='notifs' ? '  back from AI (opened over the Alerts panel) returns to the world beneath it'
+    const label = w==='notifs' ? '  back from AI (opened over the Alerts panel) returns to the Alerts panel, the entry behind it'
                                : '  back from AI returns to '+w+' with the bar restored';
     ok(got===want && back.navShown, label, JSON.stringify(back));
   }

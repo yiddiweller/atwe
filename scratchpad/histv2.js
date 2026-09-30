@@ -273,14 +273,17 @@ function sourceChecks() {
   const outside = script.slice(0, hStart) + script.slice(hEnd);
   say(hStart > 0 && hEnd > hStart && !/(?<!dataset)\.prev\b/.test(outside.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')),
     'S3. nothing outside AtweHistory reads .prev (a data-prev attribute on the applicants picker is unrelated)', [hStart, hEnd]);
-  /* Route batch 5 adds the THIRD, and only, other one: acMeBack, the Account section's Back,
-     which makes the identical decision for /account/<section> (walk real history, else
-     replace to the Account root). Every caller is named, so a fourth fails by name. */
+  /* Route batch 6: ONE App Back. setBack and acMeBack no longer decide anything themselves -
+     they delegate to appGoBack, the unified primitive. The three callers are now: appGoBack
+     (walk real history vs. the registry's logical parent), closeOverlay's walk-back, and the
+     LEGACY-UNROUTED conversation Back (acBackToList, a screen with no address of its own).
+     Every caller is named, so a fourth fails by name. */
   const callers = (script.match(/AtweHistory\.hasPrev\(\)/g) || []).length;
-  say(callers === 3 && /function setBack\(\)[\s\S]{0,400}AtweHistory\.hasPrev\(\)/.test(script)
-      && /function acMeBack\(\)[\s\S]{0,300}AtweHistory\.hasPrev\(\)/.test(script)
-      && /_setNode \|\| AtweHistory\.hasPrev\(\)|!_setNode \|\| AtweHistory\.hasPrev\(\)/.test(script),
-    'S3b. hasPrev() has exactly three callers: setBack, acMeBack and closeOverlay\'s walk-back decision', callers);
+  say(callers === 3 && /function appGoBack\(\)[\s\S]{0,1200}AtweHistory\.hasPrev\(\)/.test(script)
+      && /function acBackToList\(\)[\s\S]{0,1200}AtweHistory\.hasPrev\(\)/.test(script)
+      && /location\.pathname === _own && AtweHistory\.hasPrev\(\)/.test(script)
+      && /function setBack\(\)[\s\S]{0,500}appGoBack\(\)/.test(script) && /function acMeBack\(\) \{ appGoBack\(\); \}/.test(script),
+    'S3b. hasPrev() has exactly three callers: appGoBack, closeOverlay\'s walk-back and the legacy conversation Back; setBack and acMeBack delegate', callers);
   say(/hasPrev\(\) \{ return !!\(cur && cur\.prev\); \}/.test(script), 'S3c. hasPrev() returns a boolean, never the idx it holds');
 }
 

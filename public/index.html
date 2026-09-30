@@ -24435,6 +24435,9 @@ let _histRestoring = false;
    close find out a microtask later: if it went up, the caller was navigating, not
    leaving. See the deferred walk in closeOverlay. */
 let _ovShows = 0;
+/* A handoff's LEGACY-UNROUTED bookkeeping (see acHandoffFrom). Declared up here because the
+   writer (acSetPath) records the entry a handoff pushes. */
+let _handoffPanel = null;
 function acSyncPath(opts) {
   const wantPush = !!(opts && opts.push) && !_histRestoring;
   if (_pathSyncQueued) { if (wantPush) _pathSyncWantPush = true; return; }
@@ -24444,6 +24447,7 @@ function acSyncPath(opts) {
     _pathSyncQueued = false;
     const push = _pathSyncWantPush;
     _pathSyncWantPush = false;
+    if (_lastShow) _lastShow.pend = false;   // the screen on show now belongs to the entry written below
     try {
       // The top-most open panel that owns a route is what the person is looking at.
       const open = document.querySelectorAll('.overlay:not(.hidden):not(.closing)');
@@ -24461,9 +24465,14 @@ function acSyncPath(opts) {
         if (key) { acSetPath(acRouteKeyPath(key), { push }); return; }
       }
       // A profile / post / circle / thread writes a richer path of its own — don't stamp on it.
+      /* EXCEPT a queued PUSH under a conversation (route batch 6). A Beam conversation owns no
+         pretty path (it writes "/" by replace), so when a world switch asked for a new entry
+         and the conversation it opened is already on screen - a handoff, `appTab('chat');
+         acOpenChat(id)` - the push must still happen, or the conversation's own replace
+         overwrites the entry the member came FROM and real Back can never return there. */
       for (const id of SELF_ROUTED_SCREENS) {
         const el = document.getElementById(id);
-        if (el && !el.classList.contains('hidden')) return;
+        if (el && !el.classList.contains('hidden') && !(push && id === 'acThreadScreen')) return;
       }
       // Two destinations are a tab PLUS a scope rather than a panel — derive them
       // the same way, from the live state, so they stay right without a hint.
@@ -24764,9 +24773,13 @@ const AtweHistory = (() => {
     repush(carry, stayOn, why) {
       const was = stayOn || cur;
       const from = cur;
+      /* Route batch 6: the URL comes back too. The browser has already moved the address
+         bar to the entry it traversed to; a cancel is not a page move, so the entry and its
+         address are exactly the ones the member is still standing on. */
+      const path = (was && was.path) || location.pathname;
       const st = Object.assign(legacyOf(carry), { atwe: 2, idx: was ? was.idx : nextIdx(), key: was ? was.key : newKey(),
-        route: routeOf(location.pathname), path: location.pathname, prev: was ? (was.prev || null) : null });
-      try { history.pushState(st, ''); } catch (e) {}
+        route: routeOf(path), path, prev: was ? (was.prev || null) : null });
+      try { history.pushState(st, '', path + location.search + location.hash); } catch (e) {}
       commit(st);
       emit(why || 'dismiss', 'none', from, cur);
       return st;
@@ -24833,7 +24846,13 @@ function acSetPath(path, opts) {
     /* Through the ONE writer. A replace carries the entry's legacy fields forward exactly
        as before (history.state wholesale), but `path` is now the real URL, never stale. */
     const push = !!(opts && opts.push);
-    if (AtweHistory.write(path, push, push ? null : history.state)) _histDepth++;
+    const from = (AtweHistory.current || {}).idx;
+    if (AtweHistory.write(path, push, push ? null : history.state)) {
+      _histDepth++;
+      /* The first entry pushed straight off a handoff's panel entry is the one the handoff
+         CREATED (LEGACY-UNROUTED bookkeeping for a conversation's Back, see acHandoffFrom). */
+      if (_handoffPanel && _handoffPanel.next == null && from === _handoffPanel.idx) _handoffPanel.next = (AtweHistory.current || {}).idx;
+    }
     acSetCanonical(path);
     try { acSyncTabTitle(); } catch (e) {}
   } catch (e) {}
@@ -25554,8 +25573,11 @@ function closeOverlay(id, noHistory) {
      the path sync derives from the Account page underneath, instead of walking out of Atwe. */
   const _vkey = acViewRouteKey(id);
   const _own = el._ownPath || (id === 'settingsOverlay' ? acSettingsPath(_setPage) : (_vkey ? acRouteKeyPath(_vkey) : null));
-  const _setNode = id === 'settingsOverlay' || !!el._setLeaf || !!(_vkey && APP_ROUTES[_vkey] && APP_ROUTES[_vkey].acct);
-  if (!noHistory && !_histRestoring && _histDepth > 0 && _own && location.pathname === _own && (!_setNode || AtweHistory.hasPrev())) {
+  /* Route batch 6: EVERY routed layer walks back only over a REAL earlier Atwe entry
+     (AtweHistory.hasPrev). _histDepth alone over-counts once the member has used browser
+     Back, and a panel reached by a direct link (Back to it, then close) would otherwise walk
+     straight out of Atwe. */
+  if (!noHistory && !_histRestoring && _histDepth > 0 && _own && location.pathname === _own && AtweHistory.hasPrev()) {
     /* THE WALK IS DEFERRED BY ONE MICROTASK, AND THAT IS THE WHOLE FIX FOR A HANDOVER.
        Half the rows in Manage store read `closeOverlay('storeManageView'); acOpenX()`.
        Walked synchronously, the popstate that back() schedules lands AFTER acOpenX has
@@ -28592,21 +28614,14 @@ function setNav(pageName, opts) {
   if (pageName === 'privacy') acLoadAccountPrivacy();
   if (pageName === 'security') { acLoadConnected(); syncAppLockRow(); }
 }
-/* SETTINGS BACK (the page's own arrow, and device Back through appGoBack).
-   Search open: clear it. On a page: when there is a REAL earlier Atwe entry behind this
-   one, walk it — so the arrow, browser Back and device Back all land in the same place,
-   including where a page was opened straight from elsewhere (Notifications' menu). With
-   none (a direct link), go to the page's logical parent, the hub, by REPLACING the
-   address — Settings never fabricates history behind a deep link. On the hub: close. */
+/* SETTINGS BACK (the page's own arrow). Search open: clear it. On a page: App Back, so the
+   arrow, browser Back and device Back all land in the same place. On the hub: close. */
 function setBack() {
   if (!document.getElementById('setSearchResults').classList.contains('hidden')) { setSearchClear(); return; }
-  if (_setPage !== 'hub') {
-    if (AtweHistory.hasPrev()) {
-      _histDepth = Math.max(0, _histDepth - 1);
-      try { history.back(); return; } catch (e) {}
-    }
-    setNav('hub', { back: true });
-  }
+  /* A page or a leaf: the unified App Back (route batch 6) - the real previous entry, else
+     the registry's logical parent by replace. The hub is Settings' own root: closing it is
+     a layer close, which itself walks real history when there is some. */
+  if (_setPage !== 'hub') appGoBack();
   else closeSettings();
 }
 // Search across all settings.
@@ -32758,10 +32773,6 @@ function syncNavPill() {
 window.addEventListener('resize', () => { AC._navPillInit = false; requestAnimationFrame(syncNavPill); acUpdateRail(); });
 
 let _appTab = 'ai';
-/* Which world the Atwe AI page was opened FROM, so its back arrow can return there.
-   Null when the AI page was the restored last tab on boot (nothing to go back to) —
-   acAiBack falls back to Home in that case. */
-let _aiFrom = null;
 // Remember the last tab the user was actually on, so a reload (an OS-reclaimed
 // background PWA tab, a network-triggered reload, a manual refresh) restores
 // them there instead of always dumping them back on Home. 'call' is excluded —
@@ -32915,12 +32926,12 @@ function appTab(tab, opts) {
   }
   // Blue-icon nav notif: leaving a world dismisses its glow (it re-blues only on NEW activity).
   if (_appTab && _appTab !== tab && !_silent && typeof acDismissNavNotif === 'function') acDismissNavNotif(_appTab);
-  /* Atwe AI has no icon in the bar any more, so its back arrow is the only way out —
-     it has to return to whatever world the user actually came from. Captured here
-     because every entry point (the circle beside the Engine search bar, the Me hub, a
-     deep link, the message ⋯ menu, forward-to-AI) funnels through appTab('ai'). */
   const _prevTab = _appTab;
-  if (tab === 'ai' && _prevTab && _prevTab !== 'ai') _aiFrom = _prevTab;
+  /* The AI page is not a social screen, so acShow never records what it covers. Record it
+     here (route batch 6): Back out of /ai to the entry underneath restores that world. */
+  if (tab === 'ai' && _prevTab && _prevTab !== 'ai') {
+    try { navStackPush(AC_SCREENS.find((id) => { const e = document.getElementById(id); return e && !e.classList.contains('hidden'); })); } catch (e) {}
+  }
   // A section a URL asked for belongs to THIS visit to Account only (route batch 5).
   if (tab !== 'profile') _mePending = null;
   _appTab = tab;
@@ -37097,7 +37108,7 @@ function acRenderNotifDetail(n) {
         <div class="nd-time">${escHtml(acTime(n.created_at))}</div>
       </div>
       <div class="nd-card"><div class="nd-msg">This is the mark Atwe gives to people who deal well, over enough dealings for it to mean something. It shows on your profile from now on, and it stays as long as your reputation does.</div></div>
-      <button class="nd-action" onclick="closeOverlay('notifOverlay', true);acGoProfile()">See your profile</button>`;
+      <button class="nd-action" onclick="acNavGo(acNotifPath({ route: 'profile', params: { username: (S.user && S.user.username) || '' } }))">See your profile</button>`;
   }
   if (n.type === 'login') {
     let when = acTime(n.created_at);
@@ -37110,8 +37121,8 @@ function acRenderNotifDetail(n) {
         <div class="nd-title">New sign-in to your account</div>
         <div class="nd-time">${escHtml(when)}</div>
       </div>
-      <div class="nd-card"><div class="nd-msg">We noticed a new sign-in to your Atwe account. If this was you, you can safely ignore this. If you don't recognise it, change your password right away to keep your account secure.</div></div>
-      <button class="nd-action" onclick="changePassword()">Change password</button>`;
+      <div class="nd-card"><div class="nd-msg">We noticed a new sign-in to your Atwe account. If this was you, you can safely ignore this. If you don't recognise it, sign that device out and change your password right away to keep your account secure.</div></div>
+      <button class="nd-action" onclick="acNavGo(acSettingsPath('security', 'devices'))">Review your devices</button>`;
   }
   const a = n.actor || {};
   return `<div class="nd-hero">${acAvatarHtml(a.name, a.avatar, 'nd-ava', acIsBiz(a))}<div class="nd-title">${escHtml(a.name || 'Notification')}</div><div class="nd-time">${escHtml(acTime(n.created_at))}</div></div>`;
@@ -37134,39 +37145,49 @@ function acRenderNotifDetail(n) {
    a sign-in check — it opens its OWN detail page rather than a stranger's profile. That
    surface already exists (it is what a `login` alert opens) and reading the message you
    were notified about is a real destination; the actor's profile is not. */
-const NOTIF_GO = {
+/* ROUTE BATCH 6: the table is a DESTINATION table, read only by routeFor(). A value is
+     '@<route key>'  a routed destination: its canonical URL is BUILT by the route registry
+                     (acNotifPath) and the tap PUSHES it, so real Back returns to
+                     /notifications and Forward returns here;
+     'DETAIL'        the notification's own in-panel detail (an unrouted state of
+                     /notifications, never a URL of its own);
+     'fn(...)'       LEGACY-UNROUTED: the surface has no route yet (or only a local tab
+                     state the URL does not carry). Its opener runs as before; any routed
+                     panel it opens still derives its own address from the path sync. */
+const NOTIF_DEST = {
   // ── money: it all lives in the wallet ─────────────────────────────────────
-  payment:'acOpenWallet()', money_received:'acOpenWallet()', money_drop_done:'acOpenWallet()',
-  tip:'acOpenWallet()', pool_contribution:'acOpenPools()', ppv_unlock:'acOpenWallet()',
-  series_bought:'acOpenWallet()', wallet_frozen:'acOpenWallet()', referral:'acOpenReferrals()',
-  gift_received:'acOpenGiftCards()', giftcard_frozen:'acOpenGiftCards()',
-  sched_pay_failed:'acOpenSchedPays()', return_request:'acOpenWallet()',
+  payment:'@wallet', money_received:'@wallet', money_drop_done:'@wallet',
+  tip:'@wallet', pool_contribution:'acOpenPools()', ppv_unlock:'@wallet',
+  series_bought:'@wallet', wallet_frozen:'@wallet', referral:'@referrals',
+  gift_received:'@gift-cards', giftcard_frozen:'@gift-cards',
+  sched_pay_failed:'acOpenSchedPays()', return_request:'@wallet',
   refund_approved:'acOpenRefunds()', refund_declined:'acOpenRefunds()',
+  pot_saved:'@wallet', pot_save_skipped:'@wallet',
   // ── the "win the job" layer ───────────────────────────────────────────────
-  quote:'acOpenQuotes()', quote_received:"acOpenQuotes('received')",
+  quote:'@quotes', quote_received:'@quotes',
   quote_accepted:"acOpenQuotes('sent')", quote_declined:"acOpenQuotes('sent')",
   // ── advertising ───────────────────────────────────────────────────────────
-  ad_approved:'acOpenAds()', ad_rejected:'acOpenAds()', ad_review:'acOpenAds()',
-  product_ad_paused:'acOpenProductAds()',
+  ad_approved:'@ads', ad_rejected:'@ads', ad_review:'@ads',
   // ── affiliation badges ────────────────────────────────────────────────────
   aff_invite:'acOpenAffiliation()', aff_accepted:'acOpenAffiliation()',
   aff_approved:'acOpenAffiliation()', aff_rejected:'acOpenAffiliation()',
   aff_review:'acOpenAffiliation()',
   // ── teaching, publishing, selling ─────────────────────────────────────────
   course_enroll:"acOpenCourses('teaching')", course_cancelled:"acOpenCourses('enrolled')",
-  newsletter_issue:'acOpenNewsletters()', creator_sub:'acOpenCreatorSettings()',
+  newsletter_issue:'@newsletters', creator_sub:'acOpenCreatorSettings()',
   webinar_live:'acOpenWebinars()', webinar_signup:'acOpenWebinars()',
   webinar_cancelled:'acOpenWebinars()',
   sample_offer:'acOpenSamples()', sample_update:'acOpenSamples()',
   product_review:'acOpenPendingReviews()', review_invite:'acOpenPendingReviews()',
   review:'acOpenReviews()', review_reply:'acOpenReviews()',
-  // ── things that ARE just a message: open the message, not a stranger ──────
+  // ── system rows (the Atwe mark) ───────────────────────────────────────────
+  daily_briefing:'@calendar', app_error:"openSettings();setNav('admin')",
   // ── the twelve the first pass missed, found by tightening the guard's own scan ──
-  advance_repaid:'acOpenWallet()', wallet_adjustment:'acOpenWallet()',
-  revshare:'acOpenWallet()', money_drop_expired:'acOpenWallet()',
+  advance_repaid:'@wallet', wallet_adjustment:'@wallet',
+  revshare:'@wallet', money_drop_expired:'@wallet',
   cashout_released:'acOpenCashout()', cashout_returned:'acOpenCashout()',
-  referral_milestone:'acOpenReferrals()', event_cancelled:'acOpenEvents()',
-  listing_hidden:'acOpenSell()', waitlist_invite:'acOpenDebitCard()',
+  referral_milestone:'@referrals', event_cancelled:'@events',
+  listing_hidden:'@listings', waitlist_invite:'@card',
   sms_received:'acOpenLeads()', ai_task:'DETAIL',
   strike:'DETAIL', mod_warning:'DETAIL', appeal_granted:'DETAIL', appeal_denied:'DETAIL',
   auth_requested:'DETAIL', auth_passed:'DETAIL', auth_failed:'DETAIL',
@@ -37174,12 +37195,109 @@ const NOTIF_GO = {
   inbox_assigned:'DETAIL', case_assigned:'DETAIL', brief_application:'DETAIL',
   voicemail:'DETAIL', community_boost:'DETAIL', contact:'DETAIL',
 };
+/* routeFor(notification) — THE one place a notification's destination is decided.
+   Returns
+     { route, params, via }   a routed destination (a route-registry / APP_ROUTES name)
+     { detail: true }         the in-panel detail
+     { open, via }            LEGACY-UNROUTED opener (no route yet)
+   `via` names the kind of subject the row is about, for its preview line. Nothing here
+   builds a URL by hand: acNotifPath asks the registry. */
+function routeFor(n) {
+  const t = n.type, a = n.actor || {}, R = (route, params, via) => ({ route, params: params || null, via: via || null });
+  const O = (open, via) => ({ open, via: via || null });
+  const me = (S.user && S.user.username) || '';
+  // system rows written outside notify() (so they are not table rows): the Atwe mark
+  if (t === 'certified' || t === 'login') return { detail: true };
+  if (t === 'week_summary') return R('analytics');
+  if (t === 'follower_milestone') return O("acOpenFollowList(S.user && S.user.username, 'followers')");
+  if (['stock_low', 'stock_out', 'product_ad_paused', 'auction_no_bids'].includes(t)) return n.productId ? R('listing', { id: n.productId }, 'product') : O('', 'product');
+  if (t === 'service_lead' && n.metaNum) return O(`acOpenServiceRequest(${Number(n.metaNum)})`);
+  if (t === 'offer' && n.metaNum) return O(`acOpenOffer(${Number(n.metaNum)})`, 'chat');
+  // an order has no address yet (order-detail is planned: it needs an opaque ref)
+  if (['order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'order_disputed', 'order_refunded', 'escrow_released', 'escrow_refunded', 'return_requested', 'return_approved', 'return_declined', 'return_label_ready', 'digital_ready'].includes(t) && n.metaNum) return O(`acOpenOrder(${Number(n.metaNum)})`);
+  if (/^delivery_/.test(t) && n.metaNum) return O(`acOpenPeerDelivery(${Number(n.metaNum)})`);
+  if (t === 'review_invite') return O('acOpenPendingReviews()');
+  if (['event_rsvp', 'event_update', 'event_reminder', 'event_comment', 'event_spot'].includes(t) && n.eventId) return R('event', { id: n.eventId }, 'event');
+  if (/^appt_/.test(t) && ['appt_request', 'appt_confirmed', 'appt_declined', 'appt_cancelled', 'appt_rescheduled', 'appt_reminder'].includes(t)) return R('appointments');
+  if (['rental_request', 'rental_booked', 'rental_paid'].includes(t)) return O("acOpenBookings('host')");
+  if (['rental_confirmed', 'rental_declined', 'rental_cancelled'].includes(t)) return R('bookings');
+  if (['call_scheduled', 'call_confirmed', 'call_declined', 'call_cancelled', 'call_reminder'].includes(t)) return O(`appTab('chat');acOpenChat(${Number(a.id)})`, 'chat');
+  if (t === 'inquiry') return O('acOpenLeads()');
+  if (['money_request', 'money_request_paid', 'money_request_declined'].includes(t)) return R('money-requests');
+  if (['invoice', 'invoice_reminder'].includes(t)) return R('invoices');
+  if (['invoice_paid', 'rinv_paused'].includes(t)) return O("acOpenInvoices('sent')");
+  if (t === 'split_paid') return O("acOpenSplits();acSplitTab('created')");
+  if (t === 'split_request' || t === 'split_reminder') return O('acOpenSplits()');
+  if (t === 'mention') {
+    if (n.groupId) return O(`appTab('chat');acOpenGroup(${Number(n.groupId)})`, 'group');
+    if (n.postId) return R('post', { id: n.postId, username: n.postAuthor || null });
+    return R('profile', { username: a.username });
+  }
+  if (t === 'remix' && n.metaNum) return O(`acOpenFeedOriginal(${Number(n.metaNum)})`);
+  if (t === 'dmca_removed' && n.metaNum) return O(`acOpenCounter(${Number(n.metaNum)})`);
+  if (t === 'feed_request' || t === 'feed_approved') return O(`acOpenFeed(${Number(n.feedId)})`, 'feed');
+  if (t === 'group_request') return O(`appTab('chat');acOpenGroupRequests(${Number(n.groupId)})`, 'group');
+  if (['group_join_paid', 'group_approved', 'task_assigned', 'group_admin_added', 'group_admin_removed'].includes(t)) return O(`appTab('chat');acOpenGroup(${Number(n.groupId)})`, 'group');
+  if (['message', 'call', 'video_call', 'chat_request', 'chat_allowed', 'offer', 'crm_followup'].includes(t)) return O(`appTab('chat');acOpenChat(${Number(a.id)})`, 'chat');
+  if (['job_application', 'job_match', 'app_reviewed', 'app_shortlisted', 'app_hired', 'app_rejected', 'referral_request'].includes(t)) return n.jobId ? R('job', { id: n.jobId }, 'job') : R('search', null, 'job');
+  if (t === 'rec_received') return O('acOpenPendingRecs()');
+  if (t === 'rec_request') return O(`acWriteRecOpen(${jsAttr(a.username || '')},${jsAttr(a.name || '')})`);
+  if (t === 'connection_request' || t === 'connection_accepted') return R('profile', { username: a.username });
+  if (t === 'endorsement') return R('profile', { username: me });
+  if (['restock', 'sub_renewed', 'sub_payment_failed', 'sub_out_of_stock', 'sub_paused', 'price_drop', 'market_match', 'affiliate', 'product_ad_review', 'deal', 'auction_outbid', 'auction_won', 'auction_ended'].includes(t) && n.productId) return R('listing', { id: n.productId }, 'product');
+  if (t === 'team_invite') return O("acOpenTeam('memberships')");
+  if (t === 'team_joined') return R('team');
+  const d = NOTIF_DEST[t];
+  if (d === 'DETAIL') return { detail: true };
+  if (d && d[0] === '@') return R(d.slice(1));
+  if (d) return O(d);
+  return n.postId ? R('post', { id: n.postId, username: n.postAuthor || null }) : R('profile', { username: a.username });
+}
+/* The canonical URL of a routeFor() destination, built by the route registry. A post
+   whose author the payload does not carry falls back to its legacy /post/<id> (the app
+   canonicalises it the moment the post loads). */
+function acNotifPath(d) {
+  if (!d || !d.route) return null;
+  const p = d.params || {};
+  if (d.route === 'post') return p.username ? acRoutePath('post', { username: p.username, id: p.id }, '/' + p.username + '/post/' + p.id) : '/post/' + p.id;
+  if (d.route === 'profile') return p.username ? acRoutePath('profile', { username: p.username }, '/' + p.username) : null;
+  if (d.route === 'listing' || d.route === 'job' || d.route === 'event') return acRoutePath(d.route, { id: p.id }, '/' + d.route + '/' + p.id);
+  if (d.route === 'search') return acRoutePath('search', null, '/search');
+  if (APP_ROUTES[d.route]) return acRouteKeyPath(d.route);
+  return null;
+}
+/* Go to a canonical address as ONE real move forward: push it, then render it from the
+   URL through the same path a traversal uses. The Notifications panel it was tapped in is
+   a different route, so it is closed by that same path, without walking history. */
+function acNavGo(path) {
+  if (!path) return false;
+  if (location.pathname === path) { _navApplyUrl(); return true; }
+  acSetPath(path, { push: true });
+  const was = _histRestoring;
+  _histRestoring = true;
+  try { _navApplyUrl(); } catch (e) { console.error('acNavGo', e); }
+  finally { setTimeout(() => { _histRestoring = was; }, 260); }
+  return true;
+}
+/* A notification row was tapped. */
+function acNotifGo(id) {
+  const n = (AC._notifs || []).find((x) => String(x.id) === String(id));
+  if (!n) return;
+  const d = routeFor(n);
+  if (d.detail) { acOpenNotifDetail(n.id); return; }
+  const path = d.route ? acNotifPath(d) : null;
+  if (path) { acNavGo(path); return; }
+  /* LEGACY-UNROUTED: the destination has no address yet. The panel closes without walking
+     history (the opener is about to navigate), exactly as before. */
+  closeOverlay('notifOverlay', true);
+  if (d.open) { try { (new Function(d.open))(); } catch (e) { console.error('notification', e); } }
+}
 function notifRow(n, i) {
   const a = n.actor;
   // A new sign-in is a system (security) alert — the Atwe mark, no actor link.
   // Tapping opens an in-place detail page (back arrow returns to the notifications list).
   if (n.type === 'certified') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acOpenNotifDetail(${Number(n.id)})">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava cert-sys"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>You're Atwe Certified</b> · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">Your reputation earned it. It now shows on your profile.</div></div>
@@ -37187,7 +37305,7 @@ function notifRow(n, i) {
     </div>`;
   }
   if (n.type === 'login') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acOpenNotifDetail(${Number(n.id)})">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>New sign-in</b> to your account · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
@@ -37201,7 +37319,7 @@ function notifRow(n, i) {
   // show the Atwe mark rather than reading as "you interacted with you".
   // Weekly shop summary — a system digest for businesses; taps to Sales & analytics.
   if (n.type === 'week_summary') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);acOpenShopAnalytics()">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Your week in your shop</b>${n.metaNum ? ` - ${n.metaNum} order${n.metaNum === 1 ? '' : 's'}` : ''} · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">Tap for the full picture. Sales, orders and top products.</div></div>
@@ -37213,7 +37331,7 @@ function notifRow(n, i) {
      not a person's doing, so it wears the Atwe mark rather than attributing the bug to
      whoever happened to be on screen when it fired. */
   if (n.type === 'app_error') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);openSettings();setNav('admin')">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Something broke for someone</b> · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">A new fault was reported. Open the dashboard → Site to see it.</div></div>
@@ -37223,7 +37341,7 @@ function notifRow(n, i) {
   // Follower milestone — a system celebration (the Atwe mark, no actor):
   // tapping opens YOUR followers list to enjoy the view.
   if (n.type === 'follower_milestone') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);acOpenFollowList(S.user && S.user.username, 'followers')">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text">🎉 <b>You reached ${n.metaNum ? Number(n.metaNum).toLocaleString() : 'a new milestone in'} followers</b> · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">Keep it going. Post something for them.</div></div>
@@ -37232,7 +37350,7 @@ function notifRow(n, i) {
   }
   if (n.type === 'stock_low' || n.type === 'stock_out') {
     const out = n.type === 'stock_out';
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);${n.productId ? `acOpenListing(${n.productId})` : ''}">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>${out ? 'Sold out' : 'Running low'}</b>.${out ? 'restock to keep selling' : 'only a few left'} · <span class="notif-time">${acTime(n.created_at)}</span></div>
         ${n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : ''}</div>
@@ -37240,7 +37358,7 @@ function notifRow(n, i) {
     </div>`;
   }
   if (n.type === 'product_ad_paused') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);${n.productId ? `acOpenListing(${n.productId})` : ''}">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Sponsored listing paused</b>. Your balance ran out · <span class="notif-time">${acTime(n.created_at)}</span></div>
         ${n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : ''}</div>
@@ -37250,7 +37368,7 @@ function notifRow(n, i) {
   // Auction ended with no bids — a system row (the Atwe mark): opens the listing
   // so the seller can relist or turn the auction off.
   if (n.type === 'auction_no_bids') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);${n.productId ? `acOpenListing(${n.productId})` : ''}">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Auction ended without bids</b>. Relist it or set a lower starting bid · <span class="notif-time">${acTime(n.created_at)}</span></div>
         ${n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : ''}</div>
@@ -37259,7 +37377,7 @@ function notifRow(n, i) {
   }
   // Daily morning briefing — a system row (the Atwe mark): opens today's agenda.
   if (n.type === 'daily_briefing') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);acOpenAgenda()">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Your morning brief</b>. See what’s on today · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">Appointments, money waiting, orders to ship.</div></div>
@@ -37269,7 +37387,7 @@ function notifRow(n, i) {
   // Pot auto-save — a system event (the Atwe mark, no actor): opens the wallet.
   if (n.type === 'pot_saved' || n.type === 'pot_save_skipped') {
     const ok = n.type === 'pot_saved';
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay', true);acOpenWallet()">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acNotifGo(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>${ok ? 'Auto-save done' : 'Auto-save skipped'}</b>.${ok ? 'money moved into your pot' : 'your balance was too low, so we’ll try again next time'} · <span class="notif-time">${acTime(n.created_at)}</span></div></div>
       ${n.read ? '' : '<span class="notif-dot"></span>'}
@@ -37299,67 +37417,13 @@ function notifRow(n, i) {
     sms_received: 'sent a text to your business number',
     voicemail: 'left you a voicemail' };
   const verb = verbs[n.type] || 'interacted with you';
-  const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
-  const isEndorse = n.type === 'endorsement';
-  const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
-  const isGroup = n.type === 'group_join_paid' || n.type === 'group_request' || n.type === 'group_approved' || n.type === 'task_assigned' || n.type === 'group_admin_added' || n.type === 'group_admin_removed';
-  const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed' || n.type === 'offer' || n.type === 'crm_followup';
-  const isMention = n.type === 'mention'; // a group @mention — deep-links to the group thread (else falls back to the post/profile)
-  const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
-  const isRec = n.type === 'rec_received' || n.type === 'rec_request';
-  const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused' || n.type === 'price_drop' || n.type === 'market_match' || n.type === 'affiliate' || n.type === 'product_ad_review' || n.type === 'deal' || n.type === 'auction_outbid' || n.type === 'auction_won' || n.type === 'auction_ended') && n.productId;
-  const isTeam = n.type === 'team_invite' || n.type === 'team_joined';
-  const isMoneyReq = n.type === 'money_request' || n.type === 'money_request_paid' || n.type === 'money_request_declined';
-  const isInvoice = n.type === 'invoice' || n.type === 'invoice_reminder' || n.type === 'invoice_paid' || n.type === 'rinv_paused';
-  const isSplit = n.type === 'split_request' || n.type === 'split_reminder' || n.type === 'split_paid';
-  const isInquiry = n.type === 'inquiry';
-  const isCallSched = n.type === 'call_scheduled' || n.type === 'call_confirmed' || n.type === 'call_declined' || n.type === 'call_cancelled' || n.type === 'call_reminder';
-  const isAppt = n.type === 'appt_request' || n.type === 'appt_confirmed' || n.type === 'appt_declined' || n.type === 'appt_cancelled' || n.type === 'appt_rescheduled' || n.type === 'appt_reminder';
-  const isRentalN = n.type === 'rental_request' || n.type === 'rental_booked' || n.type === 'rental_confirmed' || n.type === 'rental_declined' || n.type === 'rental_paid' || n.type === 'rental_cancelled';
-  const isEvent = (n.type === 'event_rsvp' || n.type === 'event_update' || n.type === 'event_reminder' || n.type === 'event_comment' || n.type === 'event_spot') && n.eventId;
-  // "Leave them a review" must land on the review, not on a profile.
-  const isReviewAsk = n.type === 'review_invite';
-  // Anything about a delivery lands on that delivery, never on a profile.
-  const isDelivery = /^delivery_/.test(n.type) && n.metaNum;
-  // An offer tap lands on the OFFER (newer notifs carry its id; older ones
-  // keep the chat fallback below).
-  const isOfferN = n.type === 'offer' && n.metaNum;
-  // Anything about an order lands on that order (newer notifs carry its id).
-  const isOrderN = ['order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'order_disputed', 'order_refunded', 'escrow_released', 'escrow_refunded', 'return_requested', 'return_approved', 'return_declined', 'return_label_ready', 'digital_ready'].includes(n.type) && n.metaNum;
-  const isSvcLead = n.type === 'service_lead' && n.metaNum;
-  const go = isSvcLead ? `acOpenServiceRequest(${Number(n.metaNum)})`
-    : isOfferN ? `acOpenOffer(${Number(n.metaNum)})`
-    : isOrderN ? `acOpenOrder(${Number(n.metaNum)})`
-    : isDelivery ? `acOpenPeerDelivery(${Number(n.metaNum)})`
-    : isReviewAsk ? `acOpenPendingReviews()`
-    : isEvent ? `acOpenEvent(${n.eventId})`
-    : isAppt ? `acOpenAppointments()`
-    : isRentalN ? `acOpenBookings('${(n.type === 'rental_request' || n.type === 'rental_booked' || n.type === 'rental_paid') ? 'host' : 'guest'}')`
-    : isCallSched ? `appTab('chat');acOpenChat(${a.id})`
-    : isInquiry ? `acOpenLeads()`
-    : isMoneyReq ? `acOpenMoneyRequests()`
-    : isInvoice ? `acOpenInvoices('${(n.type === 'invoice_paid' || n.type === 'rinv_paused') ? 'sent' : 'received'}')`
-    : isSplit ? (n.type === 'split_paid' ? `acOpenSplits();acSplitTab('created')` : `acOpenSplits()`)
-    : isMention ? (n.groupId ? `appTab('chat');acOpenGroup(${n.groupId})` : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`))
-    : (n.type === 'remix' && n.metaNum) ? `acOpenFeedOriginal(${n.metaNum})`
-    : (n.type === 'dmca_removed' && n.metaNum) ? `acOpenCounter(${n.metaNum})`
-    : isFeed ? `acOpenFeed(${n.feedId})`
-    : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
-    : isChat ? `appTab('chat');acOpenChat(${a.id})`
-    : isJob ? (n.jobId ? `acOpenJob(${n.jobId})` : `appTab('search')`)
-    : isRec ? (n.type === 'rec_received' ? `acOpenPendingRecs()` : `acWriteRecOpen('${a.username}',${jsAttr(a.name || '')})`)
-    : isConn ? `acGoProfile('${a.username}')`
-    : isEndorse ? `acGoProfile('')`
-    : isProduct ? `acOpenListing(${n.productId})`
-    : isTeam ? `acOpenTeam('${n.type === 'team_invite' ? 'memberships' : 'team'}')`
-    : NOTIF_GO[n.type] ? (NOTIF_GO[n.type] === 'DETAIL'
-        ? `acOpenNotifDetail(${jsAttr(String(n.id))})` : NOTIF_GO[n.type])
-    : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`);
-  const snip = isJob ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
-    : isProduct ? (n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : '')
-    : isEvent ? (n.eventTitle ? `<div class="notif-snip">${escHtml(n.eventTitle)}</div>` : '')
-    : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" data-type="${escHtml(n.type || '')}" onclick="closeOverlay('notifOverlay', true);${(NOTIF_GO[n.type] || isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam || isMoneyReq || isInvoice || isSplit || isInquiry || isCallSched || isAppt || isEvent || isOrderN || isOfferN || (isMention && n.groupId)) ? '' : "appTab('home');"}${go}">
+  const dest = routeFor(n);   // the ONE destination decision (route batch 6)
+  const via = dest.via;
+  const snip = via === 'job' ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
+    : via === 'product' ? (n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : '')
+    : via === 'event' ? (n.eventTitle ? `<div class="notif-snip">${escHtml(n.eventTitle)}</div>` : '')
+    : (via !== 'feed' && via !== 'group' && via !== 'chat' && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
+  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" data-type="${escHtml(n.type || '')}" onclick="acNotifGo(${Number(n.id)})">
     <div class="notif-ava-wrap">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}</div>
     <div class="ac-item-main"><div class="notif-text"><b>${escHtml(a.name)}</b>${acIsVerified(a) ? vbadge(true) : ''}${acAffBadge(a)} ${verb} · <span class="notif-time">${acTime(n.created_at)}</span></div>${snip}</div>
     ${n.read ? '' : '<span class="notif-dot"></span>'}
@@ -37377,17 +37441,34 @@ const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acCo
 // Drill-in screens that have their OWN top header (back arrow + title): hide the
 // main top bar so there's no redundant double header.
 const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acFeedScreen', 'acFeedCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen', 'acProfileScreen', 'acMeScreen'];
-/* ─── Screen back-stack (browser Back walks real history) ───
-   Screens are persistent hidden divs, so "going back" can un-hide the previous
-   screen exactly as the user left it and re-apply its scroll positions (hiding
-   via display:none resets descendants' scrollTop, hence the capture). acShow()
-   pushes the outgoing screen; the popstate handler pops (open overlays still
-   unwind first, and the double-back-to-exit guard stays at the true root).
-   Only cross-screen moves are recorded — a same-screen swap (profile→profile)
-   reuses one DOM surface whose intermediate content can't be restored, so that
-   case still falls back to the fixed per-screen map (acScreenBack). */
+/* ─── Screen memory, keyed to REAL history entries (route batch 6) ───
+   Screens are persistent hidden divs, so returning to one can un-hide it exactly as the
+   member left it and re-apply its scroll positions (hiding via display:none resets
+   descendants' scrollTop, hence the capture). acShow() records the outgoing screen
+   together with the History-v2 entry it was on (`idx`) and that entry's address.
+
+   THIS NO LONGER DECIDES WHERE BACK GOES. Before batch 6 the app's own Back popped this
+   stack to pick a destination; now the destination is always the real previous entry
+   (history.back) or, on a direct entry, the route registry's logical parent. The stack is
+   consulted ONLY after a traversal has landed, and only to re-render the entry the browser
+   restored: a record is honoured when its idx AND its path match that entry exactly, so a
+   stale or wrong record can never move the member anywhere the URL does not say.
+
+   Two things it still supplies, both documented as memory rather than routing truth:
+   - scroll + render cache for a WORLD screen (Home feed, Beam list, Engine), so Back does
+     not refetch and lose the member's place;
+   - LEGACY-UNROUTED FALLBACK: a Beam conversation has no address of its own yet (it sits
+     on "/", Beam routing is a later batch), so the record is the only way to know an entry
+     was a conversation. It is restored only when the conversation on screen is still the
+     same one (`chat`), never re-pointed at another.
+   Nothing is recorded while the browser is restoring an entry: that entry is the NEW one,
+   and recording it would file the outgoing screen under the wrong position. */
 let _navStack = [], _navRestoring = false, _lastShow = null;
 const NAV_STACK_MAX = 50;
+/* Screens whose DOM can be honestly re-shown from memory. A profile, a post or a circle
+   is ONE DOM surface reused for every entity, so its content may belong to someone else by
+   now — those re-render from their URL instead. */
+const NAV_RESTORABLE = ['acHomeScreen', 'acListScreen', 'acSearchScreen', 'acGroupsScreen', 'acThreadScreen'];
 function _navScrollCandidates(screenEl) {
   if (!screenEl) return [];
   const seen = new Set(), out = [];
@@ -37396,49 +37477,66 @@ function _navScrollCandidates(screenEl) {
   });
   return out;
 }
+function _navChatId() {
+  try { return AC.mode === 'group' ? 'g' + (AC.groupId || '') : 'd' + ((AC.peer && AC.peer.id) || ''); } catch (e) { return ''; }
+}
 function navStackPush(fromScreen) {
-  if (_navRestoring || !fromScreen) return;
+  if (_navRestoring || _histRestoring || !fromScreen) return;
   const el = document.getElementById(fromScreen);
   if (!el || el.classList.contains('hidden')) return;
+  const cur = (typeof AtweHistory !== 'undefined' && AtweHistory.current) || null;
+  if (!cur) return;
   const scrolls = [];
   _navScrollCandidates(el).forEach((c, i) => { if (c.scrollTop > 0) scrolls.push({ i, top: c.scrollTop }); });
   // appTab: use the value captured when this screen was SHOWN (_lastShow) — at
   // leave time appTab() has already flipped _appTab to the DESTINATION tab, so
   // reading it here would tag the outgoing screen with the wrong tab and a
   // later restore would highlight the wrong nav item (seen in live testing).
-  // path: '/ai' can linger from an AI-tab visit that never swapped the social
-  // screen — no social screen owns it, so record '/' instead.
   const sameShow = _lastShow && _lastShow.screen === fromScreen;
-  const p = location.pathname;
+  // left again before its own entry was even written: it belongs to no entry at all
+  if (sameShow && _lastShow.pend) return;
   _navStack.push({
+    idx: cur.idx,
     screen: fromScreen,
     acTab: sameShow ? _lastShow.tab : null,
     appTab: (sameShow && _lastShow.appTab) ? _lastShow.appTab : _appTab,
-    path: p === '/ai' ? '/' : p,
+    path: location.pathname,
+    chat: fromScreen === 'acThreadScreen' ? _navChatId() : null,
     scrolls,
   });
   if (_navStack.length > NAV_STACK_MAX) _navStack.shift();
 }
-function navStackPop() {
-  const cur = AC_SCREENS.find(id => { const s = document.getElementById(id); return s && !s.classList.contains('hidden'); });
-  while (_navStack.length) {
-    const e = _navStack.pop();
-    if (e.screen === cur) continue; // same surface — its old content is gone; let the fallback map handle it
-    const el = document.getElementById(e.screen);
-    if (!el) continue;
-    _navRestoring = true;
-    try {
-      if (e.appTab && e.appTab !== _appTab) appTab(e.appTab, { silent: true });
-      acShow(e.screen, e.acTab);
-      if (e.path && e.path !== location.pathname) acSetPath(e.path);
-      requestAnimationFrame(() => {
-        const cands = _navScrollCandidates(el);
-        e.scrolls.forEach(s => { const c = cands[s.i]; if (c) c.scrollTop = s.top; });
-      });
-    } finally { _navRestoring = false; }
-    return true;
+/* The record for the entry the browser has just restored — the top-most one whose idx and
+   path both match it. Null when there is none (a direct entry, a reload, a stale record). */
+function navRecordFor(entry) {
+  if (!entry || !Number.isInteger(entry.idx)) return null;
+  for (let i = _navStack.length - 1; i >= 0; i--) {
+    const e = _navStack[i];
+    if (e.idx === entry.idx && e.path === location.pathname) return e;
   }
-  return false;
+  return null;
+}
+/* Re-show a recorded screen: world chrome, the screen, its scroll. Returns true when the
+   screen itself was restored; false when only the WORLD could be (the screen is one that
+   re-renders from its URL, or the conversation on screen is no longer that one). */
+function navRestoreRecord(e) {
+  const staleChat = e.screen === 'acThreadScreen' && e.chat !== _navChatId();
+  const restorable = NAV_RESTORABLE.includes(e.screen) && !!document.getElementById(e.screen) && !staleChat;
+  _navRestoring = true;
+  try {
+    if (e.appTab && e.appTab !== _appTab) appTab(e.appTab, { silent: restorable || staleChat });
+    /* LEGACY-UNROUTED: the conversation this entry held is no longer the one in memory, and
+       it has no address to re-open it from - its inbox stands in, in its own world. */
+    if (staleChat) { acGoMessages(); return true; }
+    if (!restorable) return false;
+    acShow(e.screen, e.acTab);
+    const el = document.getElementById(e.screen);
+    requestAnimationFrame(() => {
+      const cands = _navScrollCandidates(el);
+      e.scrolls.forEach(s => { const c = cands[s.i]; if (c) c.scrollTop = s.top; });
+    });
+    return true;
+  } finally { _navRestoring = false; }
 }
 function acShow(screenId, tab) {
   requestAnimationFrame(acBindTabFades);   // strips on this screen: which side is cut off?
@@ -37559,14 +37657,13 @@ function acShow(screenId, tab) {
     if (lbl) { lbl.classList.remove('hidden'); lbl.textContent = subLabels[screenId]; }
   }
   if (typeof acUpdateRail === 'function') acUpdateRail(); // rail/Post follow the screen
-  _lastShow = { screen: screenId, tab: tab || null, appTab: _appTab };
+  /* `pend`: shown while a push is still queued (acSyncPath is rAF-debounced), so this screen
+     belongs to the entry that push is about to create - not to the one on the address bar
+     now. Cleared the moment the queued write lands. */
+  _lastShow = { screen: screenId, tab: tab || null, appTab: _appTab, pend: !!(_pathSyncQueued && _pathSyncWantPush) };
 }
 // Top-bar back arrow → the right place per sub-page.
-function acTopBack() {
-  const cur = AC_SCREENS.find(id => !document.getElementById(id).classList.contains('hidden'));
-  if (cur === 'acProfileScreen') return acProfileBack();
-  acGoHome();
-}
+function acTopBack() { appGoBack(); }
 let _acFeedScope = 'foryou';
 function acGoHome() {
   acStopMic(); acShow('acHomeScreen', 'home');
@@ -38879,7 +38976,7 @@ async function acOpenSector(key) {
   AC._sectorKey = key;
   acShow('acCircleScreen', null);
   document.getElementById('acCircleTop').innerHTML =
-    `<button class="msg-back" onclick="acGoHome();acSetFeed('circles')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    `<button class="msg-back" onclick="appGoBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
      <div class="ac-headtitle"><div class="ac-title">Industry</div></div><span class="msg-spacer"></span>`;
   const body = document.getElementById('acCircleBody');
   const kids = (AC._circles || []).filter(c => _circleGroupOf(c.name).key === key).sort((a, b) => (b.members || 0) - (a.members || 0));
@@ -38909,13 +39006,19 @@ async function acOpenCircle(id) {
   AC._circleId = id; acStopMic();
   acShow('acCircleScreen', null);
   document.getElementById('acCircleTop').innerHTML =
-    `<button class="msg-back" onclick="acGoHome();acSetFeed('circles')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    `<button class="msg-back" onclick="appGoBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
      <div class="ac-headtitle"><div class="ac-title">Circle</div></div><span class="msg-spacer"></span>`;
   document.getElementById('acCircleBody').innerHTML = acSkelProfile();
   try {
     const d = await API.req('GET', '/api/circles/' + id);
     AC._circle = d.circle;
-    if (d.circle && d.circle.username) acSetPath('/circle/' + d.circle.username);
+    /* A circle is a REAL entry of its own (route batch 6, as batch 3 made profiles and
+       posts): it used to replace the entry it was opened from, so Back from a circle
+       skipped that place entirely. Pushed only while this circle is still the one on
+       screen, and never while the browser is restoring an entry (that IS this entry). */
+    const _cs = document.getElementById('acCircleScreen');
+    if (d.circle && d.circle.username && AC._circleId === id && _cs && !_cs.classList.contains('hidden'))
+      acSetPath(acRoutePath('circle', { slug: d.circle.username }, '/circle/' + d.circle.username), { push: !_histRestoring });
     acRenderCircle(d);
   } catch (e) { acErr(document.getElementById('acCircleBody'), 'acOpenCircle(AC._circleId)'); }
 }
@@ -39714,19 +39817,10 @@ function acAccountSectionOf(key) {
   } catch (e) {}
   return null;
 }
-/* THE SECTION'S OWN BACK (its arrow, and device Back through appGoBack). With a REAL Atwe
-   entry behind this one, walk it — so the arrow, browser Back and device Back agree. With
-   none (a direct link), go to the logical parent, the Account root, by REPLACING the
-   address: the Account page never fabricates history behind a deep link. */
-function acMeBack() {
-  const here = acAccountSectionPath(acMeShownSection());
-  if (here && location.pathname === here && AtweHistory.hasPrev()) {
-    _histDepth = Math.max(0, _histDepth - 1);
-    try { history.back(); return; } catch (e) {}
-  }
-  acGoProfileHub();
-  acSyncPath();
-}
+/* THE SECTION'S OWN BACK (its arrow). "Go back" is the unified App Back: the real
+   previous Atwe entry when there is one, else the section's logical parent (/me) by
+   REPLACE. The Account page owns no Back logic of its own any more (route batch 6). */
+function acMeBack() { appGoBack(); }
 /* One place decides how the Account page moves, so the two directions can never
    drift apart the way the old one-way 14px fade did. */
 function acMeAnim(dir) {
@@ -40699,9 +40793,6 @@ function acGoProfile(username) {
   // throwing on S.user.username.
   const myUsername = (S.user && S.user.username) || '';
   if (!username && !myUsername) { if (typeof openLogin === 'function') openLogin(); return; }
-  // Remember where we came from so Back/Esc returns there (feed, thread, group info…).
-  const cur = AC_SCREENS.find(id => !document.getElementById(id).classList.contains('hidden'));
-  if (cur && cur !== 'acProfileScreen') AC._profFrom = cur;
   const mine = !username || username.toLowerCase() === myUsername.toLowerCase();
   acStopMic();
   acShow('acProfileScreen', mine ? 'profile' : null);
@@ -40712,83 +40803,50 @@ function acGoProfile(username) {
   if (handle) acSetPath(acRoutePath('profile', { username: handle }, '/' + handle), { push: !_histRestoring });
   acLoadProfile(username || myUsername, mine);
 }
-// Route back from another user's profile to wherever it was opened from.
-/* ── A ROUTED PANEL HANDED OFF TO A SCREEN, AND THE WAY BACK ──────────────────
+/* ── A ROUTED PANEL HANDED OFF TO A SCREEN, AND THE WAY BACK (route batch 6) ──────
    Nine controls leave a routed panel (Marketplace, Connections, Orders, the business
    directory, a service, a wallet transaction) for a SCREEN - a profile or a
-   conversation. Build 1871 made them close the panel with the history opt-out so the
-   popstate could not kill the destination. That fixed the arrival and broke the
-   departure: `_navStack` records SCREENS, a panel is an overlay ON TOP of one, and the
-   opt-out removed the last trace that the member had ever been in it. Back then fell
-   through to `acProfileBack`'s final `acGoHome()`, which shows the Home screen WITHOUT
-   touching `_appTab` - so a member who came from the Marketplace got Engine chrome, the
-   Engine chips and Engine lit in the nav bar, over a Home feed. Reproduced live on a
-   phone on beta 1871.
+   conversation. The panel closes with the history opt-out, so its entry STAYS in the
+   browser's history, and the destination pushes over it (a profile or post) or sits on
+   top of it (a conversation).
 
-   `navStackPop()` already restores the screen, the world, the address and the scroll
-   position. All that is missing is the panel that was sitting on top of it, so that is
-   the only thing remembered here.
+   Back from there is now REAL HISTORY, like everywhere else: the entry behind the profile
+   IS the panel's, so history.back() lands on its address and _navApplyUrl reopens the
+   panel from the URL, with the world it was shown over restored from the screen memory.
+   Build 1871's "Engine chrome over a Home feed" cannot recur: the world comes from the
+   record of the entry being restored, never from whatever _appTab happens to be.
 
-   THE LENGTH GUARD IS WHAT KEEPS IT HONEST: the mark is only honoured when the stack has
-   grown by exactly the one entry the destination pushed. Tap onwards from the profile
-   and the mark is silently dropped rather than resurrecting a panel from minutes ago.
-
-   The restore runs under `_histRestoring`, the flag the popstate handler already uses
-   for the same reason: reopening the panel must REPLACE the address, not mint a second
-   history entry for what the member experienced as one Back. */
-let _handoffPanel = null;
+   What is left here is LEGACY-UNROUTED only, and it decides no destination:
+   - `sheets`: the UNROUTED detail sheets that sat on top of the panel (an order, a wallet
+     transaction, a service). They own no address, so the URL cannot reopen them; when a
+     traversal lands on EXACTLY the entry recorded in `idx`, they are shown again on top.
+   - `next` is the entry the handoff itself pushed (recorded by acSetPath as that push is
+     written). A conversation (no address of its own yet) walks real history only while the
+     member is still ON that entry — so the entry directly behind it is, by construction, the
+     panel it was handed off from. It compares the CURRENT entry's idx, never reads `prev`
+     (the History-v2 contract: prev is read only inside AtweHistory, as hasPrev()). */
 /* The FIRST argument is the routed panel - it gets the history opt-out, because it is the
    one whose close would otherwise walk history and let the popstate kill the destination.
-   Any further arguments are the unrouted detail sheets sitting on top of it (the order,
-   the listing, the wallet transaction, the service): they own no route, so their close is
-   ordinary, but the member's real parent is that sheet rather than the list behind it, so
-   they are remembered and reopened in the same order. */
+   Any further arguments are the detail sheets sitting on top of it; a routed one (a
+   listing) owns its own entry, an unrouted one is remembered for the way back. */
 function acHandoffFrom(view) {
   const stack = [view].concat([].slice.call(arguments, 1));
-  _handoffPanel = { stack, len: (typeof _navStack !== 'undefined' ? _navStack.length : 0) };
+  const sheets = stack.slice(1).filter((id) => { const el = document.getElementById(id); return el && !el._ownPath && !ROUTE_BY_VIEW[id]; });
+  const cur = AtweHistory.current;
+  _handoffPanel = cur ? { idx: cur.idx, next: null, sheets } : null;
   closeOverlay(view, true);
   for (let i = 1; i < stack.length; i++) closeOverlay(stack[i]);
 }
-function acHandoffBack() {
-  const h = _handoffPanel; _handoffPanel = null;
-  if (!h) return false;
-  /* The destination pushes ONE screen - and a chain that switches world first
-     (`appTab('chat'); acOpenChat(...)`) pushes the inbox on the way, so two is also a
-     single user action. Anything beyond that means the member navigated onwards and the
-     mark is dropped rather than resurrecting a panel they have left behind. */
-  if (typeof _navStack === 'undefined') return false;
-  const grew = _navStack.length - h.len;
-  if (grew < 1 || grew > 2) return false;
-  if (!h.stack.every((id) => document.getElementById(id))) return false;
-  const was = _histRestoring;
-  _histRestoring = true;
-  try {
-    /* UNDO EXACTLY THE PUSHES THIS HANDOFF CAUSED. One pop is right for a chain that
-       only opened the destination; a chain that switched world first pushed the inbox
-       on the way, so a single pop lands on the inbox instead of the surface the member
-       actually came from. Popping back to the recorded depth is the same statement for
-       both shapes. */
-    let popped = false;
-    while (_navStack.length > h.len) { if (!navStackPop()) break; popped = true; }
-    if (!popped) return false;   // each pop restores screen + world + path + scroll
-    h.stack.forEach((id) => showOverlay(id));   // ...and the panel(s) that sat on top of it
-  } catch (e) { return false; }
-  finally { setTimeout(() => { _histRestoring = was; }, 260); }
-  return true;
+/* After a traversal: reopen the unrouted sheets of a handoff when the member is back on
+   exactly the entry they were handed off from. */
+function acHandoffRestoreSheets() {
+  const h = _handoffPanel, cur = AtweHistory.current;
+  if (!h || !cur || cur.idx !== h.idx) return;
+  _handoffPanel = null;
+  h.sheets.forEach((id) => { if (document.getElementById(id)) showOverlay(id); });
 }
-function acProfileBack() {
-  if (acHandoffBack()) return;
-  const from = AC._profFrom;
-  if (from === 'acThreadScreen') {
-    if (AC.mode === 'group' && AC.groupId) acOpenGroup(AC.groupId);
-    else if (AC.peer) acOpenChat(AC.peer.id);
-    else acGoMessages();
-  } else if (from === 'acGroupInfoScreen') acOpenGroupInfo();
-  else if (from === 'acPostViewScreen' && AC._postId) _acRenderPostView(AC._postId);
-  else if (from === 'acListScreen') acGoMessages();
-  else if (from === 'acGroupsScreen') acGoGroups();
-  else acGoHome();
-}
+/* A profile's own arrow means "go back": the unified App Back decides where. */
+function acProfileBack() { appGoBack(); }
 // X-style "new message" compose: a search panel reached from the FAB.
 function acSelfRow() {
   if (!S.user) return '';
@@ -40809,7 +40867,15 @@ function acOpenCompose() {
 function acBackToList() {
   acStopMic();
   acThreadSearchClose();
-  const go = () => { if (acHandoffBack()) return; if (AC.mode === 'group') acGoGroups(); else acGoMessages(); };
+  /* LEGACY-UNROUTED: a conversation owns no address yet (Beam routing is a later batch),
+     so its Back cannot come from the URL. When the entry directly behind it is the routed
+     panel it was handed off from, that is REAL history and it is walked; otherwise the
+     inbox. */
+  const go = () => {
+    const h = _handoffPanel, cur = AtweHistory.current;
+    if (h && cur && h.next != null && cur.idx === h.next && AtweHistory.hasPrev()) { _histDepth = Math.max(0, _histDepth - 1); history.back(); return; }
+    if (AC.mode === 'group') acGoGroups(); else acGoMessages();
+  };
   const s = document.getElementById('acThreadScreen');
   if (s && !s.classList.contains('hidden') && !_jellyReduced()) {
     s.classList.remove('ac-enter'); void s.offsetWidth; s.classList.add('ac-exit'); // slide out to the right
@@ -44469,12 +44535,9 @@ function acCompact(n) {
   if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'K';
   return String(n);
 }
-// Navigate to a post's detail screen, remembering where we came from.
+// Navigate to a post's detail screen. It is a REAL history entry of its own (route batch 3),
+// so Back returns to wherever the member really was - nothing is remembered here.
 function acOpenPostView(id) {
-  if (!AC._postNav) AC._postNav = [];
-  const cur = AC_SCREENS.find(s => !document.getElementById(s).classList.contains('hidden'));
-  if (cur === 'acPostViewScreen' && AC._postId) AC._postNav.push({ type: 'post', id: AC._postId });
-  else AC._postNav.push({ type: 'screen', id: cur });
   _acRenderPostView(id);
 }
 function _acRenderPostView(id) {
@@ -44555,15 +44618,10 @@ function acSetReplySort(k) {
   while (n) { const next = n.nextElementSibling; n.remove(); n = next; }
   host.insertAdjacentHTML('beforeend', acRepliesHtml(d));
 }
+/* A post's own arrow means "go back": the unified App Back decides where. */
 function acPostViewBack() {
   acStopMic();
-  const prev = (AC._postNav || []).pop();
-  if (!prev) { acGoHome(); return; }
-  if (prev.type === 'post') _acRenderPostView(prev.id);
-  else if (prev.id === 'acProfileScreen') acGoProfile(AC.profile?.user?.username);
-  else if (prev.id === 'acGroupsScreen') acGoGroups();
-  else if (prev.id === 'acListScreen') acGoMessages();
-  else acGoHome();
+  appGoBack();
 }
 let _acReplyImg = null;
 function acReplyInput() {
@@ -58987,7 +59045,16 @@ async function acOpenChat(id, threadId) {
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
   _revealedMsgs.clear(); // re-conceal any peeked messages when leaving a thread
   acCancelReply(); // drop any in-progress reply
-  acSetPath('/'); // a DM isn't a shareable pretty URL
+  /* A DM isn't a shareable pretty URL. But when a world switch has a PUSH queued (a handoff:
+     `appTab('chat'); acOpenChat(id)`), replacing now would overwrite the entry the member
+     came from before that push is even written — the queued push gives the conversation an
+     entry of its own instead (route batch 6). */
+  /* And a conversation opened by a HANDOFF with no world switch (Connections -> Message) is
+     a move forward too: its own entry is PUSHED over the panel's, never written over it, so
+     real Back can return to the panel. */
+  const _ho = _handoffPanel, _hc = AtweHistory.current;
+  const _fromHandoff = !!(_ho && _ho.next == null && _hc && _hc.idx === _ho.idx) && !_histRestoring;
+  if (!(_pathSyncQueued && _pathSyncWantPush)) acSetPath('/', { push: _fromHandoff });
   document.getElementById('acBroadcastBar').classList.add('hidden'); // not a channel
   document.getElementById('acInput').value = ''; acAutosize();
   document.getElementById('acSearchInput').value = '';
@@ -67961,13 +68028,8 @@ document.addEventListener('keydown', (e) => {
       const vis = (id) => !document.getElementById(id).classList.contains('hidden');
       if (AC._recording) { acVoiceCancel(); return; }
       if (vis('acAttachMenu')) { acCloseAttachMenu(); return; }
-      if (vis('acGroupInfoScreen')) acOpenGroup(AC.groupId);
-      else if (vis('acGroupCreateScreen')) acGroupBack();
-      else if (vis('acPostViewScreen')) acPostViewBack();
-      else if (vis('acThreadScreen') || vis('acComposeScreen')) acGoMessages();
-      else if (vis('acPostScreen')) acGoHome();
-      else if (vis('acProfileScreen') && document.getElementById('acTabs').classList.contains('hidden')) acProfileBack();
-      else closeAtChat();
+      // Leaving a sub-screen is the unified App Back (route batch 6); at a world root, close.
+      if (_NAV_WORLD_SCREENS.some(vis)) closeAtChat(); else appGoBack();
       return;
     }
     closeSettings();
@@ -68233,14 +68295,11 @@ function _navMorphClick(e) {
   if (moving) { e.stopPropagation(); e.preventDefault(); }
 }
 document.addEventListener('click', _navMorphClick, true);
-/* Leave the Atwe AI page. It is an inside page with no icon in the bar, so this is
-   the only way out — go back to the world it was opened from, or Home when it was
-   restored as the last tab on boot and there is no "from". */
-function acAiBack() {
-  const to = (_aiFrom && _aiFrom !== 'ai') ? _aiFrom : 'home';
-  _aiFrom = null;
-  appTab(to);
-}
+/* Leave the Atwe AI page. It is an inside page with no icon in the bar, so this is the
+   only way out. /ai is a real entry: with an Atwe entry behind it, that is where the member
+   came from (real history); restored as the last tab on boot, or opened by a direct link,
+   there is none, and the registry's fallback (Home) is used. */
+function acAiBack() { appGoBack(); }
 // The morph ball's compose action is context-aware: a new post on Home, a new
 // chat on Beam.
 function acNavBallTap() {
@@ -69004,11 +69063,28 @@ function a11yLabelPlaceholders() {
   }).observe(document.body, { childList: true, subtree: true });
 }
 
-/* ─── Browser / OS back-button integration ───
-   A single history "trap": each Back press undoes exactly one app layer instead
-   of exiting. We re-trap after every handled press, and at the root use the
-   Android-style double-back-to-exit. No forward navigation needs instrumenting —
-   appGoBack() inspects the live DOM and unwinds one level. */
+/* ─── APP BACK — the one routed Back primitive (route batch 6) ───────────────────────
+   Every "go back" in the app funnels here: the profile, post, circle, Account section,
+   Settings page and Atwe AI arrows, and device Back when it reaches the app. The model:
+
+     1. dismiss a transient layer first (a menu, a confirm, a call, the drawer, an
+        unrouted sheet) — the SAME rule popstate applies, _navDismissModal;
+     2. a real previous Atwe entry exists (History v2 `prev`, AtweHistory.hasPrev):
+        history.back(). The traversal that follows applies the restored URL and owns the
+        one NavEvent;
+     3. none (a direct or deep entry): REPLACE to the route registry's logical parent and
+        apply it. No history is fabricated behind a deep link, so browser Back from it
+        still leaves Atwe;
+     4. at a root with nothing behind: nothing ('exit') — the browser/app exit behaviour
+        is the popstate handler's, untouched.
+
+   Where the address comes from is decided by what OWNS it: the top-most open routed
+   layer (a routed panel, Settings, a Settings leaf, an entity sheet), else the visible
+   screen when the URL really is that screen's (a profile, a post, a circle, a world
+   root, the Account page, the AI page). A screen with no address of its own (a Beam
+   conversation, a composer, a group-info page) is the LEGACY-UNROUTED FALLBACK below and
+   is isolated there so that no routed destination can ever fall into it. No private
+   "came from" memory decides anything here. */
 function _ovOpen(id) { const el = document.getElementById(id); return !!el && !el.classList.contains('hidden'); }
 function navTopOverlay() {
   let top = null, topZ = -1;
@@ -69019,16 +69095,20 @@ function navTopOverlay() {
   });
   return top;
 }
+/* LEGACY-UNROUTED FALLBACK. The screens here own no address yet — a Beam conversation
+   sits on "/" (Beam routing is a later batch), the composers and group pages have no
+   route at all — so their Back cannot come from the URL or the registry. Each keeps the
+   fixed parent it always had. Routed screens (profile, post, a circle on its own
+   /circle/<slug>) never reach this: _navBackOwner only sends a screen here when the
+   address is not its own. Later batches delete entries as they route them. */
 function acScreenBack(cur) {
   switch (cur) {
-    case 'acProfileScreen': return acProfileBack();
-    case 'acPostViewScreen': return acPostViewBack();
     case 'acPostScreen': return acPostComposeBack();
     case 'acComposeScreen': return acGoMessages();
     case 'acThreadScreen': return acBackToList();
     case 'acGroupCreateScreen': return acGroupBack();
     case 'acGroupInfoScreen': return acOpenGroup(AC.groupId);
-    case 'acCircleScreen': acGoHome(); return acSetFeed('circles');
+    case 'acCircleScreen': acGoHome(); return acSetFeed('circles');   // an industry (sector) page: unrouted
     case 'acCircleCreateScreen': return acCircleBack();
     case 'acFeedScreen': acGoHome(); return acSetFeed('feeds');
     case 'acFeedCreateScreen': return acFeedBack();
@@ -69036,49 +69116,86 @@ function acScreenBack(cur) {
     default: return acGoHome();
   }
 }
+/* Which layer owns the address bar right now?
+     { overlay: id }             a routed layer is on top
+     { screen: id }              a routed screen (or the AI page: id 'ai')
+     { screen: id, legacy: true } a screen whose address is not its own */
+const _NAV_WORLD_SCREENS = ['acHomeScreen', 'acListScreen', 'acSearchScreen', 'acMeScreen', 'acCallScreen'];
+function _navBackOwner() {
+  const open = [...document.querySelectorAll('.overlay:not(.hidden):not(.closing)')];
+  for (let i = open.length - 1; i >= 0; i--) {
+    const o = open[i];
+    if (o._ownPath || o.id === 'settingsOverlay' || acViewRouteKey(o.id)) return { overlay: o.id };
+  }
+  if (_appTab === 'ai') return { screen: 'ai' };
+  const scr = AC_SCREENS.find((id) => { const e = document.getElementById(id); return e && !e.classList.contains('hidden'); });
+  if (!scr || _NAV_WORLD_SCREENS.includes(scr)) return { screen: scr || null };
+  /* A self-routed screen owns the address only when the address really names it. */
+  const r = parseDeepLink();
+  const mine = (scr === 'acProfileScreen' && r && r.type === 'profile')
+    || (scr === 'acPostViewScreen' && r && r.type === 'post')
+    || (scr === 'acCircleScreen' && r && r.type === 'circle');
+  return mine ? { screen: scr } : { screen: scr, legacy: true };
+}
+/* The current root address of a registry world: its live `root` route. A world with none
+   (the AI page, Settings) falls to Home. Batch 8 flips the roots themselves, not this. */
+function acWorldRootPath(world) {
+  try {
+    const r = window.ATWE_ROUTES && ATWE_ROUTES.liveRoutes().find((x) => x.family === 'root' && x.world === world);
+    if (r) return r.pattern;
+  } catch (e) {}
+  return '/';
+}
+/* The direct-entry fallback for the address on screen, read from the route registry:
+     { path } replace to the named logical parent (or, for a screen whose parent is the
+              real history, its world's root);
+     { close } a routed layer whose parent is the real history or none: close the layer,
+              which leaves the world it was shown over;
+     null      a root with nothing behind. */
+function acLogicalParent(owner) {
+  let m = null, r = null;
+  try { m = window.ATWE_ROUTES && ATWE_ROUTES.match(location.pathname); r = m && ATWE_ROUTES.get(m.name); } catch (e) {}
+  if (r && r.parent && r.parent !== 'history') {
+    let path = null;
+    try { path = ATWE_ROUTES.build(r.parent, m.params); } catch (e) {}
+    if (!path) { try { const p = ATWE_ROUTES.get(r.parent); path = acWorldRootPath(p ? p.world : r.world); } catch (e) { path = '/'; } }
+    return { path };
+  }
+  if (owner.overlay) return { close: owner.overlay };
+  if (r && r.parent === 'history') return { path: acWorldRootPath(r.world) };
+  if (!r && owner.screen === 'ai') return { path: '/' };
+  return null;
+}
+/* Go to a logical parent WITHOUT history: replace the address (one 'replace' NavEvent)
+   and apply it through the same path a traversal uses. */
+function acBackReplace(path) {
+  const was = _histRestoring;
+  _histRestoring = true;
+  try { acSetPath(path); _navApplyUrl(); }
+  catch (e) { console.error('appGoBack', e); }
+  finally { setTimeout(() => { _histRestoring = was; }, 260); }
+}
 function appGoBack() {
-  // 1) open dropdown menus
-  const menus = document.querySelectorAll('#profileMenu:not(.hidden), .brand-menu:not(.hidden), .attach-menu:not(.hidden), .chat-menu:not(.hidden)');
-  if (menus.length) { menus.forEach(m => m.classList.add('hidden')); return 'x'; }
-  // 2) confirm / delete dialogs → cancel
-  if (_ovOpen('confirmOverlay')) { document.getElementById('cfCancel')?.click(); return 'x'; }
-  if (_ovOpen('deleteModal')) { document.getElementById('deleteModal').classList.add('hidden'); return 'x'; }
-  // 3) calls / live — Back ends or declines them
-  if (_ovOpen('liveViewersOverlay')) { closeOverlay('liveViewersOverlay'); return 'x'; }
-  if (_ovOpen('liveOverlay')) { liveEnd(); return 'x'; }
-  if (_ovOpen('callOverlay')) {
-    const cov = document.getElementById('callOverlay');
-    if (cov && cov.classList.contains('call-min')) { callRestore(); return 'x'; } // Back just reopens a minimized call, never hangs up
-    if (CALL && CALL.state === 'incoming') callDecline(); else callHangup(); return 'x';
+  /* A gate (sign-in, onboarding, the passcode pad) is not a place you are visiting: App Back
+     neither dismisses it nor navigates underneath it. */
+  if (_navGateUp()) return 'x';
+  // 1) transient UI first — the same refusal popstate gives
+  if (_navDismissModal()) return 'x';
+  // Settings' own search is a filter on the page, not a destination
+  const top = navTopOverlay();
+  if (top && top.id === 'settingsOverlay' && !document.getElementById('setSearchResults').classList.contains('hidden')) { setSearchClear(); return 'x'; }
+  const owner = _navBackOwner();
+  if (owner.legacy) { acScreenBack(owner.screen); return 'x'; }
+  // 2) real history
+  if (AtweHistory.hasPrev()) {
+    _histDepth = Math.max(0, _histDepth - 1);
+    try { history.back(); return 'x'; } catch (e) {}
   }
-  // 4) topmost modal overlay
-  const ov = navTopOverlay();
-  // Settings on top steps up through its own pages, exactly like its own arrow; closing
-  // it whole skipped the hub from any page.
-  if (ov && ov.id === 'settingsOverlay') { setBack(); return 'x'; }
-  if (ov) { closeOverlay(ov.id); return 'x'; }
-  // 5) mobile sidebar drawer
-  const sb = document.getElementById('sidebar');
-  if (sb && sb.classList.contains('open')) { closeSidebar(); return 'x'; }
-  // 5b) inside a section of the Account page → back to the section list first, the way Back
-  //     inside a Settings sub-page returns to the Settings hub rather than closing Settings.
-  //     MUST come before the screen-history step below: the Account page is one screen as far
-  //     as that stack is concerned, so it would happily walk straight out of the page instead.
-  if (_appTab === 'profile' && acMeShownSection()) { acMeBack(); return 'x'; }
-  // 6) recorded screen history — restore the previous screen with its scroll position
-  if (_appTab !== 'ai' && navStackPop()) return 'x';
-  // 6b) fallback (no usable history, e.g. a same-screen swap): the fixed per-screen parent map
-  if (_appTab !== 'ai') {
-    const cur = AC_SCREENS.find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
-    if (cur && !['acHomeScreen', 'acListScreen', 'acSearchScreen', 'acCallScreen'].includes(cur)) { acScreenBack(cur); return 'x'; }
-  }
-  // 6c) the Atwe AI page is an inside page now — Back leaves it for the world it was
-  //     opened from, exactly like its top-left arrow, instead of falling through to
-  //     'exit' (which on the installed app armed press-again-to-close).
-  if (_appTab === 'ai') { acAiBack(); return 'x'; }
-  // 7) a non-home tab → home
-  if (_appTab && _appTab !== 'home' && _appTab !== 'ai') { appTab('home'); return 'x'; }
-  // 8) at the root
+  // 3) direct entry: the registry's logical parent
+  const fb = acLogicalParent(owner);
+  if (fb && fb.close) { if (fb.close === 'settingsOverlay') closeSettings(); else closeOverlay(fb.close); return 'x'; }
+  if (fb && fb.path && fb.path !== location.pathname) { acBackReplace(fb.path); return 'x'; }
+  // 4) a root with nothing behind
   return 'exit';
 }
 let _navReady = false, _exitArmed = false, _exitTimer = null;
@@ -69097,8 +69214,11 @@ function _isStandaloneApp() {
 /* Things Back must CANCEL rather than navigate away from: an open menu, a confirm
    dialog, a live call, the mobile drawer. Cancelling one of these is not a page
    move, so the address bar must not change and the history entry is put back.
-   Mirrors steps 1-3 and 5 of appGoBack, which stays the authority for everything
-   that isn't a URL. */
+   App Back (appGoBack) asks exactly this first too, so the two can never disagree about
+   what a Back press cancels. */
+const NEVER_BACK = ['loginOverlay', 'signupOverlay', 'onboardingFlow', 'appLockView',
+                    'splashOverlay', 'introSheet'];
+function _navGateUp() { return NEVER_BACK.some((id) => _ovOpen(id)); }
 function _navDismissModal() {
   const menus = document.querySelectorAll('#profileMenu:not(.hidden), .brand-menu:not(.hidden), .attach-menu:not(.hidden), .chat-menu:not(.hidden)');
   if (menus.length) { menus.forEach((m) => m.classList.add('hidden')); return true; }
@@ -69133,8 +69253,6 @@ function _navDismissModal() {
      THE GATES ARE EXCLUDED. Back must not dismiss the login wall, the onboarding flow or
      the passcode pad — those are not places you are visiting, they are places you have to
      get through. */
-  const NEVER_BACK = ['loginOverlay', 'signupOverlay', 'onboardingFlow', 'appLockView',
-                      'splashOverlay', 'introSheet'];
   const sheets = [...document.querySelectorAll('.overlay:not(.hidden):not(.closing)')]
     .filter((o) => !ROUTE_BY_VIEW[o.id] && !o._ownPath && !NEVER_BACK.includes(o.id));
   if (sheets.length) {
@@ -69144,31 +69262,43 @@ function _navDismissModal() {
   return false;
 }
 
-/* Land on the address the browser just restored. Panels belonging to some OTHER
-   route are closed first, so walking back out of /wallet actually leaves the
-   wallet rather than leaving it sitting open over the page behind it. */
-function _navApplyUrl() {
+/* Land on the address the browser just restored (or that App Back replaced to). Panels
+   belonging to some OTHER route are closed first, so walking back out of /wallet actually
+   leaves the wallet rather than leaving it sitting open over the page behind it.
+   opts.traverse: this is a genuine Back/Forward, so the screen memory for EXACTLY this
+   entry (idx + path, see navRecordFor) may re-show the world and the screen it held. */
+function _navApplyUrl(opts) {
   const r = parseDeepLink();
   const wantView = (r && r.type === 'settings') ? 'settingsOverlay'
     : (r && r.type === 'route' && APP_ROUTES[r.key] && APP_ROUTES[r.key].view);
-  /* A SCREEN THAT OWNS ITS ADDRESS MUST NOT OUTLIVE IT (route batch 3). A profile or a
-     post opened in-app is now a real entry of its own, so Back from it can land on a
-     PANEL's address (/marketplace, /listing/15) — and the panel reopens over whatever
-     screen is showing, which is still that profile. Before batch 3 the profile REPLACED
-     the panel's entry, so this state could not arise. When the restored address belongs
-     to a panel or an entity sheet and the visible screen is a self-routed one, the
-     world's own root screen is put back first: the URL says what is on top, and the
-     world (unchanged, _appTab) says what is underneath. */
   const _toSheet = !!wantView || !!(r && (r.type === 'listing' || r.type === 'job' || r.type === 'event'));
-  if (_toSheet) {
+  /* THE WORLD UNDER A RESTORED ENTRY COMES FROM THAT ENTRY. When the screen memory holds
+     this exact entry, its world and (for a world screen) the screen itself come back as
+     they were left, scroll included. A profile/post/circle re-renders from its URL. */
+  const rec = opts && opts.traverse ? navRecordFor(AtweHistory.current) : null;
+  let restored = false;
+  if (rec && (_toSheet || !r || r.type === 'route' || rec.screen === 'acThreadScreen')) {
+    try { restored = navRestoreRecord(rec); } catch (e) {}
+  }
+  /* Leaving the Atwe AI page for any other address: the AI page is an inside page with its
+     own chrome (no bar, a back arrow), so a destination that is not /ai needs a world under
+     it. Home when the entry carried no memory of one. */
+  if (!restored && _appTab === 'ai' && r && !(r.type === 'route' && r.key === 'ai')) { try { appTab('home'); } catch (e) {} }
+  /* A SCREEN THAT OWNS ITS ADDRESS MUST NOT OUTLIVE IT (route batch 3). With no memory of
+     the entry, a panel or entity-sheet address lands over the world's own root screen,
+     never over a profile/post still showing from the entry just left. */
+  if (_toSheet && !restored) {
     const _scr = AC_SCREENS.find((id) => { const e = document.getElementById(id); return e && !e.classList.contains('hidden'); });
     if (SELF_ROUTED_SCREENS.includes(_scr)) { try { appTab(_appTab && _appTab !== 'ai' ? _appTab : 'home'); } catch (e) {} }
   }
   document.querySelectorAll('.overlay:not(.hidden)').forEach((o) => {
     if ((ROUTE_BY_VIEW[o.id] && o.id !== wantView) || (o._ownPath && o._ownPath !== location.pathname)) { try { closeOverlay(o.id); } catch (e) {} }
   });
-  if (r) openDeepLink(r);
+  if (restored && !_toSheet) { /* the recorded screen IS this address */ }
+  else if (r) openDeepLink(r);
   else if (location.pathname === '/' || location.pathname === '') { try { appTab('home'); } catch (e) {} }
+  // A handoff's unrouted detail sheets come back on top of exactly the entry they sat on.
+  if (opts && opts.traverse) { try { acHandoffRestoreSheets(); } catch (e) {} }
 }
 
 /* LEGACY SETTINGS HISTORY (route batch 4). Tabs opened before batch 4 hold entries at the
@@ -69216,7 +69346,7 @@ function navInit() {
     // URL; honour it, and suppress the pushes that landing there would normally
     // make — or Back would mint a fresh entry each time and never let you out.
     _histRestoring = true;
-    try { _navApplyUrl(); } catch (e) { console.error('popstate', e); }
+    try { _navApplyUrl({ traverse: true }); } catch (e) { console.error('popstate', e); }
     setTimeout(() => { _histRestoring = false; }, 260);
 
     // Nothing left in Atwe to go back to. In a regular browser tab the visitor came

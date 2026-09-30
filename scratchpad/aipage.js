@@ -78,9 +78,27 @@ const NICE={home:'Home',chat:'Beam',search:'Engine',profile:'Account'};
     ok(re.title==='Atwe AI', '['+lab+'] after a reload it is still on Atwe AI (last-tab restore)', JSON.stringify(re));
     if (lab==='phone') {
       ok(re.backShown && !re.navShown, '[phone] the back arrow is there after a reload, bar still hidden', JSON.stringify(re));
+      /* ROUTE BATCH 6: a reload ADOPTS its entry, and the entry before /ai (Beam, opened
+         just above) is still in this tab's real history - so the arrow walks it, exactly as
+         browser Back would. Falling back to Home is for an entry with NOTHING behind it,
+         checked just below with a genuinely fresh tab. */
       await p.click('#tbAiBack'); await p.waitForTimeout(1600);
       const home=await state();
-      ok(home.lit==='home' && home.navShown, '[phone] with nothing to go back to it falls back to Home, bar restored', JSON.stringify(home));
+      ok(home.lit==='chat' && home.navShown, '[phone] after a reload the arrow still walks the REAL previous entry, bar restored', JSON.stringify(home));
+      // A NEW TAB in a signed-in browser, so its history holds nothing of ours: the token is
+      // seeded on a throwaway page first, then /ai is opened in a page of its own.
+      const fctx=await b.newContext({viewport:{width:w,height:hgt},hasTouch:true,isMobile:true,deviceScaleFactor:2});
+      const seed=await fctx.newPage(); await seed.goto('http://localhost:3262',{waitUntil:'commit'});
+      await seed.evaluate(t=>{localStorage.setItem('atwe_token',t);localStorage.setItem('atwe_intro_seen',JSON.stringify(['beam','circles','ai','wallet']));},token);
+      await seed.close();
+      const fp=await fctx.newPage();
+      fp.on('pageerror',e=>errs.push(lab+' fresh: '+String(e).slice(0,120)));
+      await fp.goto('http://localhost:3262/ai',{waitUntil:'domcontentloaded'}); await fp.waitForTimeout(5200);
+      const len0=await fp.evaluate(()=>history.length);
+      await fp.click('#tbAiBack'); await fp.waitForTimeout(1600);
+      const fr=await fp.evaluate(()=>({path:location.pathname,len:history.length,lit:(document.querySelector('#bottomNav .bn-tab.active')||{id:''}).id}));
+      ok(fr.path==='/' && fr.lit==='bnav-home' && fr.len===len0, '[phone] a fresh tab on /ai with nothing behind it falls back to Home by REPLACE', JSON.stringify(fr));
+      await fctx.close();
     } else {
       ok(re.sidebarOut, '[desktop] the sidebar is still there after a reload', JSON.stringify(re));
     }
