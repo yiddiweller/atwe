@@ -31,7 +31,8 @@ function appRouter() {
   vm.createContext(ctx);
   vm.runInContext(html.slice(i, j) +
     '\nthis.__t = { parse: () => parseDeepLink(), reserved: [...RESERVED_PATHS], app: APP_ROUTES,' +
-    ' settings: SETTINGS_ROUTES, leaves: Object.keys(SETTINGS_LEAVES), sections: PROFILE_SECTIONS, auth: AUTH_ROUTES, entities: ENTITY_ROUTES };' +
+    ' settings: SETTINGS_ROUTES, leaves: Object.keys(SETTINGS_LEAVES), sections: PROFILE_SECTIONS, auth: AUTH_ROUTES, entities: ENTITY_ROUTES,' +
+    ' acctSections: ACCOUNT_SECTION_IDS, acctTools: ACCOUNT_TOOL_KEYS };' +
     '\nthis.__legacy = ' + lw[1] + ';', ctx);
   const t = ctx.__t;
   return {
@@ -43,6 +44,8 @@ function appRouter() {
     sections: JSON.parse(JSON.stringify(t.sections)),
     auth: JSON.parse(JSON.stringify(t.auth)),
     entities: JSON.parse(JSON.stringify(t.entities)),
+    acctSections: JSON.parse(JSON.stringify(t.acctSections)),
+    acctTools: JSON.parse(JSON.stringify(t.acctTools)),
     legacyWorld: JSON.parse(JSON.stringify(ctx.__legacy)),
   };
 }
@@ -56,6 +59,8 @@ function appName(d) {
     // Route batch 4: the Settings tree is explicit routes; an unknown node matches nothing.
     case 'settings': return d.unknown ? null : d.page === 'hub' ? 'settings' : 'settings-' + d.page + (d.leaf ? '-' + d.leaf : '');
     case 'auth': return d.page;
+    // Route batch 5: an Account section is its own route; an unknown /account/… matches nothing.
+    case 'account': return d.unknown ? null : 'account-' + d.section;
     case 'profile': return d.section ? 'profile-section' : 'profile';
     default: return d.type; // post, job, listing, event, group, circle
   }
@@ -70,7 +75,8 @@ function appParams(d) {
     else out.username = String(d.username).toLowerCase();
   }
   if (d.id !== undefined) out.id = String(d.id);
-  if (d.section !== undefined) out.section = d.section;
+  // A profile's /<username>/<section> is a parameter; an Account section is its own route.
+  if (d.section !== undefined && d.type === 'profile') out.section = d.section;
   return out;
 }
 
@@ -133,6 +139,9 @@ test('no two live routes render the same overlay (one destination, one canonical
   const seen = new Map();
   for (const x of live) {
     if (!x.view || x.view === 'settingsOverlay') continue; // the hub and every page ARE the Settings overlay, on a page
+    // A route that BORROWS an overlay names the route that owns it (route batch 5:
+    // /account/store/orders is the Orders overlay on its Seller tab).
+    if (x.sharedView) { assert.strictEqual(R.get(x.sharedView).view, x.view, x.name + ' borrows ' + x.view + ' from a route that does not own it'); continue; }
     assert.ok(!seen.has(x.view), x.view + ' is rendered by both ' + seen.get(x.view) + ' and ' + x.name);
     seen.set(x.view, x.name);
   }
@@ -230,8 +239,10 @@ test('the old world paths land on the same world the app sends them to', () => {
 
 test('every APP_ROUTES entry is represented, with the same view and auth class', () => {
   for (const [key, def] of Object.entries(APP.app)) {
-    const m = R.match('/' + key);
-    assert.ok(m, '/' + key + ' is an app route but the registry does not know it');
+    // An Account tool with no flat address (flat:false) is represented at /account/<acct>.
+    const at = def.flat === false ? '/account/' + def.acct : '/' + key;
+    const m = R.match(at);
+    assert.ok(m, at + ' is an app route but the registry does not know it');
     const route = R.get(m.name);
     if (def.view) assert.strictEqual(route.view, def.view, key + ': view differs');
     // A world's own gate lives in appTab() (every world needs an account), so its
@@ -298,7 +309,9 @@ test('approved future addresses are data only: never matched, always reserved', 
   for (const x of live) if (x.next) { const f = R.firstLiteral(x.next); if (f) assert.ok(alloc.has(f), x.name + ' next ' + x.next); }
   // Nothing planned is reachable yet.
   assert.notStrictEqual((R.match('/beam/u/john') || {}).name, 'beam-dm');
-  assert.notStrictEqual((R.match('/account/money') || {}).name, 'account-section');
+  for (const p of ['/account/orders/5', '/account/store/orders/5', '/account/wallet/tx/5', '/account/store/pause', '/account/certified']) {
+    assert.strictEqual(R.match(p), null, p + ' is planned and must not match yet');
+  }
 });
 
 test('notification destinations map onto real registry routes', () => {
@@ -400,4 +413,103 @@ test('batch 4: no history.state Settings routing is left in the app', () => {
   assert.ok(!/_setHistWrite|_histEntry\(|writeState\(/.test(html), 'a legacy Settings history writer survived');
   assert.ok(!/\{\s*land:\s*true\s*\}|\{\s*deep:\s*true\s*\}/.test(html), 'a land/deep Settings entry survived');
   assert.ok(/'prev', 'setPage', 'via'\]\.includes\(k\)/.test(html), 'legacyOf must strip setPage/via so nothing can write them');
+});
+
+/* ── Route batch 5 — Account sections and tools are canonical URLs ────────────────── */
+const ACCT_SECTIONS = ['profile', 'money', 'selling', 'customers', 'marketing', 'jobs', 'library', 'planning', 'creating', 'ai', 'help'];
+
+test('batch 5: the Account root is still /me, and /account is only its FUTURE canonical', () => {
+  const me = R.get('me');
+  assert.strictEqual(me.pattern, '/me');
+  assert.strictEqual(me.next, '/account', 'the batch-8 flip is recorded, not performed');
+  assert.strictEqual(me.family, 'root');
+  assert.strictEqual(me.parent, null);
+  assert.strictEqual(R.match('/me').name, 'me');
+  assert.strictEqual(R.match('/account'), null, 'the bare /account is not live before batch 8');
+  assert.strictEqual(APP.parse('/account'), null);
+  assert.strictEqual(R.ROUTES.filter((x) => x.world === 'account' && x.family === 'root').length, 1, 'ONE Account root');
+});
+
+test('batch 5: all eleven sections are live, private, and children of the Account root', () => {
+  assert.deepStrictEqual(R.ACCOUNT_SECTIONS.map((x) => x[0]), ACCT_SECTIONS);
+  assert.deepStrictEqual(Object.keys(APP.acctSections).sort(), [...ACCT_SECTIONS].sort(), 'the app binds exactly the registry sections');
+  for (const k of ACCT_SECTIONS) {
+    const r = R.get('account-' + k);
+    assert.ok(r && r.status === 'live', k);
+    assert.strictEqual(r.pattern, '/account/' + k);
+    assert.strictEqual(r.world, 'account');
+    assert.strictEqual(r.auth, 'account');
+    assert.strictEqual(r.privacy, 'private');
+    assert.strictEqual(r.seo, 'private');
+    assert.strictEqual(r.family, 'hierarchy');
+    assert.strictEqual(r.parent, 'me');
+    assert.ok(r.title, k + ' title');
+    assert.strictEqual(R.build('account-' + k), '/account/' + k);
+    assert.deepStrictEqual(APP.parse('/account/' + k), { type: 'account', section: k });
+    assert.deepStrictEqual(APP.parse('/ACCOUNT/' + k.toUpperCase()), { type: 'account', section: k }, 'case-insensitive');
+  }
+});
+
+test('batch 5: every Account tool is canonical under /account, parented by a real section', () => {
+  const tools = R.liveRoutes().filter((x) => x.world === 'account' && x.family === 'hierarchy' && !x.name.startsWith('account-'));
+  assert.strictEqual(tools.length, R.ACCOUNT_TOOLS.length);
+  for (const x of tools) {
+    assert.ok(x.pattern.startsWith('/account/'), x.name + ' ' + x.pattern);
+    assert.ok(x.parent.startsWith('account-') && R.get(x.parent), x.name + ' parent ' + x.parent);
+    assert.strictEqual(x.auth, 'account', x.name);
+    assert.strictEqual(x.privacy, 'private', x.name);
+    assert.ok(x.view, x.name + ' view');
+    assert.ok(x.title, x.name + ' title');
+    const sub = x.pattern.slice('/account/'.length);
+    assert.strictEqual(APP.acctTools[sub], x.name, 'app binds /account/' + sub + ' to ' + APP.acctTools[sub]);
+    assert.strictEqual(appName(APP.parse(x.pattern)), x.name);
+    assert.strictEqual(APP.app[x.name].acct, sub, x.name + ' acct column');
+    assert.strictEqual(APP.app[x.name].view, x.view, x.name + ' view differs');
+  }
+  assert.deepStrictEqual(Object.keys(APP.acctTools).sort(), tools.map((x) => x.pattern.slice(9)).sort(), 'no app-only Account tool');
+});
+
+test('batch 5: every flat Account URL ever issued is a permanent alias of its /account canonical', () => {
+  const FLAT = ['wallet', 'money-requests', 'invoices', 'quotes', 'payment-links', 'gift-cards', 'rewards', 'referrals',
+    'store', 'listings', 'analytics', 'ads', 'dashboard', 'team', 'affiliate', 'orders', 'saved', 'subscriptions',
+    'addresses', 'bookings', 'calendar', 'appointments', 'network', 'resumes', 'job-alerts'];
+  for (const f of FLAT) {
+    const m = R.match('/' + f);
+    assert.ok(m && m.alias, '/' + f + ' must stay an alias');
+    assert.ok(R.build(m.name).startsWith('/account/'), '/' + f + ' canonical is ' + R.build(m.name));
+    const d = APP.parse('/' + f);
+    assert.strictEqual(d.type, 'route'); assert.strictEqual(d.key, m.name); assert.strictEqual(d.alias, true);
+    assert.ok(APP.reserved.includes(f), f + ' must stay reserved');
+  }
+  // Tools that never had a flat address did not gain one, nor a reserved word.
+  for (const k of ['card', 'coupons', 'bundles', 'till', 'delivery', 'phone', 'verification', 'pro', 'store-orders']) {
+    assert.strictEqual(APP.app[k].flat, false, k);
+    assert.ok(!APP.reserved.includes(k) || R.PARSE_DEFENSIVE.includes(k), k + ' became a new reserved root');
+  }
+});
+
+test('batch 5: malformed /account paths never fall through to a profile or another page', () => {
+  const cases = ['/account/nope', '/account/wallet/x', '/account/money/wallet', '/account/store/nope', '/account//money',
+    '/account/%2e%2e', '/account/wallet%2Fx', '/account/orders/5', '/account/wallet/tx/1', '/account/store/pause', '/account/certified'];
+  for (const p of cases) {
+    const m = R.match(p), d = APP.parse(p);
+    assert.strictEqual(m ? m.name : null, appName(d), p + ': registry vs app');
+    assert.ok(!m || R.get(m.name).world === 'account', p + ' left the Account namespace: ' + (m && m.name));
+    assert.ok(!d || d.type === 'account' || (d.type === 'route' && APP.app[d.key].acct), p + ' parsed as ' + JSON.stringify(d));
+  }
+  assert.strictEqual(APP.parse('/account/nope').unknown, true);
+});
+
+test('batch 5: private details stay unrouted (no sequential ids made addressable)', () => {
+  for (const n of ['order-detail', 'store-order-detail', 'wallet-tx']) {
+    assert.strictEqual(R.get(n).status, 'planned', n);
+    assert.throws(() => R.build(n, { ref: 'x' }), /planned/);
+  }
+  for (const x of R.liveRoutes().filter((y) => y.world === 'account')) assert.ok(!/:/.test(x.pattern), x.name + ' takes a parameter');
+  assert.ok(!/\/account\/(orders|store\/orders|wallet\/tx|invoices|quotes)\/'\s*\+/.test(html), 'the app builds a private detail URL');
+});
+
+test('batch 5: the Account root flip stays for batch 8 — nothing in the app routes /me to /account', () => {
+  assert.ok(/WORLD_PATH = \{[^}]*profile: '\/me'/.test(html), 'the Account world still lives at /me');
+  assert.ok(!/acSetPath\('\/account'[,)]/.test(html), 'something writes the bare /account');
 });

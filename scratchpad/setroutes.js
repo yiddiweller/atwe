@@ -378,20 +378,20 @@ async function handoffs(browser, F, vp, tag) {
   const a = await snap(p);
   await tapRow(p, bodySel('premium'), '^Wallet'); await settle(p, 1600);
   const w = await snap(p);
-  say(w.path === '/wallet' && w.open.includes('walletView') && w.len === a.len + 1, tag + ' Premium → Wallet pushes /wallet (Wallet is not a Settings child)', [w.path, a.len, w.len]);
+  say(w.path === '/account/wallet' && w.open.includes('walletView') && w.len === a.len + 1, tag + ' Premium → Wallet pushes /account/wallet (an Account tool since batch 5, not a Settings child)', [w.path, a.len, w.len]);
   await back(p);
   const b = await snap(p);
   say(nodeIs(b, 'premium') && !b.open.includes('walletView'), tag + ' ...browser Back returns to /settings/premium', [b.path, b.bodies, b.open]);
   await fwd(p);
   const f = await snap(p);
-  say(f.path === '/wallet' && f.open.includes('walletView'), tag + ' ...and Forward reopens the Wallet', [f.path]);
+  say(f.path === '/account/wallet' && f.open.includes('walletView'), tag + ' ...and Forward reopens the Wallet', [f.path]);
   await back(p);
   // hub → Manage store → Back
   await p.evaluate(() => setBack()); await settle(p);
   const h = await snap(p);
   const t = await tapRow(p, bodySel('hub'), '^Manage store'); await settle(p, 1600);
   const m = await snap(p);
-  say(t && m.path === '/store' && m.len <= h.len + 1 && m.st.prev === h.st.idx, tag + ' hub → Manage store pushes /store', [t, m.path, h.len, m.len]);
+  say(t && m.path === '/account/store' && m.len <= h.len + 1 && m.st.prev === h.st.idx, tag + ' hub → Manage store pushes /account/store', [t, m.path, h.len, m.len]);
   await back(p);
   const mb = await snap(p);
   say(nodeIs(mb, 'hub'), tag + ' ...browser Back returns to /settings', [mb.path, mb.bodies]);

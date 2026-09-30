@@ -66,12 +66,19 @@ const ORIG = require('fs').readFileSync(require('path').join(__dirname,'me-label
       ok(r.back && r.labels.length>0, '  “'+sec.title+'” opens with a back arrow and '+r.labels.length+' rows', JSON.stringify(r).slice(0,200));
     }
     // back to the hub — by the arrow, and by the phone's own Back gesture
+    /* Since route batch 5 a section is a real history entry and its Back walks REAL history
+       (Settings' rule). The walk above opened eleven sections back to back, which no person
+       can do, so each Back would step to the previous section. Enter one the way a person
+       does — from the hub, by its row — before asking where Back goes. */
+    await p.evaluate(()=>acGoProfileHub()); await p.waitForTimeout(500);
+    await p.evaluate(()=>document.querySelector('#acMeBody .me-row.me-sec').click()); await p.waitForTimeout(600);
     await p.evaluate(()=>document.querySelector('#acMeBody .me-secback').click()); await p.waitForTimeout(900);
     const backHub = await p.evaluate(()=>[...document.querySelectorAll('#acMeBody .me-row')].filter(e=>/^acMeSection\(/.test(e.getAttribute('onclick')||'')).length);
     ok(backHub===hub.sections.length, '  back from a section returns to the section list', backHub);
-    const sysBack = await p.evaluate(async()=>{ acMeSection('money'); await new Promise(r=>setTimeout(r,300));
+    const sysBack = await p.evaluate(async()=>{ acGoProfileHub(); await new Promise(r=>setTimeout(r,300));
+      acMeSection('money'); await new Promise(r=>setTimeout(r,300));
       const inSec=!!document.querySelector('#acMeBody .me-sectitle');
-      appGoBack(); await new Promise(r=>setTimeout(r,600));
+      appGoBack(); await new Promise(r=>setTimeout(r,900));
       return {inSec, secs:[...document.querySelectorAll('#acMeBody .me-row')].filter(e=>/^acMeSection\(/.test(e.getAttribute('onclick')||'')).length,
         stillOnAccount:!document.getElementById('acMeScreen').classList.contains('hidden')};});
     ok(sysBack.inSec && sysBack.secs===hub.sections.length && sysBack.stillOnAccount,
