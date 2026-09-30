@@ -8112,10 +8112,11 @@ defined just above `acSetPath`). `acSetPath`, the 1874 Settings entries, `setBac
   so a Settings Back walks real history only when real history exists.
   **Its contract (route batch 4.1 audit): bookkeeping, never routing input.** It is read in
   ONE place, inside `AtweHistory`, and only as a boolean through `hasPrev()`; the number is
-  never followed, compared or used to pick a page. `hasPrev()` has exactly three callers —
-  `setBack`, `acMeBack` (the Account section's Back, route batch 5) and `closeOverlay`'s
-  walk-back — and all three only choose between WALKING real history (`history.back()`) and
-  REPLACING to the registry parent. What renders comes from
+  never followed, compared or used to pick a page. `hasPrev()` has exactly three callers
+  since route batch 6 — `appGoBack` (the unified App Back; `setBack` and `acMeBack` now only
+  delegate to it), `closeOverlay`'s walk-back, and the LEGACY-UNROUTED conversation Back
+  (`acBackToList`) — and all three only choose between WALKING real history
+  (`history.back()`) and something that is not history. What renders comes from
   the URL + registry; the logical parent from the registry; so this is not a second
   navigation graph. It lives per entry, not in `sessionStorage`, because "is an Atwe entry
   behind THIS one" differs per entry and must survive Back/Forward and reload — a
@@ -8312,6 +8313,92 @@ ran at 5s a step; `setroutes`/`histv2` still wait on it); **`history.length` is 
 50** by the browser, so after a few dozen steps "one entry was added" reads as zero — use
 the entry's own `idx` and the NavEvent log; and a boot restores the LAST world used, so
 "entering Account from another world" must switch to that world in-app first.
+
+### Unified App Back (Route Audit batch 6)
+
+**ONE Back primitive: `appGoBack()`.** Every "go back" in the app funnels into it — the
+profile, post, circle, Account-section, Settings-page and Atwe AI arrows (`acProfileBack`,
+`acPostViewBack`, `acMeBack`, `setBack` on a page, `acAiBack`, `acTopBack` are one-line
+delegates), the dead-in-practice AtChat Escape branch, and device Back when it reaches the
+app. The model, in order:
+
+1. **a gate is up** (`NEVER_BACK`: sign-in, onboarding, the passcode pad …) → nothing;
+2. **a transient layer** → dismiss it (`_navDismissModal`, the SAME refusal popstate gives:
+   menus, confirm, call, drawer, an unrouted sheet). A browser-Back cancel re-pushes the
+   entry with the SAME idx, key AND URL (`AtweHistory.repush` restores the address now);
+3. **a screen with no address of its own** → `acScreenBack`, the isolated
+   **LEGACY-UNROUTED FALLBACK** (a Beam conversation on "/", the composers, group pages, an
+   industry page). `_navBackOwner` sends a screen there only when the URL is not its own;
+4. **a real previous Atwe entry** (`AtweHistory.hasPrev()`) → `history.back()`; the traversal
+   applies the restored URL and owns the ONE NavEvent;
+5. **a direct entry** → REPLACE to the route registry's logical parent (`acLogicalParent`)
+   and apply it (`acBackReplace` → `_navApplyUrl`): a named parent is built with the current
+   params (`/account/wallet` → `/account/money` → `/me`, a Settings leaf → its page → `/settings`,
+   `/marketplace` → `/search`); a routed LAYER whose parent is `history` or none (an entity
+   sheet, Notifications, the Settings hub) is closed; a SCREEN whose parent is `history`
+   (profile, post, circle, `/ai`) goes to its world's current root (`acWorldRootPath`, from
+   the registry's live `root` routes — `/ai` and Settings have none and fall to Home). ONE
+   `replace` NavEvent, no fabricated history, so browser Back from a deep link still leaves;
+6. **a root with nothing behind** → `'exit'` (nothing): the exit behaviour belongs to
+   popstate, untouched. The current roots stay `/`, `/messages`, `/search`, `/me` (batch 8
+   flips them).
+
+**Real history wins over every static parent.** Wallet opened from Settings → Premium goes
+back to Settings → Premium, not `/account/money`; a profile opened from Notifications goes
+back to `/notifications`. Parents are only the direct-entry fallback.
+
+**Retired as routing truth:** `AC._profFrom`, `AC._postNav` and `_aiFrom` are DELETED;
+`acScreenBack` lost its profile/post/circle cases and is the legacy-unrouted map only;
+`navStackPop` is gone. What remains, and why it is not routing:
+- **`_navStack`** — screen memory keyed to the REAL entry (`idx` + path). Consulted only by
+  `_navApplyUrl` AFTER a traversal has landed (`navRecordFor`), to re-show a world screen
+  with its scroll (no refetch) and the world under a restored panel; and, legacy-unrouted, a
+  conversation (only if it is still the same one, `chat`). A record never moves the member —
+  a stale one simply matches nothing. A screen shown while a push is still queued is not
+  recorded against the entry being left (`_lastShow.pend`).
+- **`_handoffPanel`** — `{ idx, next, sheets }`: the UNROUTED detail sheets (an order, a wallet
+  transaction, a service) reopened when a traversal lands on exactly `idx`, and `next`, the
+  entry the handoff pushed, which lets a conversation's own Back walk real history while the
+  member is still on that entry. It compares the CURRENT idx, never reads `prev`.
+- **`_meSection`** — the Account page's memory of what it last drew (slide direction only).
+
+**Two real bugs fixed on the way.** A handoff into a conversation (`appTab('chat');
+acOpenChat(id)`) lost its push: `acSyncPath` skipped every self-routed screen, and
+`acOpenChat`'s own `acSetPath('/')` then OVERWROTE the entry the member came from, so no Back
+could ever return to Orders/Services/Connections. The queued push now survives under a
+conversation, and the conversation's replace stands down while a push is queued. And
+`closeOverlay` now walks history only over a REAL earlier entry for every routed layer (it
+used `_histDepth`, which over-counts after browser Back, so a panel reached by a direct link
+could walk the member out of Atwe).
+
+**Circles are real entries now** (as batch 3 made profiles and posts): `acOpenCircle` pushes
+`/circle/<slug>` once the circle has loaded and is still on screen, instead of replacing the
+entry it was opened from.
+
+**Notifications resolve through ONE function, `routeFor(notification)`.** It returns
+`{ route, params }` for a routed destination (its URL built by the registry in `acNotifPath`),
+`{ detail }` for the in-panel detail, or `{ open }` — LEGACY-UNROUTED — for a surface with no
+route yet (an order, a group, a conversation, a tab the URL does not carry). `NOTIF_GO` and the
+boolean pile are gone; `NOTIF_DEST` is the destination table routeFor reads (`'@key'` = routed).
+A row calls `acNotifGo(id)`; a routed destination is `acNavGo(path)` — ONE push of the
+canonical URL, rendered from the URL, the panel closed by the same path — so real Back returns
+to `/notifications` and Forward returns to the destination. A notification row is never a URL
+of its own; the New sign-in detail stays inside `/notifications` and its action routes to
+`/settings/security/devices`. The payload now carries `postAuthor` so a post notification pushes
+its canonical `/<author>/post/<id>` directly. **Web push is not wired to the resolver**: a push
+carries no destination today (it opens `/`), and giving it one is native/deep-link work.
+
+Guarded by `scratchpad/route6.js` (owns its fixture: two business accounts, a post in an
+official circle, a listing, a job, an event, five notifications; 390 and 1440 full matrix +
+an 820 smoke, ~700s): real-history chains with one push per step and symmetric Forward,
+direct entries (replace, no growth, browser Back leaves), transient cancel (idx AND key AND
+URL kept), gates, contextual parents, Notifications through `routeFor`, stale private memory
+(poisoned `_navStack`, `_handoffPanel`, `_profFrom`, `_postNav`, `_aiFrom`, `_meSection`), and
+mixed state (world + screen + top layer + URL + lit nav must agree). `--break` puts the old
+`_profFrom` profile Back back; `--break=notif` sends one row around `routeFor`. **Two probe
+traps it hit:** `idx` is ONE monotonic sequence per tab, so after a Back the next push is not
+`idx + 1` — assert the new entry's `prev` is the one you left; and `AtweHistory.log` is a ring
+of 60, so counting NavEvents by its length stops working — keep an unbounded listener.
 
 ## Search & typeahead
 
