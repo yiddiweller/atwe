@@ -156,7 +156,7 @@ function cases(F) {
   return [
     ['1. Business directory -> seller profile', 'bizDirectory', '/businesses', 'bizDirectory', openDirectory,
       click('.ac-item', '#bizDirectoryBody'), 'acProfileScreen'],
-    ['2. Wallet -> transaction -> peer profile', 'walletView', '/wallet', 'walletTxView', openWalletTx,
+    ['2. Wallet -> transaction -> peer profile', 'walletView', '/account/wallet', 'walletTxView', openWalletTx,
       click('.wtxd-peer', '#walletTxView'), 'acProfileScreen'],
     ['3. Marketplace card head -> seller profile', 'marketplaceView', '/marketplace', 'marketplaceView', openMarket,
       click('.mkt-head', '#marketplaceView'), 'acProfileScreen'],
@@ -177,11 +177,11 @@ function cases(F) {
       }), 'acProfileScreen'],
     ['6. Services -> message the provider', 'servicesView', '/services', 'servicesView', openServices,
       (p) => p.evaluate((id) => { acMessageProvider(id); return true; }, F.peer.id), 'acThreadScreen'],
-    ['7. Order -> message the other party', 'ordersView', '/orders', 'orderView', openOrder,
+    ['7. Order -> message the other party', 'ordersView', '/account/orders', 'orderView', openOrder,
       click('[onclick*="acOpenChat"]', '#orderView'), 'acThreadScreen'],
-    ['8. Connections -> Message', 'connList', '/network', 'connList', openConns,
+    ['8. Connections -> Message', 'connList', '/account/network', 'connList', openConns,
       click('.ac-conn-item .ac-pill-btn', '#connListBody'), 'acThreadScreen'],
-    ['9. Connections row -> profile', 'connList', '/network', 'connList', openConns,
+    ['9. Connections row -> profile', 'connList', '/account/network', 'connList', openConns,
       click('.ac-conn-item', '#connListBody'), 'acProfileScreen'],
   ];
 }

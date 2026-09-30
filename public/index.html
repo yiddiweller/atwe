@@ -24222,10 +24222,10 @@ const APP_ROUTES = {
   'help':           { open: () => openHelp(), view: 'helpOverlay' },
 
   /* ── Network & work ── */
-  'network':        { open: () => acOpenConnections(),             auth: true, view: 'connList' },
+  'network':        { open: () => acOpenConnections(),             auth: true, view: 'connList', acct: 'network' },
   'jobs':           { open: () => acOpenJobsView(),                auth: true },
-  'job-alerts':     { open: () => acOpenSavedSearches(),           auth: true, view: 'savedSearches' },
-  'resumes':        { open: () => acOpenResumes(),                 auth: true, view: 'resumesList' },
+  'job-alerts':     { open: () => acOpenSavedSearches(),           auth: true, view: 'savedSearches', acct: 'job-alerts' },
+  'resumes':        { open: () => acOpenResumes(),                 auth: true, view: 'resumesList', acct: 'resumes' },
   'businesses':     { open: () => acOpenDirectory(), view: 'bizDirectory' },
   'services':       { open: () => acOpenServices(), view: 'servicesView' },
   'events':         { open: () => acOpenEvents(), view: 'eventsList' },
@@ -24237,35 +24237,50 @@ const APP_ROUTES = {
   /* ── Shopping ── */
   'marketplace':    { open: () => acOpenMarketplace(), view: 'marketplaceView' },
   'cart':           { open: () => acOpenCart(),                    auth: true, view: 'cartView' },
-  'orders':         { open: () => acOpenOrders('buyer'),           auth: true, view: 'ordersView' },
-  'saved':          { open: () => acOpenSaved(),                   auth: true, view: 'savedView' },
+  'orders':         { open: () => acOpenOrders('buyer'),           auth: true, view: 'ordersView', acct: 'orders' },
+  'saved':          { open: () => acOpenSaved(),                   auth: true, view: 'savedView', acct: 'saved' },
   'collections':    { open: () => acOpenCollections(),             auth: true },
-  'subscriptions':  { open: () => acOpenSubs(),                    auth: true, view: 'subsView' },
-  'addresses':      { open: () => acOpenAddresses(),               auth: true, view: 'addressesView' },
-  'bookings':       { open: () => acOpenBookings('guest'),         auth: true, view: 'bookingsView' },
+  'subscriptions':  { open: () => acOpenSubs(),                    auth: true, view: 'subsView', acct: 'subscriptions' },
+  'addresses':      { open: () => acOpenAddresses(),               auth: true, view: 'addressesView', acct: 'addresses' },
+  'bookings':       { open: () => acOpenBookings('guest'),         auth: true, view: 'bookingsView', acct: 'bookings' },
 
   /* ── Money ── */
-  'wallet':         { open: () => acOpenWallet(),                  auth: true, view: 'walletView' },
-  'money-requests': { open: () => acOpenMoneyRequests(),           auth: true, view: 'moneyRequestsView' },
-  'invoices':       { open: () => acOpenInvoices('received'),      auth: true, view: 'invoicesView' },
-  'quotes':         { open: () => acOpenQuotes('received'),        auth: true, view: 'quotesView' },
-  'payment-links':  { open: () => acOpenPayLinks(),                auth: true, view: 'payLinkView' },
-  'gift-cards':     { open: () => acOpenGiftCards(),               auth: true, view: 'giftCardView' },
-  'rewards':        { open: () => acOpenLoyalty(),                 auth: true, view: 'loyaltyView' },
-  'referrals':      { open: () => acOpenReferrals(),               auth: true, view: 'referView' },
+  'wallet':         { open: () => acOpenWallet(),                  auth: true, view: 'walletView', acct: 'wallet' },
+  'money-requests': { open: () => acOpenMoneyRequests(),           auth: true, view: 'moneyRequestsView', acct: 'money-requests' },
+  'invoices':       { open: () => acOpenInvoices('received'),      auth: true, view: 'invoicesView', acct: 'invoices' },
+  'quotes':         { open: () => acOpenQuotes('received'),        auth: true, view: 'quotesView', acct: 'quotes' },
+  'payment-links':  { open: () => acOpenPayLinks(),                auth: true, view: 'payLinkView', acct: 'payment-links' },
+  'gift-cards':     { open: () => acOpenGiftCards(),               auth: true, view: 'giftCardView', acct: 'gift-cards' },
+  'rewards':        { open: () => acOpenLoyalty(),                 auth: true, view: 'loyaltyView', acct: 'rewards' },
+  'referrals':      { open: () => acOpenReferrals(),               auth: true, view: 'referView', acct: 'referrals' },
 
   /* ── Selling & business ── */
-  'dashboard':      { open: () => acOpenDashboard(),               auth: true, view: 'dashboardView' },
-  'store':          { open: () => acOpenStoreManage(),             auth: true, view: 'storeManageView' },
-  'listings':       { open: () => acOpenSell(),                    auth: true, view: 'sellView' },
-  'analytics':      { open: () => acOpenShopAnalytics(),           auth: true, view: 'shopAnalyticsView' },
-  'ads':            { open: () => acOpenAds(),                     auth: true, view: 'adsView' },
-  'affiliate':      { open: () => acOpenAffiliate(),               auth: true, view: 'affiliateView' },
-  'team':           { open: () => acOpenTeam(),                    auth: true, view: 'teamView' },
+  'dashboard':      { open: () => acOpenDashboard(),               auth: true, view: 'dashboardView', acct: 'dashboard' },
+  'store':          { open: () => acOpenStoreManage(),             auth: true, view: 'storeManageView', acct: 'store' },
+  'listings':       { open: () => acOpenSell(),                    auth: true, view: 'sellView', acct: 'store/listings' },
+  'analytics':      { open: () => acOpenShopAnalytics(),           auth: true, view: 'shopAnalyticsView', acct: 'store/analytics' },
+  'ads':            { open: () => acOpenAds(),                     auth: true, view: 'adsView', acct: 'store/ads' },
+  'affiliate':      { open: () => acOpenAffiliate(),               auth: true, view: 'affiliateView', acct: 'affiliate' },
+  'team':           { open: () => acOpenTeam(),                    auth: true, view: 'teamView', acct: 'team' },
 
   /* ── Planning ── */
-  'calendar':       { open: () => acOpenAgenda(),                  auth: true, view: 'agendaView' },
-  'appointments':   { open: () => acOpenAppointments('mine'),      auth: true, view: 'apptView' },
+  'calendar':       { open: () => acOpenAgenda(),                  auth: true, view: 'agendaView', acct: 'calendar' },
+  'appointments':   { open: () => acOpenAppointments('mine'),      auth: true, view: 'apptView', acct: 'appointments' },
+
+  /* ── Account tools that never had a flat address (route batch 5) ──
+     `flat: false`: no /<key> URL exists or is reserved for these — they live ONLY at their
+     /account/... address. `layout: false`: they keep the sheet presentation they have
+     always had (acTagRouteView would otherwise turn them into desktop pages).
+     `sharedView`: /account/store/orders is the Orders overlay on its Seller tab. */
+  'card':           { open: () => acOpenDebitCard(),               auth: true, view: 'debitCardView', acct: 'card', flat: false, layout: false },
+  'store-orders':   { open: () => acOpenOrders('seller'),          auth: true, view: 'ordersView', acct: 'store/orders', flat: false, sharedView: 'orders' },
+  'coupons':        { open: () => acOpenCoupons(),                 auth: true, view: 'couponsView', acct: 'store/coupons', flat: false, layout: false },
+  'bundles':        { open: () => acOpenBundles(),                 auth: true, view: 'bundlesView', acct: 'store/bundles', flat: false, layout: false },
+  'till':           { open: () => acOpenTill(),                    auth: true, view: 'tillView', acct: 'till', flat: false, layout: false },
+  'delivery':       { open: () => acOpenDelivery(),                auth: true, view: 'deliveryView', acct: 'delivery', flat: false, layout: false },
+  'phone':          { open: () => acOpenBizPhone(),                auth: true, view: 'phoneView', acct: 'phone', flat: false, layout: false },
+  'verification':   { open: () => acOpenIdVerify(),                auth: true, view: 'idVerifyView', acct: 'verification', flat: false, layout: false },
+  'pro':            { open: () => acOpenPro(),                     auth: true, view: 'proView', acct: 'pro', flat: false, layout: false },
 };
 
 /* Settings sub-pages: atwe.com/settings/<page>. Kept shallow on purpose —
@@ -24296,6 +24311,22 @@ const SETTINGS_LEAVES = {
   'about/whats-new':     () => acOpenChangelog(),
 };
 
+/* ACCOUNT SECTIONS: atwe.com/account/<key> (route batch 5). The runtime binding of each
+   approved URL key to the Account page's own section id — the addresses, titles and parents
+   are declared once, in the route registry (ACCOUNT_SECTIONS), and
+   test/route-registry.test.js requires the two to hold exactly the same keys. Two ids differ
+   from their key on purpose: the page has always called Marketing `growth` and Help `app`.
+   The Account ROOT stays /me until the batch-8 world-root flip. */
+const ACCOUNT_SECTION_IDS = { profile: 'profile', money: 'money', selling: 'selling', customers: 'customers',
+  marketing: 'growth', jobs: 'jobs', library: 'library', planning: 'planning', creating: 'creating', ai: 'ai', help: 'app' };
+/* Account TOOLS: atwe.com/account/<acct> → the APP_ROUTES key that opens it. Derived from the
+   `acct` column above, so a tool gets its Account address in exactly one place. */
+const ACCOUNT_TOOL_KEYS = (() => {
+  const m = {};
+  for (const [key, def] of Object.entries(APP_ROUTES)) if (def.acct) m[def.acct] = key;
+  return m;
+})();
+
 /* Public sections of a profile: atwe.com/<username>/<section>. Only genuinely
    public parts belong here — private things live at the top level (/settings,
    /notifications), never nested under someone's name. */
@@ -24313,7 +24344,8 @@ const ENTITY_ROUTES = ['post', 'job', 'listing', 'event', 'group', 'circle', 'co
    impersonation or confusion if someone registered them. */
 const RESERVED_PATHS = (() => {
   const set = new Set([
-    ...Object.keys(APP_ROUTES).filter(Boolean),
+    // A tool marked flat:false has no /<key> address, so its key is not a reserved root.
+    ...Object.keys(APP_ROUTES).filter((k) => k && APP_ROUTES[k].flat !== false),
     ...AUTH_ROUTES, ...ENTITY_ROUTES,
     // real files served from /public
     'index.html', 'admin.html', 'locked.html', 'sw.js', 'manifest.json',
@@ -24340,9 +24372,28 @@ const WORLD_PATH = { home: '/', chat: '/messages', search: '/search', ai: '/ai',
    instead of every one of the 45 openers having to remember to set it. */
 const ROUTE_BY_VIEW = (() => {
   const m = {};
-  for (const [key, def] of Object.entries(APP_ROUTES)) if (def.view) m[def.view] = key;
+  // A route that only BORROWS an overlay (sharedView) never claims it: the owner does.
+  for (const [key, def] of Object.entries(APP_ROUTES)) if (def.view && !def.sharedView) m[def.view] = key;
   return m;
 })();
+/* The route an open overlay is showing right now. Normally its ROUTE_BY_VIEW owner; a route
+   that borrows the overlay (the Orders overlay on its Seller tab is /account/store/orders)
+   wins while the overlay is in that state. */
+function acViewRouteKey(id) {
+  if (id === 'ordersView' && typeof AC !== 'undefined' && AC._ordScope === 'seller') return 'store-orders';
+  return ROUTE_BY_VIEW[id] || null;
+}
+/* The canonical address of an APP_ROUTES key, built by the registry. An Account tool's is
+   /account/<acct> (route batch 5); its flat /<key> is an alias the app canonicalises away. */
+function acRouteKeyPath(key) {
+  const def = APP_ROUTES[key] || {};
+  return acRoutePath(key, null, def.acct ? '/account/' + def.acct : '/' + key);
+}
+/* The canonical address of an Account section, from the PAGE's section id. */
+function acAccountSectionPath(meId) {
+  const key = Object.keys(ACCOUNT_SECTION_IDS).find((k) => ACCOUNT_SECTION_IDS[k] === meId);
+  return key ? acRoutePath('account-' + key, null, '/account/' + key) : null;
+}
 
 /* Screens that own their own address (a person, a post, a circle, a group). The
    sync below leaves these alone — they set a richer path than any tab could. */
@@ -24406,8 +24457,8 @@ function acSyncPath(opts) {
         /* Settings is ONE overlay whose address is the page it is showing (route batch 4):
            /settings, /settings/privacy … derived from _setPage, never from history.state. */
         if (open[i].id === 'settingsOverlay') { acSetPath(acSettingsPath(_setPage), { push }); return; }
-        const key = ROUTE_BY_VIEW[open[i].id];
-        if (key) { acSetPath('/' + key, { push }); return; }
+        const key = acViewRouteKey(open[i].id);
+        if (key) { acSetPath(acRouteKeyPath(key), { push }); return; }
       }
       // A profile / post / circle / thread writes a richer path of its own — don't stamp on it.
       for (const id of SELF_ROUTED_SCREENS) {
@@ -24417,6 +24468,10 @@ function acSyncPath(opts) {
       // Two destinations are a tab PLUS a scope rather than a panel — derive them
       // the same way, from the live state, so they stay right without a hint.
       const _push = { push };
+      /* The Account page on one of its sections is /account/<key> (route batch 5). Read from
+         what is RENDERED (acMeShownSection), the same way Settings derives its address from the
+         page it is showing — never from history.state. */
+      if (_appTab === 'profile') { const sec = acMeShownSection(); if (sec) { acSetPath(acAccountSectionPath(sec) || '/me', _push); return; } }
       if (_appTab === 'search' && _searchScope === 'jobs') { acSetPath('/jobs', _push); return; }
       if (_appTab === 'home' && _acFeedScope === 'bookmarks') { acSetPath('/collections', _push); return; }
       acSetPath(WORLD_PATH[_appTab] || '/', _push);
@@ -24446,6 +24501,16 @@ function parseDeepLink() {
     if (segs.length === 3 && Object.prototype.hasOwnProperty.call(SETTINGS_LEAVES, page + '/' + leaf)) return { type: 'settings', page, leaf };
     return { type: 'settings', page, unknown: true };
   }
+  /* /account/<section> and /account/<tool…> — the URL IS the destination (route batch 5).
+     Anything else under /account says so (`unknown`): it never falls through to a username
+     ('account' is reserved) and never silently renders some other page. The bare /account is
+     the batch-8 root and is left exactly as it was. */
+  if (s0 === 'account' && segs.length > 1) {
+    const sub = segs.slice(1).join('/').toLowerCase();
+    if (segs.length === 2 && Object.prototype.hasOwnProperty.call(ACCOUNT_SECTION_IDS, sub)) return { type: 'account', section: sub };
+    if (Object.prototype.hasOwnProperty.call(ACCOUNT_TOOL_KEYS, sub)) return { type: 'route', key: ACCOUNT_TOOL_KEYS[sub] };
+    return { type: 'account', unknown: true };
+  }
   // /group/<slug>, /circle/<slug>
   if ((s0 === 'group' || s0 === 'circle') && segs[1]) return { type: s0, username: segs[1].replace(/^@/, '') };
   // /company/<username> — a business IS an account, so this is an alias that
@@ -24458,7 +24523,11 @@ function parseDeepLink() {
   // Signed-out pages.
   if (AUTH_ROUTES.includes(s0) && segs.length === 1) return { type: 'auth', page: s0 };
   // A plain feature route.
-  if (Object.prototype.hasOwnProperty.call(APP_ROUTES, s0) && segs.length === 1) return { type: 'route', key: s0 };
+  // (An Account tool's flat /<key> is an ALIAS: it opens the tool, and the address
+  // canonicalises to /account/<…> by replace. A flat:false tool never had one.)
+  if (Object.prototype.hasOwnProperty.call(APP_ROUTES, s0) && segs.length === 1 && APP_ROUTES[s0].flat !== false) {
+    return APP_ROUTES[s0].acct ? { type: 'route', key: s0, alias: true } : { type: 'route', key: s0 };
+  }
 
   // Anything else that looks like a handle is a person or a business.
   const u = s0.replace(/^@/, '');
@@ -24474,14 +24543,25 @@ function parseDeepLink() {
 /* Turn a parsed route into the surface it names. Every branch is wrapped so a
    bad or stale link can never take the whole app down — the worst case is that
    you land on the default surface instead. */
-function openDeepLink(r) {
+function openDeepLink(r, opts) {
   if (!r) return;
   try {
     if (r.type === 'route') {
       const def = APP_ROUTES[r.key];
       if (!def) return;
       if (def.auth && !isAccount()) { openLogin(); return; }
+      /* A DIRECT entry onto an Account tool rebuilds the Account world with the tool's own
+         section underneath (route batch 5), so the tool's own Back walks tool -> section ->
+         /me instead of dropping onto whatever world boot happened to restore. A Back/Forward
+         restore leaves the world alone: that is real history, and it is where the member was. */
+      if (def.acct && opts && opts.boot) acOpenAccountSection(acAccountSectionOf(r.key));
       def.open();
+      return;
+    }
+    if (r.type === 'account') {
+      if (!isAccount()) { openLogin(); return; }
+      if (r.unknown) { acOpenAccountSection(null); showNotif('That page doesn’t exist.'); return; }
+      acOpenAccountSection(ACCOUNT_SECTION_IDS[r.section]);
       return;
     }
     if (r.type === 'settings') {
@@ -24782,7 +24862,7 @@ function consumePendingRoute() {
   if (_pendingWaitlist) { const sl = _pendingWaitlist; _pendingWaitlist = null; setTimeout(() => acOpenWaitlist(sl), 200); }
   if (!_pendingRoute) return;
   const r = _pendingRoute; _pendingRoute = null;
-  setTimeout(() => openDeepLink(r), 80);
+  setTimeout(() => openDeepLink(r, { boot: true }), 80);
 }
 
 // ─── Deep-link "peek" (X-style) ───────────────────────────────────────────────
@@ -25469,8 +25549,12 @@ function closeOverlay(id, noHistory) {
      walks back when there REALLY is an earlier Atwe entry behind it (AtweHistory.hasPrev).
      _histDepth can over-count once the member has used browser Back, and a Settings Back
      on a direct link must fall to the logical parent, never out of Atwe. */
-  const _own = el._ownPath || (id === 'settingsOverlay' ? acSettingsPath(_setPage) : (ROUTE_BY_VIEW[id] ? '/' + ROUTE_BY_VIEW[id] : null));
-  const _setNode = id === 'settingsOverlay' || !!el._setLeaf;
+  /* Route batch 5: an Account tool is a node of the same kind — its address is /account/…,
+     and on a direct entry (nothing of ours behind it) closing it falls to its section, which
+     the path sync derives from the Account page underneath, instead of walking out of Atwe. */
+  const _vkey = acViewRouteKey(id);
+  const _own = el._ownPath || (id === 'settingsOverlay' ? acSettingsPath(_setPage) : (_vkey ? acRouteKeyPath(_vkey) : null));
+  const _setNode = id === 'settingsOverlay' || !!el._setLeaf || !!(_vkey && APP_ROUTES[_vkey] && APP_ROUTES[_vkey].acct);
   if (!noHistory && !_histRestoring && _histDepth > 0 && _own && location.pathname === _own && (!_setNode || AtweHistory.hasPrev())) {
     /* THE WALK IS DEFERRED BY ONE MICROTASK, AND THAT IS THE WHOLE FIX FOR A HANDOVER.
        Half the rows in Manage store read `closeOverlay('storeManageView'); acOpenX()`.
@@ -25509,7 +25593,7 @@ function acTagRouteView(el) {
   if (!el || el._rv) return;
   el._rv = 1;
   try {
-    for (const r of Object.values(APP_ROUTES)) if (r && (r.view === el.id || r.pageLayout === el.id)) { el.classList.add('route-view'); break; }
+    for (const r of Object.values(APP_ROUTES)) if (r && r.layout !== false && (r.view === el.id || r.pageLayout === el.id)) { el.classList.add('route-view'); break; }
   } catch (e) {}
 }
 function showOverlay(id) {
@@ -28144,8 +28228,7 @@ function acNavSettings() {
 }
 function acNavHelp() {
   if (_lw() <= 768) closeSidebar();
-  appTab('profile');
-  setTimeout(() => { if (typeof acMeSection === 'function') acMeSection('app'); }, 0);
+  acOpenAccountSection('app');   // /account/help — one navigation, one history entry
 }
 // "Upgrade" entry in the sidebar nav — close the mobile drawer, then open plans.
 function acNavUpgrade() {
@@ -32838,6 +32921,8 @@ function appTab(tab, opts) {
      deep link, the message ⋯ menu, forward-to-AI) funnels through appTab('ai'). */
   const _prevTab = _appTab;
   if (tab === 'ai' && _prevTab && _prevTab !== 'ai') _aiFrom = _prevTab;
+  // A section a URL asked for belongs to THIS visit to Account only (route batch 5).
+  if (tab !== 'profile') _mePending = null;
   _appTab = tab;
   if (tab !== 'call') { try { localStorage.setItem('atwe_last_tab', tab); } catch {} }
   acSyncPath({ push: true });   // /messages, /search, /ai, /me — home stays the bare domain
@@ -39579,12 +39664,68 @@ function acGoProfileHub() {
     _meSection = null; _meQuery = '';
     const body = document.getElementById('acMeBody');
     body.innerHTML = html;
+    delete body.dataset.section;     // the hub: no section is rendered (acMeShownSection)
     acPruneEmptyGroups(body); // drop groups emptied by switched-off features
     body.scrollTop = 0;
+    /* A section asked for by URL (acOpenAccountSection) lands straight on it, in the same
+       task, so the hub is never seen and the address is written once — the section's. */
+    if (_mePending) { const sec = _mePending; _mePending = null; acMeSection(sec, { quiet: true }); return; }
     // Coming BACK from a section pops left-to-right; arriving from another world
     // is not a navigation within this page, so it stays still.
     if (wasSection) acMeAnim('back');
+    /* The hub is /me. The address is DERIVED from what is on screen, so any caller that
+       lands here keeps it true — by replace; appTab's own push in the same frame wins. */
+    acSyncPath();
   });
+}
+/* ── Account routing (route batch 5) ──────────────────────────────────────────────────
+   THE URL IS THE DESTINATION. /account/<key> names a section and that is what is rendered,
+   whatever `_meSection` happens to hold: `_meSection` is only the page's memory of what it
+   last drew (it picks the slide direction), and acMeShownSection reads the rendered DOM,
+   which is what the address is derived from. Nothing is read from history.state. */
+let _mePending = null;   // a section a URL asked for, consumed by acGoProfileHub
+function acMeShownSection() {
+  const scr = document.getElementById('acMeScreen'), body = document.getElementById('acMeBody');
+  if (!scr || scr.classList.contains('hidden') || !body) return null;
+  return body.dataset.section || null;
+}
+/* Open the Account page on a section (its PAGE id), or on the hub for null. Already on the
+   Account page: switch in place (nothing to do when it is already showing). Anywhere else:
+   enter the Account world and land on the section in the same task. */
+function acOpenAccountSection(meId) {
+  const shown = acMeShownSection();
+  const onPage = _appTab === 'profile' && !!document.getElementById('acMeScreen') && !document.getElementById('acMeScreen').classList.contains('hidden');
+  if (onPage) {
+    if (meId) { if (shown !== meId) acMeSection(meId); }
+    else if (shown) { acGoProfileHub(); acSyncPath(); }
+    return;
+  }
+  _mePending = meId || null;
+  appTab('profile');
+}
+/* The Account section that owns a tool, climbing the registry's logical parents. */
+function acAccountSectionOf(key) {
+  try {
+    let r = window.ATWE_ROUTES && ATWE_ROUTES.get(key);
+    for (let i = 0; r && i < 6; i++) {
+      if (r.name.startsWith('account-')) return ACCOUNT_SECTION_IDS[r.name.slice(8)] || null;
+      r = r.parent && r.parent !== 'history' ? ATWE_ROUTES.get(r.parent) : null;
+    }
+  } catch (e) {}
+  return null;
+}
+/* THE SECTION'S OWN BACK (its arrow, and device Back through appGoBack). With a REAL Atwe
+   entry behind this one, walk it — so the arrow, browser Back and device Back agree. With
+   none (a direct link), go to the logical parent, the Account root, by REPLACING the
+   address: the Account page never fabricates history behind a deep link. */
+function acMeBack() {
+  const here = acAccountSectionPath(acMeShownSection());
+  if (here && location.pathname === here && AtweHistory.hasPrev()) {
+    _histDepth = Math.max(0, _histDepth - 1);
+    try { history.back(); return; } catch (e) {}
+  }
+  acGoProfileHub();
+  acSyncPath();
 }
 /* One place decides how the Account page moves, so the two directions can never
    drift apart the way the old one-way 14px fade did. */
@@ -39666,7 +39807,7 @@ function acMeSearchClear() {
 /* Open one section of the Account page. Same rows, same design as before — they just
    live behind their section now. The header carries a back arrow because this screen
    has no top bar of its own (acMeScreen is in AC_OWN_HEADER). */
-function acMeSection(id) {
+function acMeSection(id, opts) {
   const g = ME_SECTIONS.find((x) => x.id === id);
   const body = document.getElementById('acMeBody');
   if (!g || !body) return;
@@ -39674,15 +39815,20 @@ function acMeSection(id) {
   const rows = g.items.filter((it) => acMeRowLive(it, u, isAdmin, verified))
     .map((it) => `<button class="me-row ${it.danger ? 'danger' : ''}" onclick="${it.run}"><span class="me-ic">${it.ic}</span><span class="me-lbl">${escHtml(meLabel(it))}</span><svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`).join('');
   body.innerHTML = `<div class="me-sechead">
-      <button class="me-secback" onclick="acGoProfileHub()" aria-label="Back to Account">
+      <button class="me-secback" onclick="acMeBack()" aria-label="Back to Account">
         <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <span class="me-sectitle">${g.title}</span>
     </div>${id === 'profile' ? acMeStatusCard(u) : ''}<div class="me-group">${rows}</div>`;
   acPruneEmptyGroups(body);
   _meSection = id;
+  body.dataset.section = id;   // what is rendered — the path sync reads THIS (acMeShownSection)
   body.scrollTop = 0;
-  acMeAnim('in');   // drilling in pushes right-to-left, as Settings does
+  if (!(opts && opts.quiet)) acMeAnim('in');   // drilling in pushes right-to-left, as Settings does
+  /* A section is a real destination: a tap PUSHES /account/<key>. A restore (Back/Forward)
+     or boot writes no new entry — acSyncPath replaces while _histRestoring, and AtweHistory
+     turns boot pushes into replaces. */
+  acSyncPath({ push: true });
 }
 // The Beam page is tabbed (Chats · Groups · Calls · Contacts), home-feed-tab style.
 // Chats = direct-only, Groups = group chats only (both reuse the message list);
@@ -50685,6 +50831,8 @@ const _CARRIER_TRACK_URL = {
 function acOpenOrders(scope) { AC._ordScope = scope || 'buyer'; showOverlay('ordersView'); acOrdersTab(AC._ordScope); }
 function acOrdersTab(scope) {
   AC._ordScope = scope;
+  // Buyer is /account/orders, Seller is /account/store/orders: a tab, so the address follows by REPLACE.
+  if (_ovOpen('ordersView')) acSyncPath();
   document.getElementById('ordTabBuyer').classList.toggle('on', scope === 'buyer');
   document.getElementById('ordTabSeller').classList.toggle('on', scope === 'seller');
   acLoadOrders();
@@ -68916,7 +69064,7 @@ function appGoBack() {
   //     inside a Settings sub-page returns to the Settings hub rather than closing Settings.
   //     MUST come before the screen-history step below: the Account page is one screen as far
   //     as that stack is concerned, so it would happily walk straight out of the page instead.
-  if (_appTab === 'profile' && _meSection) { acGoProfileHub(); return 'x'; }
+  if (_appTab === 'profile' && acMeShownSection()) { acMeBack(); return 'x'; }
   // 6) recorded screen history — restore the previous screen with its scroll position
   if (_appTab !== 'ai' && navStackPop()) return 'x';
   // 6b) fallback (no usable history, e.g. a same-screen swap): the fixed per-screen parent map

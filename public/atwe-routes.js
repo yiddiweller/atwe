@@ -92,6 +92,65 @@
   ];
   const PROFILE_SECTIONS = ['posts', 'replies', 'media', 'likes', 'about', 'connections'];
 
+  /* The Account tree (route batch 5). The Account ROOT is the live `me` route — today at
+     /me, with /account recorded as its `next` for the batch-8 world-root flip. Its CHILDREN
+     already live under /account/..., and each names `me` (or one of its sections) as its
+     logical parent, so the batch-8 flip changes the root's pattern and nothing below it.
+
+     A SECTION is /account/<key>, rendered inside the Account page itself (no overlay). The
+     URL key is the approved one; the page's own section id differs for two of them
+     (marketing is the page's `growth`, help is its `app`) and that binding lives in the app.
+     A TOOL is a routed overlay under /account; its logical parent is the section whose row
+     opens it in the live Account page. `aliases` are the flat addresses issued before batch
+     5 — permanent, canonicalised by the client (the server 301 is batch 9). */
+  const ACCOUNT_SECTIONS = [
+    ['profile', 'Profile'], ['money', 'Money'], ['selling', 'Selling'], ['customers', 'Customers'],
+    ['marketing', 'Marketing'], ['jobs', 'Jobs & hiring'], ['library', 'Orders & saved'],
+    ['planning', 'Planning'], ['creating', 'Creating'], ['ai', 'Atwe AI'], ['help', 'Help & feedback'],
+  ];
+  /* name, path under /account, overlay, parent section, title, flat alias (or null), extra */
+  const ACCOUNT_TOOLS = [
+    ['wallet',         'wallet',          'walletView',        'money',     'Wallet',          '/wallet', { native: '/wallet' }],
+    ['money-requests', 'money-requests',  'moneyRequestsView', 'money',     'Money requests',  '/money-requests'],
+    ['invoices',       'invoices',        'invoicesView',      'money',     'Invoices',        '/invoices'],
+    ['quotes',         'quotes',          'quotesView',        'money',     'Quotes',          '/quotes'],
+    ['payment-links',  'payment-links',   'payLinkView',       'money',     'Payment links',   '/payment-links'],
+    ['gift-cards',     'gift-cards',      'giftCardView',      'money',     'Gift cards',      '/gift-cards'],
+    ['rewards',        'rewards',         'loyaltyView',       'money',     'Rewards',         '/rewards'],
+    ['referrals',      'referrals',       'referView',         'money',     'Invite friends',  '/referrals'],
+    ['card',           'card',            'debitCardView',     'money',     'Atwe Card',       null],
+    ['store',          'store',           'storeManageView',   'selling',   'Manage store',    '/store'],
+    ['listings',       'store/listings',  'sellView',          'selling',   'My listings',     '/listings'],
+    /* The seller's side of the Orders overlay: same view as /account/orders, opened on its
+       Seller tab. `sharedView` names the route that owns the overlay by default. */
+    ['store-orders',   'store/orders',    'ordersView',        'selling',   'Store orders',    null, { sharedView: 'orders' }],
+    ['coupons',        'store/coupons',   'couponsView',       'selling',   'Coupons',         null],
+    ['bundles',        'store/bundles',   'bundlesView',       'selling',   'Bundles',         null],
+    /* Sales & analytics and the Ads Manager live in the Marketing section of the live page,
+       so that is their logical parent, whatever their path says about the store. */
+    ['analytics',      'store/analytics', 'shopAnalyticsView', 'marketing', 'Sales & analytics', '/analytics'],
+    ['ads',            'store/ads',       'adsView',           'marketing', 'Ads Manager',     '/ads'],
+    ['dashboard',      'dashboard',       'dashboardView',     'selling',   'Business dashboard', '/dashboard'],
+    ['team',           'team',            'teamView',          'selling',   'Team',            '/team'],
+    ['till',           'till',            'tillView',          'selling',   'The till',        null],
+    ['delivery',       'delivery',        'deliveryView',      'selling',   'Local delivery',  null],
+    ['phone',          'phone',           'phoneView',         'selling',   'Business phone number', null],
+    ['verification',   'verification',    'idVerifyView',      'profile',   'Verify your identity', null],
+    ['pro',            'pro',             'proView',           'profile',   'Atwe Pro',        null],
+    ['affiliate',      'affiliate',       'affiliateView',     'marketing', 'Affiliate program', '/affiliate'],
+    ['orders',         'orders',          'ordersView',        'library',   'Orders',          '/orders'],
+    ['saved',          'saved',           'savedView',         'library',   'Saved items',     '/saved'],
+    ['subscriptions',  'subscriptions',   'subsView',          'library',   'Subscriptions',   '/subscriptions'],
+    ['addresses',      'addresses',       'addressesView',     'library',   'Addresses',       '/addresses'],
+    ['bookings',       'bookings',        'bookingsView',      'library',   'Bookings',        '/bookings'],
+    ['calendar',       'calendar',        'agendaView',        'planning',  'Calendar',        '/calendar'],
+    ['appointments',   'appointments',    'apptView',          'planning',  'Appointments',    '/appointments'],
+    ['resumes',        'resumes',         'resumesList',       'jobs',      'Resumes',         '/resumes'],
+    ['job-alerts',     'job-alerts',      'savedSearches',     'jobs',      'Job alerts',      '/job-alerts'],
+    /* "My network" is a row of the Profile section in the live page. */
+    ['network',        'network',         'connList',          'profile',   'My network',      '/network'],
+  ];
+
   /* ── The routes ────────────────────────────────────────────────────────────
      name     unique id. The route NAME, not the URL, is what code refers to.
      pattern  '/literal/:param' — params typed in `params`.
@@ -111,7 +170,6 @@
     world: 'global', view: null, auth: 'account', privacy: 'private', seo: 'private',
     family: 'hierarchy', parent: 'history', aliases: [], next: null, native: null, params: {}, title: null }, o || {});
   const pub = { auth: 'public', privacy: 'public', seo: 'index' };
-  const acct = (view, next, o) => Object.assign({ world: 'account', view, next, parent: 'me' }, o || {});
 
   const ROUTES = [
     /* The five worlds (+ the AI inside page). Today's world URLs keep working; the
@@ -136,10 +194,7 @@
     r('help',           '/help',           Object.assign({ view: 'helpOverlay', world: 'global' }, pub)),
 
     /* Network & work */
-    r('network',     '/network',     acct('connList', '/account/network')),
     r('jobs',        '/jobs',        { world: 'engine', next: '/engine/jobs', parent: 'search' }),
-    r('job-alerts',  '/job-alerts',  acct('savedSearches', '/account/job-alerts')),
-    r('resumes',     '/resumes',     acct('resumesList', '/account/resumes')),
     r('businesses',  '/businesses',  Object.assign({ world: 'engine', view: 'bizDirectory', next: '/engine/businesses', parent: 'search' }, pub)),
     r('services',    '/services',    Object.assign({ world: 'engine', view: 'servicesView', next: '/engine/services', parent: 'search' }, pub)),
     r('events',      '/events',      Object.assign({ world: 'engine', view: 'eventsList', next: '/engine/events', parent: 'search' }, pub)),
@@ -151,35 +206,14 @@
     /* Shopping */
     r('marketplace', '/marketplace', Object.assign({ world: 'engine', view: 'marketplaceView', next: '/engine/marketplace', parent: 'search', native: '/marketplace' }, pub)),
     r('cart',        '/cart',        { world: 'engine', view: 'cartView', family: 'modal' }),
-    r('orders',        '/orders',        acct('ordersView', '/account/orders')),
-    r('saved',         '/saved',         acct('savedView', '/account/saved')),
     r('collections',   '/collections',   { world: 'home', parent: 'home' }),
-    r('subscriptions', '/subscriptions', acct('subsView', '/account/subscriptions')),
-    r('addresses',     '/addresses',     acct('addressesView', '/account/addresses')),
-    r('bookings',      '/bookings',      acct('bookingsView', '/account/bookings')),
 
-    /* Money */
-    r('wallet',         '/wallet',         acct('walletView', '/account/wallet', { native: '/wallet' })),
-    r('money-requests', '/money-requests', acct('moneyRequestsView', '/account/money-requests')),
-    r('invoices',       '/invoices',       acct('invoicesView', '/account/invoices')),
-    r('quotes',         '/quotes',         acct('quotesView', '/account/quotes')),
-    r('payment-links',  '/payment-links',  acct('payLinkView', '/account/payment-links')),
-    r('gift-cards',     '/gift-cards',     acct('giftCardView', '/account/gift-cards')),
-    r('rewards',        '/rewards',        acct('loyaltyView', '/account/rewards')),
-    r('referrals',      '/referrals',      acct('referView', '/account/referrals')),
-
-    /* Selling & business */
-    r('dashboard', '/dashboard', acct('dashboardView', '/account/dashboard')),
-    r('store',     '/store',     acct('storeManageView', '/account/store')),
-    r('listings',  '/listings',  acct('sellView', '/account/store/listings')),
-    r('analytics', '/analytics', acct('shopAnalyticsView', '/account/store/analytics')),
-    r('ads',       '/ads',       acct('adsView', '/account/store/ads')),
-    r('affiliate', '/affiliate', acct('affiliateView', '/account/affiliate')),
-    r('team',      '/team',      acct('teamView', '/account/team')),
-
-    /* Planning */
-    r('calendar',     '/calendar',     acct('agendaView', '/account/calendar')),
-    r('appointments', '/appointments', acct('apptView', '/account/appointments')),
+    /* Account (route batch 5): the eleven sections and the Account-owned tools, all under
+       /account and all private. Their parents climb to `me`, the Account root. */
+    ...ACCOUNT_SECTIONS.map(([key, title]) => r('account-' + key, '/account/' + key,
+      { world: 'account', parent: 'me', title })),
+    ...ACCOUNT_TOOLS.map(([name, sub, view, section, title, alias, extra]) => r(name, '/account/' + sub,
+      Object.assign({ world: 'account', view, parent: 'account-' + section, title, aliases: alias ? [alias] : [] }, extra || {}))),
 
     /* Entities. Posts are canonical under their author; the flat /post/:id is the
        legacy form the app upgrades once the author is known. */
@@ -213,9 +247,17 @@
     r('course',         '/course/:idslug',              { status: P, world: 'engine', params: { idslug: 'idslug' }, privacy: 'public', seo: 'index' }),
     r('newsletter',     '/newsletter/:idslug',          { status: P, world: 'engine', params: { idslug: 'idslug' }, privacy: 'public', seo: 'index' }),
     r('community',      '/communities/:id',             { status: P, world: 'engine', params: { id: 'int' }, privacy: 'public', seo: 'index' }),
-    r('account-section','/account/:section',            { status: P, world: 'account', parent: 'me',
-      params: { section: ['profile', 'money', 'selling', 'customers', 'marketing', 'jobs', 'library', 'planning', 'creating', 'ai', 'help'] } }),
+    /* PRIVATE DETAILS STAY PLANNED (route batch 5 audit): orders, wallet transactions,
+       invoices and quotes are keyed only by sequential SERIAL ids today, and a private
+       detail must not be addressable by an enumerable id. They go live only once each row
+       carries an opaque ref (a schema change, deliberately not part of a routing batch). */
     r('order-detail',   '/account/orders/:ref',         { status: P, world: 'account', params: { ref: 'slug' }, parent: 'orders' }),
+    r('store-order-detail', '/account/store/orders/:ref', { status: P, world: 'account', params: { ref: 'slug' }, parent: 'store-orders' }),
+    r('wallet-tx',      '/account/wallet/tx/:ref',      { status: P, world: 'account', params: { ref: 'slug' }, parent: 'wallet' }),
+    /* Approved Account destinations with no screen in the product yet: vacation mode is a
+       switch inside Manage store, and there is no Certified surface. */
+    r('store-pause',    '/account/store/pause',         { status: P, world: 'account', parent: 'store' }),
+    r('certified',      '/account/certified',           { status: P, world: 'account', parent: 'account-selling' }),
     r('live',           '/live/:id',                    { status: P, world: 'home', params: { id: 'slug' }, seo: 'noindex' }),
     r('media',          '/:username/post/:id/photo/:n', { status: P, world: 'home', params: { username: 'handle', id: 'int', n: 'int' },
                                                           parent: 'post', family: 'modal', seo: 'noindex' }),
@@ -413,6 +455,7 @@
   return {
     version: 1,
     ROUTES, PARAM_TYPES, SETTINGS_PAGES, SETTINGS_TREE, SETTINGS_LEAVES, PROFILE_SECTIONS, PARSE_DEFENSIVE, SERVER_ROOTS,
+    ACCOUNT_SECTIONS, ACCOUNT_TOOLS,
     NEAR_TERM, FILE_EXT_RE, NOTIF_TARGETS,
     get, match, build, splitPath, firstLiteral, liveRoutes,
     parseReserved, routeRoots, allocationReserved, usernameShapeError,
