@@ -37,7 +37,9 @@ function clientTables() {
   const ctx = {};
   vm.createContext(ctx);
   vm.runInContext(app + '\n' + mid + '\n' + res + '\n' +
-    'RESULT = JSON.stringify({ reserved: [...RESERVED_PATHS], routes: Object.keys(APP_ROUTES), ' +
+    // A key marked flat:false is NOT a root path: it lives only at /account/<acct> (route batch 5),
+    // whose root ('account') is what has to be reserved.
+    'RESULT = JSON.stringify({ reserved: [...RESERVED_PATHS], routes: Object.keys(APP_ROUTES).map((k) => (APP_ROUTES[k].flat === false ? \'account\' : k)), ' +
     'settings: SETTINGS_ROUTES, sections: PROFILE_SECTIONS, auth: AUTH_ROUTES, entities: ENTITY_ROUTES });', ctx);
   // Cross the realm boundary as JSON: arrays built inside the vm carry the vm's
   // own Array prototype, and deepStrictEqual compares prototypes — so even two

@@ -120,7 +120,7 @@ async function subSheet(p, label, openIt, sheetId) {
     const chain = await toWalletViaManageStore(p);
     say(chain.sellingOk, 'A1. Account -> Selling lists Manage store');
     say(chain.state.open.includes('walletView'), 'A2. Manage store -> Wallet & payouts opens the wallet', JSON.stringify(chain.state));
-    say(chain.state.path === '/wallet', 'A3. and the address is /wallet', chain.state.path);
+    say(chain.state.path === '/account/wallet', 'A3. and the address is /account/wallet (its Account address since route batch 5)', chain.state.path);
 
     /* ══ B. the top "Request" button - the one that was reported ══ */
     await subSheet(p, 'B. Request money', () => {

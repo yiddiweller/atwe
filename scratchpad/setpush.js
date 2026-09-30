@@ -87,7 +87,7 @@ const CHILDREN = [
      const r = b && [...b.querySelectorAll('.iset-row')].find((x) => (x.textContent || '').trim().startsWith('Devices & sessions'));
      if (!r) return false; r.click(); return true;
    }), 'security'],
-  ['Manage store', '/store', 'storeManageView',
+  ['Manage store', '/account/store', 'storeManageView',   // its Account address since route batch 5
    (p) => p.evaluate(() => {
      const r = [...document.querySelectorAll('#settingsOverlay .iset-row')].find((x) => /Manage store/.test(x.textContent || ''));
      if (!r) return false; r.click(); return true;

@@ -8516,9 +8516,10 @@ defined just above `acSetPath`). `acSetPath`, the 1874 Settings entries, `setBac
   so a Settings Back walks real history only when real history exists.
   **Its contract (route batch 4.1 audit): bookkeeping, never routing input.** It is read in
   ONE place, inside `AtweHistory`, and only as a boolean through `hasPrev()`; the number is
-  never followed, compared or used to pick a page. `hasPrev()` has exactly two callers —
-  `setBack` and `closeOverlay`'s walk-back — and both only choose between WALKING real
-  history (`history.back()`) and REPLACING to the registry parent. What renders comes from
+  never followed, compared or used to pick a page. `hasPrev()` has exactly three callers —
+  `setBack`, `acMeBack` (the Account section's Back, route batch 5) and `closeOverlay`'s
+  walk-back — and all three only choose between WALKING real history (`history.back()`) and
+  REPLACING to the registry parent. What renders comes from
   the URL + registry; the logical parent from the registry; so this is not a second
   navigation graph. It lives per entry, not in `sessionStorage`, because "is an Atwe entry
   behind THIS one" differs per entry and must survive Back/Forward and reload — a
@@ -8648,6 +8649,73 @@ page out of it, and the same address always rebuilds the same node from any star
   model; `setdeep.js --break` now cuts the batch-4 code. `route-registry.test.js` gained 7
   tests (the tree, parents, the opener binding, `/devices`, transient flows, malformed paths,
   no `history.state` Settings routing left).
+### Account canonical sections + tools (Route Audit batch 5)
+
+**The Account ROOT is still `/me`; its children already live under `/account/...`.** One
+root identity in the registry — the live `me` route, pattern `/me`, `next: '/account'` —
+and every section and tool names `me` (directly or through a section) as its logical
+parent. So the batch-8 world-root flip changes ONE pattern and nothing below it. **Do not
+write `/account` as the root, redirect `/me`, or touch native links before batch 8.**
+
+| address | what it is |
+|---|---|
+| `/account/<key>` | eleven sections: profile · money · selling · customers · marketing · jobs · library · planning · creating · ai · help — rendered INSIDE the Account page |
+| `/account/<tool…>` | 34 Account tools, each a routed overlay (Wallet, Orders, Manage store …) |
+| `/wallet`, `/store`, `/orders` … | the 25 flat addresses issued before batch 5 — **permanent aliases**, canonicalised to `/account/...` by REPLACE (the server 301 is batch 9) |
+
+- **One description, in the registry.** `public/atwe-routes.js` `ACCOUNT_SECTIONS` /
+  `ACCOUNT_TOOLS` generate every route (pattern, view, parent section, title, flat alias).
+  The app's `ACCOUNT_SECTION_IDS` binds each URL key to the page's own section id — two
+  differ on purpose (marketing is the page's `growth`, help is its `app`) — and each
+  `APP_ROUTES` tool line carries its `acct` subpath; `route-registry.test.js` holds both in
+  lock-step with the registry.
+- **`flat: false`** marks a tool that never had a flat URL (card, store/orders, coupons,
+  bundles, till, delivery, phone, verification, pro): no `/<key>` address and no new reserved
+  root. **`layout: false`** keeps those in the sheet presentation they always had.
+  **`sharedView`**: `/account/store/orders` is the Orders overlay on its Seller tab
+  (`acViewRouteKey` picks it from `AC._ordScope`; switching tab REPLACES the address).
+- **A tool's parent is the section whose ROW opens it in the live page**, not the shape of its
+  path: Sales & analytics and the Ads Manager are `/account/store/...` but live in Marketing;
+  My network, Pro and Verify identity live in Profile. `store/orders`, `coupons`, `bundles`
+  are reached from Manage store and parented by Selling.
+- **URL = destination; `_meSection` is not routing truth.** A section is what
+  `acMeShownSection()` reads off the rendered DOM (`#acMeBody[data-section]`), and the path
+  sync derives `/account/<key>` from THAT — the same way Settings derives its address from
+  `_setPage`. `_meSection` survives only as the page's memory of what it last drew (it
+  picks the slide direction). Nothing is read from or written to `history.state`.
+- **One push per step.** A section row, a tool row, Settings → Wallet / Manage store are
+  one push each; a Back/Forward restore or boot writes none. `acOpenAccountSection(meId)`
+  lands on a section from anywhere in ONE navigation (`_mePending`, consumed by
+  `acGoProfileHub` in the same task) — the drawer's Help uses it rather than the old
+  `appTab` + `setTimeout` pair that pushed twice.
+- **Account Back** (`acMeBack`, the section arrow and device Back): walk real history when
+  `AtweHistory.hasPrev()`, else go to the logical parent by REPLACE. A tool is a node of the
+  same kind in `closeOverlay`. **A DIRECT entry onto a tool** (`openDeepLink(r, {boot:true})`)
+  rebuilds the Account world with the tool's own section underneath, so its Back walks
+  tool → section → `/me`; a Back/Forward restore leaves the world alone (real history).
+- **Unknown `/account/<x>`** lands on the Account root with "That page doesn’t exist" — it
+  can never become a username (`account` is reserved) or silently render another page.
+- **Private details stay planned** (`order-detail`, `store-order-detail`, `wallet-tx`):
+  orders, wallet transactions, invoices and quotes are keyed only by SERIAL ids, and a
+  private detail must not be addressable by an enumerable id. They need an opaque ref — a
+  schema change, deliberately not in a routing batch. `/account/store/pause` (a switch inside
+  Manage store) and `/account/certified` (no surface) are planned too.
+- **Transient flows have no address**: send / request / add money, cash out, edit profile,
+  create listing / coupon / bundle, invoice and quote creation, rate buyer, returns, labels,
+  checkout. They open over their owner and the URL stays the owner's.
+- `SYSTEM_ROUTES` is unchanged (137): no new first segment. **Beta promotion needs the next
+  synchronized bump** of `ATWE_BUILD`, `sw.js` `CACHE` and `atwe-routes.js?v=`.
+
+Guarded by `scratchpad/route5.js` (owns its business fixture; 390 and 1440 full matrix +
+an 820 smoke, ~1040s). `--break` takes the section out of the path sync (a section leaves
+`/me` in the address bar); `--break=flat` puts the tools back on their flat addresses.
+**Three probe traps it hit, each of which reported a failure on working code:** `S` and
+`AC` are top-level bindings, NOT window properties — `window.S && S.user` never becomes
+true, so a wait on it burns its whole timeout on every load (it is why this probe first
+ran at 5s a step; `setroutes`/`histv2` still wait on it); **`history.length` is capped at
+50** by the browser, so after a few dozen steps "one entry was added" reads as zero — use
+the entry's own `idx` and the NavEvent log; and a boot restores the LAST world used, so
+"entering Account from another world" must switch to that world in-app first.
 
 ## Search & typeahead
 
