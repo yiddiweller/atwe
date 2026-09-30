@@ -38,9 +38,10 @@ const emitted = new Set(
   [...server.matchAll(/notify\([^,]+,[^,]+,\s*'([a-z_]+)'/g)].map(m => m[1])
    .concat([...server.matchAll(/notifySelf\([^,]+,\s*'([a-z_]+)'/g)].map(m => m[1])));
 
-// what the client routes: the is* boolean pile, the NOTIF_GO table, and the two
-// families matched by regex/array rather than by ===.
-const row = client.slice(client.indexOf('const NOTIF_GO = {'), client.indexOf('const snip = isJob'));
+// what the client routes (route batch 6): ONE resolver, routeFor(), and its destination
+// table NOTIF_DEST. The resolver matches types by === and by arrays passed to
+// .includes(t); the table by its keys.
+const row = client.slice(client.indexOf('const NOTIF_DEST = {'), client.indexOf('function acNotifPath('));
 /* THREE SOURCES, EACH NAMED — never a blanket scan for quoted words. The first version
    swept /'([a-z_]+)'/ over the whole block, which counted 'sent', 'host' and 'received'
    as notification types and therefore reported a type as ROUTED after its row had been
@@ -49,19 +50,19 @@ const row = client.slice(client.indexOf('const NOTIF_GO = {'), client.indexOf('c
    under-counts it — this repo has recorded the second shape four times and this is the
    first of the first. */
 const routed = new Set([
-  // 1. the `is*` boolean pile
-  ...[...row.matchAll(/n\.type === '([a-z_]+)'/g)].map(m => m[1]),
-  // 2. the NOTIF_GO table's own keys — NOT line-anchored, because the table writes
+  // 1. routeFor's own `t === '...'` matches
+  ...[...row.matchAll(/\bt === '([a-z_]+)'/g)].map(m => m[1]),
+  // 2. the NOTIF_DEST table's own keys — NOT line-anchored, because the table writes
   //    several keys per line and /^\s*.../gm silently counted only the first of each.
-  ...[...(row.slice(row.indexOf('const NOTIF_GO = {'),
-                    row.indexOf('};', row.indexOf('const NOTIF_GO = {'))))
+  ...[...(row.slice(row.indexOf('const NOTIF_DEST = {'),
+                    row.indexOf('};', row.indexOf('const NOTIF_DEST = {'))))
        .matchAll(/([a-z_]+)\s*:\s*['"]/g)].map(m => m[1]),
-  // 3. the one family matched by an array rather than by ===
-  ...[...(row.match(/isOrderN = \[(.*?)\]/s) || ['',''])[1].matchAll(/'([a-z_]+)'/g)].map(m => m[1]),
+  // 3. the families matched by an array: [ ... ].includes(t)
+  ...[...row.matchAll(/\[([^\]]*)\]\.includes\(t\)/g)].flatMap(m => [...m[1].matchAll(/'([a-z_]+)'/g)].map(x => x[1])),
 ]);
 /* THE POST/PROFILE FALLBACK IS THE RIGHT ANSWER FOR THESE, and saying so out loud is the
    point: a `like` should open the post that was liked and a `follow` should open the
-   person who followed you, so neither needs a row in NOTIF_GO. They are listed here by
+   person who followed you, so neither needs a row in NOTIF_DEST. They are listed here by
    name rather than left to fall out of a loose regex, so that removing one from the
    client still turns this check red. */
 const FALLBACK_OK = new Set(['like','reply','repost','post','follow','profile_update',
@@ -79,17 +80,26 @@ ok(orphan.length === 0,
 
 // The table must not rot in the other direction either — a row for a type nobody sends
 // is dead weight that reads as coverage.
-const table = client.slice(client.indexOf('const NOTIF_GO = {'), client.indexOf('};', client.indexOf('const NOTIF_GO = {')));
-const keys = [...table.matchAll(/^\s*([a-z_]+):/gm)].map(m => m[1]);
+const table = client.slice(client.indexOf('const NOTIF_DEST = {'), client.indexOf('};', client.indexOf('const NOTIF_DEST = {')));
+const keys = [...table.matchAll(/([a-z_]+)\s*:\s*['"]/g)].map(m => m[1]);
 const dead = keys.filter(k => !emitted.has(k));
-ok(dead.length === 0, `every NOTIF_GO row is a type the server really sends (${keys.length} rows)`, dead.join(' '));
+ok(dead.length === 0, `every NOTIF_DEST row is a type the server really sends (${keys.length} rows)`, dead.join(' '));
 
-// Every destination must name a function that exists — a route to nothing is worse
-// than no route, because it looks handled.
+// Every destination must be real — a route to nothing is worse than no route, because it
+// looks handled. A '@key' must be a route the app knows; an opener a function that exists.
 const fns = new Set([...client.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]));
-const missing = [...new Set([...table.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]))]
-  .filter(n => n !== 'DETAIL' && !fns.has(n));
-ok(missing.length === 0, 'every destination in the table is a function that exists', missing.join(' '));
+const missing = [...new Set([...row.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]))]
+  .filter(n => /^(ac|open|set|app)[A-Z]/.test(n) && !fns.has(n));
+ok(missing.length === 0, 'every opener named by routeFor is a function that exists', missing.join(' '));
+const appRoutes = client.slice(client.indexOf('const APP_ROUTES = {'), client.indexOf('const SETTINGS_ROUTES'));
+const appKeys = new Set([...appRoutes.matchAll(/^\s*'([a-z-]*)':/gm)].map(m => m[1]));
+const atKeys = [...new Set([...table.matchAll(/'@([a-z-]+)'/g)].map(m => m[1]))];
+const badAt = atKeys.filter(k => !appKeys.has(k));
+ok(atKeys.length > 5 && badAt.length === 0, `every routed destination ('@key', ${atKeys.length}) is a real route`, badAt.join(' '));
+const rKeys = [...new Set([...row.matchAll(/\bR\('([a-z-]+)'/g)].map(m => m[1]))];
+const ENTITY = ['post', 'profile', 'listing', 'job', 'event', 'search'];
+const badR = rKeys.filter(k => !appKeys.has(k) && !ENTITY.includes(k));
+ok(badR.length === 0, `every route routeFor returns can be built (${rKeys.length})`, badR.join(' '));
 
 // ── PART 2 · drive real rows ────────────────────────────────────────────────
 (async () => {
