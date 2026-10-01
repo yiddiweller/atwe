@@ -8804,6 +8804,78 @@ traps it hit:** `idx` is ONE monotonic sequence per tab, so after a Back the nex
 `idx + 1` — assert the new entry's `prev` is the one you left; and `AtweHistory.log` is a ring
 of 60, so counting NavEvents by its length stops working — keep an unbounded listener.
 
+### Engine namespace + typed entity permalinks (Route Audit batch 7)
+
+**Engine's browse destinations are canonical under `/engine/<key>`** — marketplace, services,
+jobs, events, businesses, courses, newsletters, communities, showcase. Each flat `/<key>` it was
+issued at is a **permanent alias**, canonicalised by REPLACE (the server 301 is batch 9). In the
+app, `APP_ROUTES` marks them `engine: true` and `acRouteKeyPath` builds the canonical through the
+registry. **The Engine ROOT is still `/search`** (`next: '/engine'`): batch 8 owns that flip. An
+unknown `/engine/<x>` lands on the Engine root with "That page doesn't exist" and can never
+become a username.
+
+**Public entities have SHORT TYPED permalinks**, never nested under `/engine`:
+
+| address | parent (direct-entry fallback) |
+|---|---|
+| `/listing/{id}-{slug}` | `/engine/marketplace` |
+| `/service/{id}-{slug}` | `/engine/services` |
+| `/job/{id}-{slug}` | `/engine/jobs` |
+| `/event/{id}-{slug}` | `/engine/events` |
+| `/course/{id}-{slug}` | `/engine/courses` |
+| `/newsletter/{id}-{slug}` | `/engine/newsletters` |
+| `/newsletter/{id}/issue/{issueId}` | its newsletter |
+| `/communities/{id}` (no slug, per the approved table) | `/engine/communities` |
+
+- **The id is authoritative, the slug decorative.** `/listing/12`, `/listing/12-anything` and
+  `/listing/012-Old-Name` all open listing 12 and are corrected to its CURRENT canonical by
+  REPLACE once it loads. `/listing`, `/job`, `/event` keep tolerating a trailing segment (they
+  always did); the new types do not.
+- **ONE slug rule, in the registry**: `ATWE_ROUTES.slugify / idSlug / parseIdSlug`. NFKD,
+  accents stripped, `&` → `and`, apostrophes dropped, everything else → `-`, cut at a word
+  under 60. A title with no Latin letters or digits has an EMPTY slug and the canonical is the
+  bare id. Nothing is stored — a rename keeps the id and simply has a new canonical slug. The
+  app builds every entity address through `acEntityPath(type, id, title)` (cards, share links,
+  notifications); it has no slug function of its own, and a test fails if it grows one.
+- **One in-app open = ONE push of the canonical, ONE NavEvent.** The title (so the slug) is
+  only known once the entity loads, so the sheet WAITS (`acEntityOwn` sets `_ownWait`): while
+  it waits `acSyncPath` writes nothing and keeps the push it was asked for on the sheet;
+  `acEntitySettle` then owns the canonical and pushes it once. A waiting sheet owns no address,
+  so Back simply dismisses it; a failed or slow (4s) load settles on the bare id. A sheet whose
+  address is ALREADY in the bar (direct entry, Back/Forward, a notification's `acNavGo`) owns it
+  at once and only REPLACES if the slug was wrong. Notifications carry the title when the
+  payload has one (`productName`, `jobTitle`, `eventTitle`), so they push the canonical directly.
+- **Back is batch 6, unchanged**: real history wins; a direct entry's App Back REPLACES to the
+  registry parent (`acLogicalParent`, which also maps a child's `id` onto its parent's
+  `idslug`, so an issue climbs to its newsletter). No per-type parent memory exists, and a test
+  fails if one appears.
+
+**Deliberately NOT routed in batch 7, each for a recorded reason:**
+- **`/engine/search?q=&scope=`** — the live app has no committed search-results state. Results
+  are a live function of the text box (debounced per keystroke), and the jobs/services/companies
+  scopes render with no query at all, so "Engine landing" vs "search results" is not a structural
+  distinction an address can name without a brittle heuristic. Search stays at `/search`;
+  scope chips and typing write no history. Founder/product decision needed.
+- **`/engine/workers`** — "Find workers" is the Jobs board's other side (`AC._jobBoard`), not a
+  standalone destination. Planned only.
+- **Showcase detail** — the approved audit gives BOTH `/showcase/{id}` (§engine table, route
+  tree) and `{id}-{slug}` (§26 identifier table), and nothing in the repository settles it. Left
+  unrouted for founder review; `/engine/showcase` (browse) is live.
+- Business identity stays `/{username}`; the cart stays the private `/cart` modal; checkout has
+  no address; Atwe AI shopping stays a handoff into `/ai`.
+
+**Reserved words:** `SYSTEM_ROUTES` (the DB seed) goes **137 → 140** — `service`, `course`,
+`newsletter` became live roots (all three were already in the new-username allocation set, so no
+new member could have taken them since batch 1). An EXISTING member holding one of those three
+handles loses the reachability of atwe.com/<that word>; **the production collision gate
+(`tools/reserved-collisions.js`) is mandatory before production** and was not run here.
+
+Guarded by `scratchpad/route7.js` (owns its fixture: two businesses and one of every entity,
+titles chosen to stress the slug rule; 390 + 1440 full matrix + 820 smoke) and 9 batch-7 tests in
+`test/route-registry.test.js`. Self-tests: `--break=flat` (a flat URL stops canonicalising),
+`--break=slug` (a slug correction pushes), `--break=parent` (a listing's parent becomes Services).
+`route3`, `route6` and `navhandoff` were updated from the old flat addresses.
+
 ## Search & typeahead
 
 **Two separate things, one rule each.**

@@ -149,18 +149,20 @@ function cases(F) {
     el.click(); return true;
   }, [sel, within || null]);
 
-  /* Cases 4 and 5 run from a LISTING sheet, which owns its own address since route
+  /* Route batch 7: Engine browse is canonical under /engine, and a listing at its
+     `{id}-{slug}` (the fixture's product is "Sourdough").
+     Cases 4 and 5 run from a LISTING sheet, which owns its own address since route
      batch 3 (/listing/<id>). They used to expect /marketplace here — the B2 bug itself:
      the browse surface's queued sync overwrote the sheet's URL. The listing is the
      member's real parent, so it is the address the case must start on and return to. */
   return [
-    ['1. Business directory -> seller profile', 'bizDirectory', '/businesses', 'bizDirectory', openDirectory,
+    ['1. Business directory -> seller profile', 'bizDirectory', '/engine/businesses', 'bizDirectory', openDirectory,
       click('.ac-item', '#bizDirectoryBody'), 'acProfileScreen'],
     ['2. Wallet -> transaction -> peer profile', 'walletView', '/account/wallet', 'walletTxView', openWalletTx,
       click('.wtxd-peer', '#walletTxView'), 'acProfileScreen'],
-    ['3. Marketplace card head -> seller profile', 'marketplaceView', '/marketplace', 'marketplaceView', openMarket,
+    ['3. Marketplace card head -> seller profile', 'marketplaceView', '/engine/marketplace', 'marketplaceView', openMarket,
       click('.mkt-head', '#marketplaceView'), 'acProfileScreen'],
-    ['4. Listing "Visit store" -> seller profile', 'marketplaceView', '/listing/' + F.product, 'listingView', openListing,
+    ['4. Listing "Visit store" -> seller profile', 'marketplaceView', '/listing/' + F.product + '-sourdough', 'listingView', openListing,
       // selected by its VISIBLE TEXT, not by its onclick: an onclick selector stops
       // matching under --break and the case would report "could not drive" instead of
       // failing, which is the difference between a self-test and a blind spot.
@@ -168,14 +170,14 @@ function cases(F) {
         const b = [...document.querySelectorAll('#listingView .ac-pill-btn')].find((x) => /^Visit\b/.test((x.textContent || '').trim()));
         if (!b) return false; b.click(); return true;
       }), 'acProfileScreen'],
-    ['5. Listing detail head -> seller profile', 'marketplaceView', '/listing/' + F.product, 'listingView', openListing,
+    ['5. Listing detail head -> seller profile', 'marketplaceView', '/listing/' + F.product + '-sourdough', 'listingView', openListing,
       (p) => p.evaluate(() => {
         const v = document.getElementById('listingView');
         const h = v && v.querySelector('.mkt-detail-head');
         if (!h || v.classList.contains('hidden')) return false;
         h.click(); return true;
       }), 'acProfileScreen'],
-    ['6. Services -> message the provider', 'servicesView', '/services', 'servicesView', openServices,
+    ['6. Services -> message the provider', 'servicesView', '/engine/services', 'servicesView', openServices,
       (p) => p.evaluate((id) => { acMessageProvider(id); return true; }, F.peer.id), 'acThreadScreen'],
     ['7. Order -> message the other party', 'ordersView', '/account/orders', 'orderView', openOrder,
       click('[onclick*="acOpenChat"]', '#orderView'), 'acThreadScreen'],
@@ -308,7 +310,7 @@ async function marketplaceParent(browser, u) {
     await p.waitForTimeout(2600);
     const s2 = await state(p);
     say(s2.open.includes('marketplaceView'), `${tag} MARKETPLACE PROFILE BACK RESTORES MARKETPLACE`, JSON.stringify(s2));
-    say(s2.path === '/marketplace', `${tag} MARKETPLACE PROFILE BACK restores /marketplace`, s2.path);
+    say(s2.path === '/engine/marketplace', `${tag} MARKETPLACE PROFILE BACK restores /engine/marketplace`, s2.path);
     say(s2.tab === 'search', `${tag} MARKETPLACE PROFILE BACK keeps the Engine world`, 'saw ' + s2.tab);
     say(!s2.homeVisible, `${tag} MARKETPLACE PROFILE BACK shows NO Home feed (no Engine/Home hybrid)`, JSON.stringify(s2.navActive));
     say(s2.screen !== 'acProfileScreen', `${tag} MARKETPLACE PROFILE BACK leaves the profile`);
