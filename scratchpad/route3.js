@@ -15,6 +15,7 @@
  */
 'use strict';
 const path = require('path');
+const REG = require(path.join(__dirname, '..', 'public', 'atwe-routes.js'));
 const QA = require(path.join(__dirname, 'qa-fixture.js'));
 const { chromium } = require(process.env.PW_SCRATCH
   ? path.join(process.env.PW_SCRATCH, 'node_modules/playwright-core')
@@ -30,8 +31,12 @@ const say = (ok, what, extra) => { ok ? pass++ : fail++; console.log((ok ? '  ok
 
 /* --break: the shipped bugs, restored byte-for-byte from build 1874. */
 const OLD = [
-  ['b2', `  document.getElementById('listingView')._ownPath = acRoutePath('listing', { id }, '/listing/' + id);
-  showOverlay('listingView');`, `  showOverlay('listingView');
+  /* (route batch 7: the listing opener now owns its address through acEntityOwn; the
+     restored bug is the same B2 — no owned address, a plain replace that the browse
+     surface's sync then overwrites.) */
+  ['b2', `  const _lv = document.getElementById('listingView'), _tok = acEntityOwn(_lv, 'listing', id);
+  showOverlay('listingView');`, `  const _lv = document.getElementById('listingView'), _tok = null; _lv._ownPath = null;
+  showOverlay('listingView');
   acSetPath('/listing/' + id); // shareable + reload-safe listing URL`],
   ['b1', `if (handle) acSetPath(acRoutePath('profile', { username: handle }, '/' + handle), { push: !_histRestoring });`,
    `if (handle) acSetPath('/' + handle);`],
@@ -126,7 +131,8 @@ async function entityJourney(browser, F, vp, tag, spec) {
   await p.waitForTimeout(1600);   // long enough for any queued parent sync to have landed
   const b = await snap(p);
   const evs = await evSince(p, a.events);
-  const want = '/' + spec.kind + '/' + spec.id;
+  // Route batch 7: the canonical address carries the registry's `{id}-{slug}`.
+  const want = '/' + spec.kind + '/' + REG.idSlug(spec.id, spec.title);
   say(b.path === want && b[spec.flag], tag + ' ' + spec.label + ': opening it shows ' + want + ' and it stays there', [b.path, b[spec.flag]]);
   say(b.len === a.len + 1, tag + ' ' + spec.label + ': the open adds exactly ONE history entry', [a.len, b.len]);
   const nav = evs.filter((e) => e.kind === 'push' || e.kind === 'root-change' || e.kind === 'replace');
@@ -151,8 +157,8 @@ async function entityJourney(browser, F, vp, tag, spec) {
   await ctx.close();
 }
 
-async function directEntity(browser, F, vp, tag, kind, id, flag) {
-  const want = '/' + kind + '/' + id;
+async function directEntity(browser, F, vp, tag, kind, id, flag, title) {
+  const want = '/' + kind + '/' + REG.idSlug(id, title);   // route batch 7: the canonical form
   const { ctx, p, errs } = await freshPage(browser, F.viewer.token, vp, want);
   await p.waitForTimeout(1600);
   const a = await snap(p);
@@ -257,22 +263,22 @@ async function run(browser, F, vp) {
     say(a.scr === 'acProfileScreen' && !a.mkt, tag + ' 7b. Marketplace -> seller profile (the real control)', [a.scr, a.path]);
     await back(p);
     const b = await snap(p);
-    say(b.path === '/marketplace' && b.mkt, tag + ' 7c. browser Back reopens the Marketplace on /marketplace', [b.path, b.mkt]);
+    say(b.path === '/engine/marketplace' && b.mkt, tag + ' 7c. browser Back reopens the Marketplace on /engine/marketplace', [b.path, b.mkt]);
     say(b.scr !== 'acProfileScreen', tag + ' 7d. ...with the world\'s screen underneath, not the profile', b.scr);
     say(errs.length === 0, tag + ' 7e. no JS errors', errs.slice(0, 2));
     await ctx.close();
   }
 
   /* 7-16. listing, job, event from their browse surfaces */
-  await entityJourney(browser, F, vp, tag, { label: 'listing', kind: 'listing', id: F.productId, flag: 'listing', browsePath: '/marketplace',
+  await entityJourney(browser, F, vp, tag, { label: 'listing', kind: 'listing', id: F.productId, flag: 'listing', browsePath: '/engine/marketplace', title: 'R3 chair',
     openBrowse: () => acOpenMarketplace(), openEntity: (id) => acOpenListing(id) });
-  await entityJourney(browser, F, vp, tag, { label: 'job', kind: 'job', id: F.jobId, flag: 'job', browsePath: '/jobs',
+  await entityJourney(browser, F, vp, tag, { label: 'job', kind: 'job', id: F.jobId, flag: 'job', browsePath: '/engine/jobs', title: 'R3 designer',
     openBrowse: () => acOpenJobsView(), openEntity: (id) => acOpenJob(id) });
-  await entityJourney(browser, F, vp, tag, { label: 'event', kind: 'event', id: F.eventId, flag: 'event', browsePath: '/events',
+  await entityJourney(browser, F, vp, tag, { label: 'event', kind: 'event', id: F.eventId, flag: 'event', browsePath: '/engine/events', title: 'R3 meetup',
     openBrowse: () => acOpenEvents(), openEntity: (id) => acOpenEvent(id) });
-  await directEntity(browser, F, vp, tag, 'listing', F.productId, 'listing');
-  await directEntity(browser, F, vp, tag, 'job', F.jobId, 'job');
-  await directEntity(browser, F, vp, tag, 'event', F.eventId, 'event');
+  await directEntity(browser, F, vp, tag, 'listing', F.productId, 'listing', 'R3 chair');
+  await directEntity(browser, F, vp, tag, 'job', F.jobId, 'job', 'R3 designer');
+  await directEntity(browser, F, vp, tag, 'event', F.eventId, 'event', 'R3 meetup');
 
   /* 17/18. /go is the shell, a real username still resolves, an unknown one still says so */
   for (const g of ['/go', '/GO', '/go?check=1']) {

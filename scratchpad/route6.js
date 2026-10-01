@@ -21,6 +21,7 @@
  */
 'use strict';
 const path = require('path');
+const REG = require(path.join(__dirname, '..', 'public', 'atwe-routes.js'));
 const QA = require(path.join(__dirname, 'qa-fixture.js'));
 const { chromium } = require(process.env.PW_SCRATCH
   ? path.join(process.env.PW_SCRATCH, 'node_modules/playwright-core')
@@ -188,8 +189,8 @@ async function realHistory(p, errs, tag, fx) {
     { name: 'Manage store', act: () => { closeSettings(true); acOpenStoreManage(); }, want: '/account/store', check: (s) => s.top === 'storeManageView' },
   ]);
   await chain(p, tag, 'Engine -> Marketplace -> listing', () => appTab('search'), [
-    { name: 'Marketplace', act: () => acOpenMarketplace(), want: '/marketplace', backCheck: (s) => s.screen === 'acSearchScreen' && s.top === null },
-    { name: 'listing', act: (id) => acOpenListing(id), arg: LID, want: '/listing/' + LID, check: (s) => s.top === 'listingView', backCheck: (s) => s.top === 'marketplaceView' },
+    { name: 'Marketplace', act: () => acOpenMarketplace(), want: '/engine/marketplace', backCheck: (s) => s.screen === 'acSearchScreen' && s.top === null },
+    { name: 'listing', act: (id) => acOpenListing(id), arg: LID, want: '/listing/' + REG.idSlug(LID, 'route6 listing'), check: (s) => s.top === 'listingView', backCheck: (s) => s.top === 'marketplaceView' },
   ]);
   await chain(p, tag, 'circle -> post', () => appTab('home'), [
     { name: 'circle', act: (u) => acOpenCircleByUsername(u), arg: fx.circle, want: '/circle/' + fx.circle, check: (s) => s.screen === 'acCircleScreen', backCheck: (s) => s.screen === 'acHomeScreen' },
@@ -215,7 +216,7 @@ async function notifications(p, errs, tag, fx) {
     ['follow', '/' + fx.b.username, (s) => s.screen === 'acProfileScreen'],
     ['like', '/' + fx.a.username + '/post/' + fx.ownPostId, (s) => s.screen === 'acPostViewScreen'],
     ['payment', '/account/wallet', (s) => s.top === 'walletView'],
-    ['price_drop', '/listing/' + fx.listingId, (s) => s.top === 'listingView'],
+    ['price_drop', '/listing/' + REG.idSlug(fx.listingId, 'route6 listing'), (s) => s.top === 'listingView'],
   ];
   for (const [type, want, check] of cases) {
     await open();
@@ -280,7 +281,7 @@ async function contextual(p, errs, tag, fx) {
     say(s.path === want && check(s) && s.coherent, `${tag} ${origin} -> profile -> Back returns to ${origin}`, { path: s.path, tab: s.tab, screen: s.screen, why: s.why });
   }
   for (const [origin, start, want, check] of [
-    ['Marketplace', () => { appTab('search'); acOpenMarketplace(); }, '/marketplace', (s) => s.top === 'marketplaceView'],
+    ['Marketplace', () => { appTab('search'); acOpenMarketplace(); }, '/engine/marketplace', (s) => s.top === 'marketplaceView'],
     ['Settings', () => { appTab('home'); openSettings('premium'); }, '/settings/premium', (s) => s.top === 'settingsOverlay'],
   ]) {
     await p.evaluate(start); await settle(p, 1400);
@@ -406,7 +407,7 @@ async function mixedState(p, errs, tag, fx) {
   say(s.path === '/' + fx.b.username && s.coherent, `${tag} Marketplace -> seller is the seller's profile`, s.why);
   await p.evaluate(() => acProfileBack()); await settle(p, 1500);
   s = await snap(p);
-  say(s.path === '/marketplace' && s.top === 'marketplaceView' && s.tab === 'search' && s.screen === 'acSearchScreen' && s.coherent,
+  say(s.path === '/engine/marketplace' && s.top === 'marketplaceView' && s.tab === 'search' && s.screen === 'acSearchScreen' && s.coherent,
     `${tag} Back: Marketplace over Engine, Engine lit (no Engine chrome over Home)`, { path: s.path, top: s.top, tab: s.tab, screen: s.screen, why: s.why });
   await fwd(p);
   s = await snap(p);
@@ -441,10 +442,12 @@ async function directEntries(browser, token, vp, tag, fx) {
     ['Settings leaf', '/settings/security/devices', ['/settings/security', '/settings']],
     ['Account section', '/account/money', ['/me']],
     ['Account tool', '/account/wallet', ['/account/money', '/me']],
-    ['Marketplace', '/marketplace', ['/search']],
-    ['listing', '/listing/' + fx.listingId, [null]],
-    ['job', '/job/' + fx.jobId, [null]],
-    ['event', '/event/' + fx.eventId, [null]],
+    /* Route batch 7: Engine browse is /engine/<x>, an entity is `{id}-{slug}` and its
+       direct-entry parent is its browse surface (it used to be the world under the layer). */
+    ['Marketplace', '/engine/marketplace', ['/search']],
+    ['listing', '/listing/' + REG.idSlug(fx.listingId, 'route6 listing'), ['/engine/marketplace', '/search']],
+    ['job', '/job/' + REG.idSlug(fx.jobId, 'route6 job'), ['/engine/jobs', '/search']],
+    ['event', '/event/' + REG.idSlug(fx.eventId, 'route6 event'), ['/engine/events', '/search']],
     ['/ai', '/ai', ['/']],
   ];
   for (const [name, url, wants] of cases) {

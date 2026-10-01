@@ -62,9 +62,13 @@ function appName(d) {
     // Route batch 5: an Account section is its own route; an unknown /account/… matches nothing.
     case 'account': return d.unknown ? null : 'account-' + d.section;
     case 'profile': return d.section ? 'profile-section' : 'profile';
-    default: return d.type; // post, job, listing, event, group, circle
+    // Route batch 7: an unknown /engine/<x> matches nothing; an issue is its own route.
+    case 'engine': return null;
+    case 'nlissue': return 'newsletter-issue';
+    default: return d.type; // post, job, listing, event, service, course, newsletter, community, group, circle
   }
 }
+const TYPED = ['listing', 'job', 'event', 'service', 'course', 'newsletter'];
 function appParams(d) {
   if (!d) return {};
   const out = {};
@@ -74,6 +78,9 @@ function appParams(d) {
     if (d.type === 'group' || d.type === 'circle') out.slug = String(d.username);
     else out.username = String(d.username).toLowerCase();
   }
+  // Route batch 7: a typed entity's segment is `{id}-{slug}`; an issue names its newsletter.
+  if (d.type === 'nlissue') return { id: String(d.nl), issue: String(d.id) };
+  if (TYPED.includes(d.type)) return { idslug: String(d.id) + (d.slug === null || d.slug === undefined ? '' : '-' + String(d.slug).toLowerCase()) };
   if (d.id !== undefined) out.id = String(d.id);
   // A profile's /<username>/<section> is a parameter; an Account section is its own route.
   if (d.section !== undefined && d.type === 'profile') out.section = d.section;
@@ -163,7 +170,8 @@ test('builders produce valid paths that parse straight back (round trip)', () =>
 test('a builder refuses planned routes and bad parameters instead of inventing a URL', () => {
   assert.throws(() => R.build('beam-dm', { username: 'john' }), /planned/);
   assert.throws(() => R.build('listing', {}), /missing id/);
-  assert.throws(() => R.build('listing', { id: 'abc' }), /invalid id/);
+  assert.throws(() => R.build('listing', { idslug: 'abc' }), /invalid idslug/);
+  assert.throws(() => R.build('listing', { idslug: 'oak-chair' }), /invalid idslug/);
   assert.throws(() => R.build('profile-section', { username: 'john', section: 'nope' }), /invalid section/);
   assert.throws(() => R.build('nope'), /unknown route/);
 });
@@ -199,6 +207,7 @@ function corpus() {
   let s = 1874;
   const rnd = (n) => { s = (s * 1103515245 + 12345) & 0x7fffffff; return (s >>> 16) % n; };
   const pieces = ['post', 'job', 'listing', 'event', 'group', 'circle', 'company', 'settings', 'security',
+    'engine', 'marketplace', 'service', 'course', 'newsletter', 'issue', 'communities', 'showcase', '12-oak', '7-Café-&-co', '0-', 'search', 'workers',
     'media', 'about', 'john', 'Jane.Doe', '@bob', '12', 'x', '0', 'wallet', 'login', 'photo', 'MEDIA', '-a', 'a-'];
   for (let k = 0; k < 900; k++) {
     const n = 1 + rnd(4);
@@ -512,4 +521,143 @@ test('batch 5: private details stay unrouted (no sequential ids made addressable
 test('batch 5: the Account root flip stays for batch 8 — nothing in the app routes /me to /account', () => {
   assert.ok(/WORLD_PATH = \{[^}]*profile: '\/me'/.test(html), 'the Account world still lives at /me');
   assert.ok(!/acSetPath\('\/account'[,)]/.test(html), 'something writes the bare /account');
+});
+
+/* ── Route batch 7 — Engine browse under /engine, typed public entity permalinks ───────── */
+const ENGINE_BROWSE = ['marketplace', 'services', 'jobs', 'events', 'businesses', 'courses', 'newsletters', 'communities', 'showcase'];
+const ENTITY_PARENT = { listing: 'marketplace', service: 'services', job: 'jobs', event: 'events', course: 'courses', newsletter: 'newsletters' };
+
+test('batch 7: every Engine browse destination is canonical at /engine/<key>, its flat URL a permanent alias', () => {
+  for (const k of ENGINE_BROWSE) {
+    const r = R.get(k);
+    assert.ok(r && r.status === 'live', k);
+    assert.strictEqual(r.pattern, '/engine/' + k, k + ' canonical');
+    assert.deepStrictEqual(r.aliases, ['/' + k], k + ' keeps its flat alias');
+    assert.strictEqual(r.next, null, k + ' has arrived');
+    assert.strictEqual(r.world, 'engine');
+    assert.strictEqual(r.parent, 'search', k + ' climbs to the Engine root');
+    assert.strictEqual(R.build(k), '/engine/' + k);
+    assert.deepStrictEqual(R.match('/engine/' + k), { name: k, params: {}, alias: false });
+    assert.deepStrictEqual(R.match('/' + k), { name: k, params: {}, alias: true });
+    assert.deepStrictEqual(APP.parse('/engine/' + k), { type: 'route', key: k });
+    assert.deepStrictEqual(APP.parse('/ENGINE/' + k.toUpperCase()), { type: 'route', key: k }, 'case-insensitive');
+    assert.deepStrictEqual(APP.parse('/' + k), { type: 'route', key: k }, 'the flat alias still opens it');
+    assert.strictEqual(APP.app[k].engine, true, k + ' carries engine:true in APP_ROUTES');
+    assert.ok(APP.reserved.includes(k), k + ' stays reserved');
+  }
+  assert.ok(APP.reserved.includes('engine'));
+});
+
+test('batch 7: the Engine ROOT is still /search — batch 8 owns that flip', () => {
+  const s = R.get('search');
+  assert.strictEqual(s.pattern, '/search');
+  assert.strictEqual(s.next, '/engine', 'the flip is recorded, not performed');
+  assert.deepStrictEqual(s.aliases, ['/engine']);
+  assert.ok(/WORLD_PATH = \{[^}]*search: '\/search'/.test(html), 'the Engine world still lives at /search');
+  assert.ok(!/acSetPath\('\/engine'[,)]/.test(html), 'something writes the bare /engine');
+});
+
+test('batch 7: what stayed planned is not reachable, and never becomes a profile', () => {
+  for (const n of ['engine-search', 'engine-workers']) {
+    assert.strictEqual(R.get(n).status, 'planned', n);
+    assert.throws(() => R.build(n), /planned/);
+  }
+  for (const p of ['/engine/search', '/engine/workers', '/engine/nope', '/engine/marketplace/x']) {
+    assert.strictEqual(R.match(p), null, p + ' must not match');
+    const d = APP.parse(p);
+    assert.ok(!d || (d.type === 'engine' && d.unknown), p + ' parsed as ' + JSON.stringify(d));
+  }
+  // Showcase DETAIL: the approved audit gives two shapes; nothing here picks one.
+  assert.ok(!R.ROUTES.some((x) => /^\/showcase\/:/.test(x.pattern)), 'a Showcase detail route was invented');
+  for (const p of ['/showcase/3', '/showcase/3-sunset']) { assert.strictEqual(R.match(p), null, p); assert.strictEqual(APP.parse(p), null, p); }
+});
+
+test('batch 7: typed public entities are short, live, public, and parented by their browse surface', () => {
+  for (const [t, parent] of Object.entries(ENTITY_PARENT)) {
+    const r = R.get(t);
+    assert.ok(r && r.status === 'live', t);
+    assert.strictEqual(r.pattern, '/' + t + '/:idslug', t + ' is a short typed permalink, not nested under /engine');
+    assert.strictEqual(r.parent, parent, t + ' direct-entry parent');
+    assert.strictEqual(r.privacy, 'public'); assert.strictEqual(r.seo, 'index');
+    assert.strictEqual(R.build(t, { idslug: R.idSlug(12, 'Oak Chair') }), '/' + t + '/12-oak-chair');
+    assert.strictEqual(R.match('/' + t + '/12-oak-chair').name, t);
+    assert.deepStrictEqual(APP.parse('/' + t + '/12-oak-chair'), { type: t, id: 12, slug: 'oak-chair' });
+    assert.deepStrictEqual(APP.parse('/' + t + '/12'), { type: t, id: 12, slug: null }, t + ' bare id');
+    assert.ok(APP.reserved.includes(t), t + ' prefix reserved');
+  }
+  const issue = R.get('newsletter-issue');
+  assert.strictEqual(issue.pattern, '/newsletter/:id/issue/:issue');
+  assert.strictEqual(issue.parent, 'newsletter');
+  assert.deepStrictEqual(APP.parse('/newsletter/5/issue/9'), { type: 'nlissue', id: 9, nl: 5 });
+  const comm = R.get('community');
+  assert.strictEqual(comm.status, 'live'); assert.strictEqual(comm.pattern, '/communities/:id'); assert.strictEqual(comm.parent, 'communities');
+  assert.deepStrictEqual(APP.parse('/communities/4'), { type: 'community', id: 4 });
+  // no /engine/<type>/<id> nesting, ever
+  assert.ok(!R.ROUTES.some((x) => /^\/engine\/[a-z-]+\/:/.test(x.pattern)), 'an entity was nested under /engine');
+});
+
+test('batch 7: the id is authoritative and the slug decorative — wrong, missing and odd slugs all resolve', () => {
+  const same = ['/listing/12', '/listing/12-oak-chair', '/listing/12-WRONG-old-name', '/listing/012-x', '/listing/12-',
+    '/listing/12-caf%C3%A9', '/listing/12/extra'];
+  for (const p of same) {
+    assert.strictEqual(R.match(p).name, 'listing', p);
+    assert.strictEqual(APP.parse(p).id, 12, p + ' id');
+  }
+  for (const p of ['/service/12/x', '/course/12/x', '/newsletter/12/x']) {
+    assert.strictEqual(R.match(p), null, p + ': only the legacy three tolerate a trailing segment');
+    assert.strictEqual(APP.parse(p), null, p);
+  }
+});
+
+test('batch 7: ONE slug rule (in the registry) — punctuation, whitespace, accents, non-Latin, length, rename', () => {
+  assert.strictEqual(R.slugify('Oak Chair'), 'oak-chair');
+  assert.strictEqual(R.slugify('  Oak    Chair  '), 'oak-chair', 'repeated whitespace');
+  assert.strictEqual(R.slugify('Oak, chair! (2026) -- "New"?'), 'oak-chair-2026-new', 'punctuation');
+  assert.strictEqual(R.slugify("Bob's Café & Bar"), 'bobs-cafe-and-bar', 'apostrophes, accents, ampersand');
+  assert.strictEqual(R.slugify('שלום עולם'), '', 'a non-Latin title has no slug');
+  assert.strictEqual(R.idSlug(7, 'שלום'), '7', '…and the canonical is the bare id');
+  assert.strictEqual(R.idSlug(7, ''), '7');
+  assert.strictEqual(R.idSlug(7, null), '7');
+  const long = R.slugify('word '.repeat(40));
+  assert.ok(long.length <= 60 && !long.endsWith('-') && !/-$/.test(long), 'long titles cut at a word: ' + long);
+  assert.strictEqual(R.idSlug(9, 'Old name'), '9-old-name');
+  assert.strictEqual(R.idSlug(9, 'New name'), '9-new-name', 'a rename keeps the id, changes the slug');
+  assert.deepStrictEqual(R.parseIdSlug('9-new-name'), { id: 9, slug: 'new-name' });
+  assert.deepStrictEqual(R.parseIdSlug('9'), { id: 9, slug: null });
+  assert.strictEqual(R.parseIdSlug('new-name'), null);
+  assert.throws(() => R.idSlug('x', 'a'), /invalid id/);
+  // The app builds entity addresses through the registry rule only.
+  assert.ok(/ATWE_ROUTES\.idSlug\(/.test(html), 'the app does not use the registry slug rule');
+  assert.ok(!/function\s+(slugify|acSlug|_slug)\s*\(/.test(html), 'the app grew its own slug function');
+  for (const t of ['listing', 'job', 'event', 'service', 'course', 'newsletter']) {
+    assert.ok(new RegExp("acEntityPath\\('" + t + "'").test(html), t + ' is not addressed through acEntityPath');
+  }
+});
+
+test('batch 7: malformed typed paths reject cleanly and never become a username', () => {
+  const cases = ['/service', '/service/abc', '/service/-5', '/course/', '/newsletter/x', '/newsletter/5/issue', '/newsletter/5/issue/x',
+    '/newsletter/5-slug/issue/9', '/newsletter/5/issues/9', '/communities/x', '/communities/5-x', '/communities/5/x', '/listing/abc-12',
+    '/job/' + '9'.repeat(13), '/listing/12-' + 'x'.repeat(201)];
+  for (const p of cases) {
+    const m = R.match(p), d = APP.parse(p);
+    assert.strictEqual(m ? m.name : null, appName(d), p + ': registry ' + (m && m.name) + ' vs app ' + appName(d));
+    assert.ok(!d || d.type !== 'profile', p + ' fell through to a profile');
+    assert.ok(!m || !['profile', 'profile-section', 'post'].includes(m.name), p + ' matched ' + (m && m.name));
+  }
+});
+
+test('batch 7: a business stays at its username; cart stays a modal; no checkout or Engine-AI route', () => {
+  assert.strictEqual(R.match('/someshop').name, 'profile');
+  for (const n of ['business', 'engine-business', 'checkout', 'engine-ai', 'shop-ai']) assert.strictEqual(R.get(n), null, n);
+  assert.strictEqual(R.match('/business/5'), null);
+  assert.strictEqual(R.match('/engine/business/5'), null);
+  assert.strictEqual(R.match('/engine/ai'), null);
+  const cart = R.get('cart');
+  assert.strictEqual(cart.pattern, '/cart'); assert.strictEqual(cart.family, 'modal');
+  assert.ok(!R.ROUTES.some((x) => /checkout/.test(x.pattern)), 'a checkout stage got an address');
+});
+
+test('batch 7: no Engine-specific parent memories; Back stays the batch-6 model', () => {
+  assert.ok(!/_engineFrom|_listingFrom|_serviceFrom|_jobFrom|_eventFrom|_courseFrom|_nlFrom|_commFrom/.test(html), 'a private browse-parent memory was introduced');
+  assert.ok(!/history\.state[^;\n]*(slug|engine|entity)/i.test(html), 'routing reads entity state out of history.state');
 });

@@ -24223,19 +24223,21 @@ const APP_ROUTES = {
 
   /* ── Network & work ── */
   'network':        { open: () => acOpenConnections(),             auth: true, view: 'connList', acct: 'network' },
-  'jobs':           { open: () => acOpenJobsView(),                auth: true },
+  /* ── Engine browse (route batch 7): canonical at /engine/<key>; the flat /<key> stays a
+     permanent alias the app canonicalises by replace. `engine: true` is that binding. ── */
+  'jobs':           { open: () => acOpenJobsView(),                auth: true, engine: true },
   'job-alerts':     { open: () => acOpenSavedSearches(),           auth: true, view: 'savedSearches', acct: 'job-alerts' },
   'resumes':        { open: () => acOpenResumes(),                 auth: true, view: 'resumesList', acct: 'resumes' },
-  'businesses':     { open: () => acOpenDirectory(), view: 'bizDirectory' },
-  'services':       { open: () => acOpenServices(), view: 'servicesView' },
-  'events':         { open: () => acOpenEvents(), view: 'eventsList' },
-  'courses':        { open: () => acOpenCourses(), view: 'coursesView' },
-  'newsletters':    { open: () => acOpenNewsletters(), view: 'nlList' },
-  'communities':    { open: () => acOpenCommunities(), view: 'commList' },
-  'showcase':       { open: () => acOpenShowcaseDiscover(), view: 'showcaseDiscover' },
+  'businesses':     { open: () => acOpenDirectory(), view: 'bizDirectory', engine: true },
+  'services':       { open: () => acOpenServices(), view: 'servicesView', engine: true },
+  'events':         { open: () => acOpenEvents(), view: 'eventsList', engine: true },
+  'courses':        { open: () => acOpenCourses(), view: 'coursesView', engine: true },
+  'newsletters':    { open: () => acOpenNewsletters(), view: 'nlList', engine: true },
+  'communities':    { open: () => acOpenCommunities(), view: 'commList', engine: true },
+  'showcase':       { open: () => acOpenShowcaseDiscover(), view: 'showcaseDiscover', engine: true },
 
   /* ── Shopping ── */
-  'marketplace':    { open: () => acOpenMarketplace(), view: 'marketplaceView' },
+  'marketplace':    { open: () => acOpenMarketplace(), view: 'marketplaceView', engine: true },
   'cart':           { open: () => acOpenCart(),                    auth: true, view: 'cartView' },
   'orders':         { open: () => acOpenOrders('buyer'),           auth: true, view: 'ordersView', acct: 'orders' },
   'saved':          { open: () => acOpenSaved(),                   auth: true, view: 'savedView', acct: 'saved' },
@@ -24335,8 +24337,12 @@ const PROFILE_SECTIONS = ['posts', 'replies', 'media', 'likes', 'about', 'connec
 /* Signed-out pages. Plain and human-readable — /login, not /auth/login. */
 const AUTH_ROUTES = ['login', 'signup', 'forgot-password', 'reset-password', 'verify-email'];
 
-/* Entity prefixes that take an id or a slug after them. */
-const ENTITY_ROUTES = ['post', 'job', 'listing', 'event', 'group', 'circle', 'company'];
+/* Entity prefixes that take an id or a slug after them. service / course / newsletter are
+   route batch 7's typed public entities (/communities/<id> rides on the browse key). */
+const ENTITY_ROUTES = ['post', 'job', 'listing', 'event', 'group', 'circle', 'company', 'service', 'course', 'newsletter'];
+/* The typed public entities that take `{id}-{slug}` (route batch 7). The slug is computed
+   by the ONE rule in the route registry (ATWE_ROUTES.idSlug); the id is authoritative. */
+const SLUG_ENTITIES = ['listing', 'job', 'event', 'service', 'course', 'newsletter'];
 
 /* Words a username can NEVER be, because they are real addresses on atwe.com.
    Derived from the tables above so it can never fall out of step with them,
@@ -24387,7 +24393,7 @@ function acViewRouteKey(id) {
    /account/<acct> (route batch 5); its flat /<key> is an alias the app canonicalises away. */
 function acRouteKeyPath(key) {
   const def = APP_ROUTES[key] || {};
-  return acRoutePath(key, null, def.acct ? '/account/' + def.acct : '/' + key);
+  return acRoutePath(key, null, def.acct ? '/account/' + def.acct : def.engine ? '/engine/' + key : '/' + key);
 }
 /* The canonical address of an Account section, from the PAGE's section id. */
 function acAccountSectionPath(meId) {
@@ -24458,6 +24464,10 @@ function acSyncPath(opts) {
            can never win: that was route batch 3's B2 (Marketplace -> listing showed
            /marketplace) and B3 (a direct /listing/15 collapsed to /). */
         if (open[i]._ownPath) { acSetPath(open[i]._ownPath, { push }); return; }
+        /* An entity sheet still resolving its canonical address (route batch 7) writes
+           NOTHING yet: it keeps the push it was asked for, and settles it — once — when the
+           title is known. Nothing beneath it may claim the address meanwhile. */
+        if (open[i]._ownWait) { if (push) open[i]._ownWait.push = true; return; }
         /* Settings is ONE overlay whose address is the page it is showing (route batch 4):
            /settings, /settings/privacy … derived from _setPage, never from history.state. */
         if (open[i].id === 'settingsOverlay') { acSetPath(acSettingsPath(_setPage), { push }); return; }
@@ -24481,7 +24491,7 @@ function acSyncPath(opts) {
          what is RENDERED (acMeShownSection), the same way Settings derives its address from the
          page it is showing — never from history.state. */
       if (_appTab === 'profile') { const sec = acMeShownSection(); if (sec) { acSetPath(acAccountSectionPath(sec) || '/me', _push); return; } }
-      if (_appTab === 'search' && _searchScope === 'jobs') { acSetPath('/jobs', _push); return; }
+      if (_appTab === 'search' && _searchScope === 'jobs') { acSetPath(acRouteKeyPath('jobs'), _push); return; }
       if (_appTab === 'home' && _acFeedScope === 'bookmarks') { acSetPath('/collections', _push); return; }
       acSetPath(WORLD_PATH[_appTab] || '/', _push);
     } catch (e) {}
@@ -24525,10 +24535,30 @@ function parseDeepLink() {
   // /company/<username> — a business IS an account, so this is an alias that
   // canonicalises to /<username>. Kept so the LinkedIn-shaped URL still works.
   if (s0 === 'company' && segs[1]) return { type: 'profile', username: segs[1].replace(/^@/, ''), canonicalFrom: 'company' };
-  // /post/:id, /job/:id, /listing/:id, /event/:id — the old flat entity links.
-  if ((s0 === 'post' || s0 === 'job' || s0 === 'listing' || s0 === 'event') && /^\d+$/.test(segs[1] || '')) {
-    return { type: s0, id: parseInt(segs[1], 10), legacy: s0 === 'post' };
+  /* /engine/<key> — Engine's browse destinations (route batch 7). Anything else under
+     /engine says so (`unknown`) and lands on the Engine root; it can never fall through to
+     a username ('engine' is reserved). The bare /engine is the legacy world path, handled
+     at boot. */
+  if (s0 === 'engine' && segs.length > 1) {
+    const k = segs[1].toLowerCase();
+    if (segs.length === 2 && Object.prototype.hasOwnProperty.call(APP_ROUTES, k) && APP_ROUTES[k].engine) return { type: 'route', key: k };
+    return { type: 'engine', unknown: true };
   }
+  // /post/:id — the old flat post link (canonicalised under its author once loaded).
+  if (s0 === 'post' && /^\d+$/.test(segs[1] || '')) return { type: 'post', id: parseInt(segs[1], 10), legacy: true };
+  /* Typed public entities, `{id}-{slug}` (route batch 7). The id is authoritative; the slug
+     is whatever was written (null when absent) and is corrected by replace once the entity
+     has loaded. /listing /job /event tolerate a trailing segment as they always have. */
+  if (SLUG_ENTITIES.includes(s0) && segs[1]) {
+    if (s0 === 'newsletter' && segs.length === 4 && segs[2].toLowerCase() === 'issue' && /^\d{1,12}$/.test(segs[1]) && /^\d{1,12}$/.test(segs[3])) {
+      return { type: 'nlissue', id: parseInt(segs[3], 10), nl: parseInt(segs[1], 10) };
+    }
+    const tail = s0 === 'listing' || s0 === 'job' || s0 === 'event';
+    const m = /^(\d{1,12})(?:-([^/]{0,200}))?$/.exec(segs[1]);
+    if (m && (tail || segs.length === 2)) return { type: s0, id: parseInt(m[1], 10), slug: m[2] === undefined ? null : m[2] };
+  }
+  // /communities/<id> — a community (route batch 7). /communities alone is the browse alias.
+  if (s0 === 'communities' && segs.length === 2 && /^\d{1,12}$/.test(segs[1])) return { type: 'community', id: parseInt(segs[1], 10) };
   // Signed-out pages.
   if (AUTH_ROUTES.includes(s0) && segs.length === 1) return { type: 'auth', page: s0 };
   // A plain feature route.
@@ -24605,12 +24635,23 @@ function openDeepLink(r, opts) {
       if (r.section) setTimeout(() => { try { acProfTab(r.section); } catch (e) {} }, 420);
       return;
     }
+    if (r.type === 'engine') {
+      // An address under /engine that names nothing: the Engine root, said plainly.
+      appTab('search');
+      if (r.unknown) showNotif('That page doesn’t exist.');
+      return;
+    }
     if (r.type === 'circle') acOpenCircleByUsername(r.username);
     else if (r.type === 'group') acOpenGroupByUsername(r.username);
     else if (r.type === 'post') acOpenPostView(r.id);
     else if (r.type === 'job') acOpenJob(r.id);
     else if (r.type === 'listing') acOpenListing(r.id);
     else if (r.type === 'event') acOpenEvent(r.id);
+    else if (r.type === 'service') acOpenService(r.id);
+    else if (r.type === 'course') acOpenCourse(r.id);
+    else if (r.type === 'newsletter') acOpenNewsletter(r.id);
+    else if (r.type === 'nlissue') acOpenIssue(r.id, r.nl);
+    else if (r.type === 'community') acOpenCommunity(r.id);
   } catch (e) { console.error('openDeepLink', e); }
 }
 // Keep the address bar in sync with the open profile/circle/group so links are
@@ -24823,6 +24864,55 @@ function acSettingsPath(page, leaf) {
   if (!page || page === 'hub' || !SETTINGS_ROUTES.includes(page)) return acRoutePath('settings', null, '/settings');
   if (leaf) return acRoutePath('settings-' + page + '-' + leaf, null, '/settings/' + page + '/' + leaf);
   return acRoutePath('settings-' + page, null, '/settings/' + page);
+}
+/* ── TYPED PUBLIC ENTITY ADDRESSES (route batch 7) ──────────────────────────────────
+   /listing /job /event /service /course /newsletter are `{id}-{slug}`. The id is
+   authoritative; the slug comes from the ONE rule in the route registry (ATWE_ROUTES.idSlug)
+   so a card, a share link, a notification and the router can never disagree about it.
+
+   ONE NAVIGATION, ONE ENTRY, ONE NavEvent. An in-app open does not know the title — and so
+   the slug — until the entity has loaded, and a push of the bare id followed by a slug
+   replace would be two events for one move. So the sheet WAITS (`_ownWait`): while it waits
+   the path sync writes nothing at all (it keeps the push it was asked for on the sheet),
+   and once the entity has loaded the sheet owns its CURRENT canonical and that is pushed,
+   once. A waiting sheet owns no address, so Back simply dismisses it (nothing was pushed);
+   a failed or slow load settles on the bare id after a short wait, as before.
+   A sheet whose address is ALREADY in the bar (a direct entry, a Back/Forward restore, a
+   notification's acNavGo) owns it at once; its slug, if it was wrong or missing, is then
+   corrected by REPLACE — a correction is never a new destination.
+   No per-type parent memory is kept: Back is the real history, or the registry parent. */
+const _entPathMemo = new Map();
+let _entSeq = 0;
+function acEntityPath(type, id, title) {
+  let seg = String(parseInt(id, 10));
+  try { if (window.ATWE_ROUTES) seg = ATWE_ROUTES.idSlug(id, title); } catch (e) {}
+  return acRoutePath(type, { idslug: seg }, '/' + type + '/' + seg);
+}
+/* `fallback` is the address to own if the load fails (the bare id unless the caller knows
+   better: an issue's /newsletter/<id>/issue/<n>, a community's /communities/<id>). */
+function acEntityOwn(el, type, id, fallback) {
+  const r = parseDeepLink();
+  const tok = type + ':' + id + ':' + (++_entSeq);
+  el._entTok = tok;
+  if (r && r.type === type && r.id === id) { el._ownPath = location.pathname; el._ownWait = null; return tok; }
+  // `false`: there is no address to fall back to (an issue opened with no newsletter in hand)
+  const fb = fallback === false ? null : (fallback || _entPathMemo.get(type + ':' + id) || acEntityPath(type, id, ''));
+  el._ownPath = null;
+  el._ownWait = { push: false, fallback: fb };
+  setTimeout(() => acEntitySettle(el, tok, type, id, null), 4000);   // never wait on a slow load for ever
+  return tok;
+}
+/* The entity has loaded (path = its current canonical), or it could not be (path = null). */
+function acEntitySettle(el, tok, type, id, path) {
+  if (!el || el._entTok !== tok) return;
+  const wait = el._ownWait;
+  if (!path) { if (!wait) return; path = wait.fallback; if (!path) { el._ownWait = null; return; } }
+  else _entPathMemo.set(type + ':' + id, path);
+  el._ownWait = null;
+  if (el.classList.contains('hidden') || el.classList.contains('closing')) return;
+  if (el._ownPath === path && !wait) return;
+  el._ownPath = path;
+  acSyncPath(wait && wait.push ? { push: true } : undefined);
 }
 /* overlay id → the leaf address it owns, derived from the registry's Settings leaves (the
    same list SETTINGS_LEAVES binds openers to). A leaf sheet carries its address as
@@ -33794,12 +33884,16 @@ async function acBoostSend(amountCents) {
 }
 
 async function acOpenCommunity(id) {
+  // owns /communities/<id> (route batch 7) — the approved form carries no slug
+  const _cm = document.getElementById('commView'), _cpath = acRoutePath('community', { id }, '/communities/' + id);
+  const _tok = acEntityOwn(_cm, 'community', id, _cpath);
   AC._commId = id;
   showOverlay('commView');
   const body = document.getElementById('commViewBody');
   body.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
   try {
     const d = await API.req('GET', '/api/communities/' + id);
+    acEntitySettle(_cm, _tok, 'community', id, _cpath);
     AC._commCur = d;
     const c = d.community;
     const announce = d.announceGroupId
@@ -33829,7 +33923,7 @@ async function acOpenCommunity(id) {
       ${announce}
       <div class="ac-section-row"><span class="ac-prof-head">Groups</span>${c.isAdmin ? '<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acCommAddGroup()">＋ Add group</button>' : ''}</div>
       ${groups}`;
-  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+  } catch (e) { acEntitySettle(_cm, _tok, 'community', id, null); body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 async function acCommJoin() {
   try { await API.req('POST', '/api/communities/' + AC._commId + '/join'); showNotif('Joined the community.'); acOpenCommunity(AC._commId); }
@@ -34029,6 +34123,7 @@ async function acSaveNewsletter() {
   } catch (e) { showNotif(e.message || 'Could not create the newsletter.'); }
 }
 async function acOpenNewsletter(id) {
+  const _nv = document.getElementById('nlView'), _tok = acEntityOwn(_nv, 'newsletter', id); // owns /newsletter/<id>-<slug> (route batch 7)
   AC._nlId = id;
   showOverlay('nlView');
   const body = document.getElementById('nlViewBody');
@@ -34037,6 +34132,7 @@ async function acOpenNewsletter(id) {
     const d = await API.req('GET', '/api/newsletters/' + id);
     AC._nlCur = d;
     const n = d.newsletter;
+    acEntitySettle(_nv, _tok, 'newsletter', id, acEntityPath('newsletter', id, n.title));
     const priceLbl = n.priceCents ? ' · $' + (n.priceCents / 100).toFixed(2) : '';
     const subLabel = n.subscribed ? 'Subscribed ✓' : (n.priceCents ? 'Subscribe · $' + (n.priceCents / 100).toFixed(2) : 'Subscribe');
     const subBtn = n.mine
@@ -34056,7 +34152,7 @@ async function acOpenNewsletter(id) {
       ${n.mine ? `<div class="ev-rsvp-row" style="margin-top:8px;"><button onclick="acEditNlTiers()"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg>Paid tiers…</button><button onclick="acDeleteNewsletter()" style="color:var(--red-txt);"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete newsletter</button></div>` : ''}
       <div class="ba-sec" style="margin-top:14px;">Issues</div>
       ${issues}`;
-  } catch (e) { body.innerHTML = '<div class="ac-empty">That newsletter is no longer available.</div>'; }
+  } catch (e) { acEntitySettle(_nv, _tok, 'newsletter', id, null); body.innerHTML = '<div class="ac-empty">That newsletter is no longer available.</div>'; }
 }
 async function acToggleNlSub() {
   const d = AC._nlCur; if (!d) return;
@@ -34116,12 +34212,22 @@ async function acPublishIssue() {
     acOpenNewsletter(id);
   } catch (e) { showNotif(e.message || 'Could not publish.'); }
 }
-async function acOpenIssue(id) {
+/* An issue owns /newsletter/<newsletter id>/issue/<issue id> (route batch 7). The issue id is
+   authoritative: a link naming the wrong newsletter is corrected, by replace, once it loads.
+   `nlId` is the newsletter it was opened from (the URL, or the newsletter on screen). */
+function acIssuePath(nlId, id) {
+  return acRoutePath('newsletter-issue', { id: nlId, issue: id }, '/newsletter/' + nlId + '/issue/' + id);
+}
+async function acOpenIssue(id, nlId) {
+  const _iv = document.getElementById('nlIssueView');
+  const _nl = nlId || AC._nlId;
+  const _tok = acEntityOwn(_iv, 'nlissue', id, _nl ? acIssuePath(_nl, id) : false);
   showOverlay('nlIssueView');
   const body = document.getElementById('nlIssueViewBody');
   body.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
   try {
     const { issue } = await API.req('GET', '/api/newsletters/issues/' + id);
+    if (issue.newsletter && issue.newsletter.id) acEntitySettle(_iv, _tok, 'nlissue', id, acIssuePath(issue.newsletter.id, id));
     body.innerHTML = `
       <div class="ac-item-last" style="color:var(--accent);font-weight:600;font-size:12.5px;">${escHtml(issue.newsletter.title)}</div>
       <div class="jp-title" style="margin-top:4px;padding-inline-end:30px;">${escHtml(issue.title)}</div>
@@ -34130,7 +34236,7 @@ async function acOpenIssue(id) {
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(issue.owner.name)}${vbadge(acIsVerified(issue.owner))}</span></div><div class="ac-item-last">${acFullTime(issue.createdAt)}</div></div>
       </div>
       <div class="ev-desc">${acLinkifyPost ? acLinkifyPost(issue.body) : escHtml(issue.body)}</div>`;
-  } catch (e) { body.innerHTML = '<div class="ac-empty">That issue is no longer available.</div>'; }
+  } catch (e) { acEntitySettle(_iv, _tok, 'nlissue', id, null); body.innerHTML = '<div class="ac-empty">That issue is no longer available.</div>'; }
 }
 /* ─── Professional events (LinkedIn-style) ─── */
 function acEvDate(d) { try { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } catch { return ''; } }
@@ -34236,15 +34342,16 @@ async function acEventSave() {
 }
 async function acOpenEvent(id) {
   AC._evId = id;
-  document.getElementById('eventView')._ownPath = acRoutePath('event', { id }, '/event/' + id); // owns its URL (route batch 3)
+  const _ev = document.getElementById('eventView'), _tok = acEntityOwn(_ev, 'event', id); // owns its URL (route batches 3 + 7)
   showOverlay('eventView');
   const body = document.getElementById('eventViewBody');
   body.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
   try {
     const { event } = await API.req('GET', '/api/events/' + id);
+    acEntitySettle(_ev, _tok, 'event', id, acEntityPath('event', id, event.title));
     AC._evCur = event;
     acRenderEvent(event);
-  } catch (e) { body.innerHTML = '<div class="ac-empty">That event is no longer available.</div>'; }
+  } catch (e) { acEntitySettle(_ev, _tok, 'event', id, null); body.innerHTML = '<div class="ac-empty">That event is no longer available.</div>'; }
 }
 function acRenderEvent(e) {
   if (e.cancelled) {
@@ -34329,7 +34436,7 @@ async function acEvCommentDel(cid) {
 // the forward picker (title + date + deep link). Hosts spread the word; guests invite.
 async function acShareEvent(id) {
   const e = (AC._evCur && AC._evCur.id === id) ? AC._evCur : {};
-  const url = location.origin + '/event/' + id;
+  const url = location.origin + acEntityPath('event', id, e.title || '');   // the canonical address (route batch 7)
   const when = e.startsAt ? new Date(e.startsAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
   const label = (e.title || 'An event') + (when ? ' · ' + when : '');
   if (navigator.share) {
@@ -34458,14 +34565,16 @@ function acCourseCard(c) {
   </div>`;
 }
 async function acOpenCourse(id) {
+  const _cv = document.getElementById('courseView'), _tok = acEntityOwn(_cv, 'course', id); // owns /course/<id>-<slug> (route batch 7)
   AC._crsId = id; showOverlay('courseView');
   const body = document.getElementById('courseViewBody');
   body.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
   try {
     const { course: c } = await API.req('GET', '/api/courses/' + id);
+    acEntitySettle(_cv, _tok, 'course', id, acEntityPath('course', id, c.title));
     AC._crsCur = c;
     acRenderCourse(c);
-  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Course not available.') + '</div>'; }
+  } catch (e) { acEntitySettle(_cv, _tok, 'course', id, null); body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Course not available.') + '</div>'; }
 }
 function acRenderCourse(c) {
   const body = document.getElementById('courseViewBody');
@@ -35343,11 +35452,12 @@ async function acRepostJob(id) {
   }
 }
 async function acOpenJob(id) {
-  document.getElementById('jobView')._ownPath = acRoutePath('job', { id }, '/job/' + id); // owns its URL (route batch 3)
+  const _jv = document.getElementById('jobView'), _tok = acEntityOwn(_jv, 'job', id); // owns its URL (route batches 3 + 7)
   showOverlay('jobView');
   const body = document.getElementById('jobViewBody'); body.innerHTML = acSkelRows(3);
   try {
     const { job } = await API.req('GET', '/api/jobs/' + id);
+    acEntitySettle(_jv, _tok, 'job', id, acEntityPath('job', id, job.title));
     AC._job = job;
     // Record a view for the poster's analytics (once per session per job).
     if (!job.mine) { AC._viewed = AC._viewed || new Set(); if (!AC._viewed.has(id)) { AC._viewed.add(id); API.req('POST', '/api/jobs/' + id + '/view', {}).catch(() => {}); } }
@@ -35407,14 +35517,14 @@ async function acOpenJob(id) {
       ${job.mine ? '' : `<div class="ac-job-report" onclick="acOpenReport('job',${job.id},${jsAttr(job.title)})">Report this job</div>`}`;
     if (job.industry) acLoadSalaryInsight(job.id);
     if (!job.mine) acLoadSimilarJobs(job.id);
-  } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
+  } catch { acEntitySettle(_jv, _tok, 'job', id, null); body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
 }
 // Share a job: native share sheet when available; otherwise send it into a Beam
 // chat via the forward picker (text + deep link). Recruiters share their own
 // openings; seekers pass roles to friends.
 async function acShareJob(id) {
   const j = (AC._job && AC._job.id === id) ? AC._job : {};
-  const url = location.origin + '/job/' + id;
+  const url = location.origin + acEntityPath('job', id, j.title || '');   // the canonical address (route batch 7)
   const label = (j.title || 'Open role') + (j.company ? ' at ' + j.company : '');
   if (navigator.share) {
     try { await navigator.share({ title: label, text: label + 'hiring on Atwe', url }); return; }
@@ -37210,14 +37320,14 @@ function routeFor(n) {
   if (t === 'certified' || t === 'login') return { detail: true };
   if (t === 'week_summary') return R('analytics');
   if (t === 'follower_milestone') return O("acOpenFollowList(S.user && S.user.username, 'followers')");
-  if (['stock_low', 'stock_out', 'product_ad_paused', 'auction_no_bids'].includes(t)) return n.productId ? R('listing', { id: n.productId }, 'product') : O('', 'product');
+  if (['stock_low', 'stock_out', 'product_ad_paused', 'auction_no_bids'].includes(t)) return n.productId ? R('listing', { id: n.productId, title: n.productName }, 'product') : O('', 'product');
   if (t === 'service_lead' && n.metaNum) return O(`acOpenServiceRequest(${Number(n.metaNum)})`);
   if (t === 'offer' && n.metaNum) return O(`acOpenOffer(${Number(n.metaNum)})`, 'chat');
   // an order has no address yet (order-detail is planned: it needs an opaque ref)
   if (['order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'order_disputed', 'order_refunded', 'escrow_released', 'escrow_refunded', 'return_requested', 'return_approved', 'return_declined', 'return_label_ready', 'digital_ready'].includes(t) && n.metaNum) return O(`acOpenOrder(${Number(n.metaNum)})`);
   if (/^delivery_/.test(t) && n.metaNum) return O(`acOpenPeerDelivery(${Number(n.metaNum)})`);
   if (t === 'review_invite') return O('acOpenPendingReviews()');
-  if (['event_rsvp', 'event_update', 'event_reminder', 'event_comment', 'event_spot'].includes(t) && n.eventId) return R('event', { id: n.eventId }, 'event');
+  if (['event_rsvp', 'event_update', 'event_reminder', 'event_comment', 'event_spot'].includes(t) && n.eventId) return R('event', { id: n.eventId, title: n.eventTitle }, 'event');
   if (/^appt_/.test(t) && ['appt_request', 'appt_confirmed', 'appt_declined', 'appt_cancelled', 'appt_rescheduled', 'appt_reminder'].includes(t)) return R('appointments');
   if (['rental_request', 'rental_booked', 'rental_paid'].includes(t)) return O("acOpenBookings('host')");
   if (['rental_confirmed', 'rental_declined', 'rental_cancelled'].includes(t)) return R('bookings');
@@ -37239,12 +37349,12 @@ function routeFor(n) {
   if (t === 'group_request') return O(`appTab('chat');acOpenGroupRequests(${Number(n.groupId)})`, 'group');
   if (['group_join_paid', 'group_approved', 'task_assigned', 'group_admin_added', 'group_admin_removed'].includes(t)) return O(`appTab('chat');acOpenGroup(${Number(n.groupId)})`, 'group');
   if (['message', 'call', 'video_call', 'chat_request', 'chat_allowed', 'offer', 'crm_followup'].includes(t)) return O(`appTab('chat');acOpenChat(${Number(a.id)})`, 'chat');
-  if (['job_application', 'job_match', 'app_reviewed', 'app_shortlisted', 'app_hired', 'app_rejected', 'referral_request'].includes(t)) return n.jobId ? R('job', { id: n.jobId }, 'job') : R('search', null, 'job');
+  if (['job_application', 'job_match', 'app_reviewed', 'app_shortlisted', 'app_hired', 'app_rejected', 'referral_request'].includes(t)) return n.jobId ? R('job', { id: n.jobId, title: n.jobTitle }, 'job') : R('search', null, 'job');
   if (t === 'rec_received') return O('acOpenPendingRecs()');
   if (t === 'rec_request') return O(`acWriteRecOpen(${jsAttr(a.username || '')},${jsAttr(a.name || '')})`);
   if (t === 'connection_request' || t === 'connection_accepted') return R('profile', { username: a.username });
   if (t === 'endorsement') return R('profile', { username: me });
-  if (['restock', 'sub_renewed', 'sub_payment_failed', 'sub_out_of_stock', 'sub_paused', 'price_drop', 'market_match', 'affiliate', 'product_ad_review', 'deal', 'auction_outbid', 'auction_won', 'auction_ended'].includes(t) && n.productId) return R('listing', { id: n.productId }, 'product');
+  if (['restock', 'sub_renewed', 'sub_payment_failed', 'sub_out_of_stock', 'sub_paused', 'price_drop', 'market_match', 'affiliate', 'product_ad_review', 'deal', 'auction_outbid', 'auction_won', 'auction_ended'].includes(t) && n.productId) return R('listing', { id: n.productId, title: n.productName }, 'product');
   if (t === 'team_invite') return O("acOpenTeam('memberships')");
   if (t === 'team_joined') return R('team');
   const d = NOTIF_DEST[t];
@@ -37261,7 +37371,9 @@ function acNotifPath(d) {
   const p = d.params || {};
   if (d.route === 'post') return p.username ? acRoutePath('post', { username: p.username, id: p.id }, '/' + p.username + '/post/' + p.id) : '/post/' + p.id;
   if (d.route === 'profile') return p.username ? acRoutePath('profile', { username: p.username }, '/' + p.username) : null;
-  if (d.route === 'listing' || d.route === 'job' || d.route === 'event') return acRoutePath(d.route, { id: p.id }, '/' + d.route + '/' + p.id);
+  /* A typed entity's `{id}-{slug}` (route batch 7). The row carries the title when it has one
+     (a product's name); otherwise the bare id, which the sheet corrects by replace on load. */
+  if (d.route === 'listing' || d.route === 'job' || d.route === 'event') return acEntityPath(d.route, p.id, p.title || '');
   if (d.route === 'search') return acRoutePath('search', null, '/search');
   if (APP_ROUTES[d.route]) return acRouteKeyPath(d.route);
   return null;
@@ -48122,7 +48234,7 @@ function acHandlePayErr(e, fallback) {
 // picker (send it in a message) — same pattern as sharing a job or event.
 async function acShareListing(id) {
   const l = (AC._listingCur && AC._listingCur.id === id) ? AC._listingCur : {};
-  const url = location.origin + '/listing/' + id;
+  const url = location.origin + acEntityPath('listing', id, l.name || '');   // the canonical address (route batch 7)
   const label = l.name || 'A listing';
   if (navigator.share) {
     try { await navigator.share({ title: label, text: label + 'on Atwe', url }); return; }
@@ -48143,11 +48255,12 @@ async function acRestockAlert(id, on) {
 async function acOpenListing(id) {
   /* The sheet OWNS /listing/<id> (route batch 3). Declared before showOverlay, whose
      address sync then pushes exactly one entry for it; nothing queued can overwrite it. */
-  document.getElementById('listingView')._ownPath = acRoutePath('listing', { id }, '/listing/' + id);
+  const _lv = document.getElementById('listingView'), _tok = acEntityOwn(_lv, 'listing', id);
   showOverlay('listingView');
   const body = document.getElementById('listingBody'); body.innerHTML = acSkelRows(3);
   try {
     const { listing: l } = await API.req('GET', '/api/listings/' + id);
+    acEntitySettle(_lv, _tok, 'listing', id, acEntityPath('listing', id, l.name));
     const biz = l.seller.accountType === 'business';
     AC._listingCur = l; AC._listingQty = 1; AC._listingVar = null;
     // Media gallery: the product video (if any) leads the carousel, Etsy-style —
@@ -48218,7 +48331,7 @@ async function acOpenListing(id) {
     acLoadProductReviews(l.id);
     acLoadProductQA(l.id);
     acLoadListingBranches(l.id);
-  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the listing.') + '</div>'; }
+  } catch (e) { acEntitySettle(_lv, _tok, 'listing', id, null); body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the listing.') + '</div>'; }
 }
 /* ── AI shopping concierge ── */
 const _AI_SHOP_EXAMPLES = ['a gift for a coffee lover under $30', 'something cozy for winter', 'a unique handmade present', 'tech gadgets under $50'];
@@ -50227,10 +50340,12 @@ async function acLoadServices(q) {
 }
 // Service detail.
 async function acOpenService(id) {
+  const _sv = document.getElementById('serviceView'), _tok = acEntityOwn(_sv, 'service', id); // owns /service/<id>-<slug> (route batch 7)
   showOverlay('serviceView');
   const body = document.getElementById('serviceBody'); body.innerHTML = acSkelRows(3);
   try {
     const { service: s } = await API.req('GET', '/api/services/' + id);
+    acEntitySettle(_sv, _tok, 'service', id, acEntityPath('service', id, s.title));
     AC._svcOpen = s;
     const p = s.provider || {};
     const biz = p.accountType === 'business';
@@ -50252,7 +50367,7 @@ async function acOpenService(id) {
       ${acQualifications(p)}
       ${acMoreFromProvider(s)}
       ${actions}`;
-  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the service.') + '</div>'; }
+  } catch (e) { acEntitySettle(_sv, _tok, 'service', id, null); body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the service.') + '</div>'; }
 }
 /* ── Can this person actually do the job? ──
    All of it already lived on their profile; none of it was on the page where
@@ -69157,7 +69272,11 @@ function acLogicalParent(owner) {
   try { m = window.ATWE_ROUTES && ATWE_ROUTES.match(location.pathname); r = m && ATWE_ROUTES.get(m.name); } catch (e) {}
   if (r && r.parent && r.parent !== 'history') {
     let path = null;
-    try { path = ATWE_ROUTES.build(r.parent, m.params); } catch (e) {}
+    /* A child that names its parent by plain id (a newsletter issue: /newsletter/<id>/issue/<n>)
+       builds the parent's `{id}-{slug}` from that id; the parent corrects its slug on load. */
+    const bp = Object.assign({}, m.params);
+    if (bp.id && !bp.idslug) bp.idslug = bp.id;
+    try { path = ATWE_ROUTES.build(r.parent, bp); } catch (e) {}
     if (!path) { try { const p = ATWE_ROUTES.get(r.parent); path = acWorldRootPath(p ? p.world : r.world); } catch (e) { path = '/'; } }
     return { path };
   }
@@ -69271,7 +69390,7 @@ function _navApplyUrl(opts) {
   const r = parseDeepLink();
   const wantView = (r && r.type === 'settings') ? 'settingsOverlay'
     : (r && r.type === 'route' && APP_ROUTES[r.key] && APP_ROUTES[r.key].view);
-  const _toSheet = !!wantView || !!(r && (r.type === 'listing' || r.type === 'job' || r.type === 'event'));
+  const _toSheet = !!wantView || !!(r && ['listing', 'job', 'event', 'service', 'course', 'newsletter', 'nlissue', 'community'].includes(r.type));
   /* THE WORLD UNDER A RESTORED ENTRY COMES FROM THAT ENTRY. When the screen memory holds
      this exact entry, its world and (for a world screen) the screen itself come back as
      they were left, scroll included. A profile/post/circle re-renders from its URL. */
