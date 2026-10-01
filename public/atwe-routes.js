@@ -55,9 +55,41 @@
     handle: { test: (s) => /^@?[a-z0-9._-]{1,40}$/i.test(s), norm: (s) => s.replace(/^@/, '').toLowerCase() },
     // group / circle slugs: the router takes any segment and strips a leading @.
     slug:   { test: (s) => s.length > 0 && s.length <= 80, norm: (s) => s.replace(/^@/, '') },
-    // approved future `{id}-{slug}` entity form; the id is authoritative.
-    idslug: { test: (s) => /^\d{1,12}(-[a-z0-9-]{1,80})?$/.test(s), norm: (s) => s },
+    /* A public entity's `{id}-{slug}` (route batch 7). The id is AUTHORITATIVE and the slug
+       decorative: any text after "<id>-" is accepted (an old slug, a wrong one, none at all)
+       and the app replaces the address with the entity's CURRENT slug once it has loaded.
+       norm keeps the slug as written (lower-cased) and drops leading zeros from the id. */
+    idslug: { test: (s) => /^\d{1,12}(-[^/]{0,200})?$/.test(s), norm: (s) => s.replace(/^0+(?=\d)/, '').toLowerCase() },
   };
+
+  /* ── THE ONE SLUG RULE (route batch 7) ── used by the app, the server and the tests, so a
+     card, a share link, a notification and the router can never disagree about an entity's
+     canonical address. The slug is COMPUTED from the entity's current title — nothing is
+     stored — so a renamed listing keeps its id and simply gains a new canonical slug. A
+     title with no Latin letters or digits (Hebrew, Arabic, CJK, emoji) has an empty slug and
+     the canonical address is the bare id. */
+  const SLUG_MAX = 60;
+  function slugify(title) {
+    let s = String(title == null ? '' : title);
+    try { s = s.normalize('NFKD'); } catch (e) {}
+    s = s.replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .replace(/&/g, ' and ').replace(/['\u2019]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (s.length > SLUG_MAX) s = s.slice(0, SLUG_MAX).replace(/-[^-]*$/, '') || s.slice(0, SLUG_MAX);
+    return s.replace(/-+$/, '');
+  }
+  /* The canonical `{id}-{slug}` segment for an entity. */
+  function idSlug(id, title) {
+    const n = parseInt(id, 10);
+    if (!Number.isInteger(n) || n < 0) throw new Error('idSlug: invalid id ' + id);
+    const sl = slugify(title);
+    return sl ? n + '-' + sl : String(n);
+  }
+  /* Read an `{id}-{slug}` segment back: { id, slug } (slug null when absent) or null. */
+  function parseIdSlug(seg) {
+    const m = /^(\d{1,12})(?:-(.*))?$/.exec(String(seg || ''));
+    return m ? { id: parseInt(m[1], 10), slug: m[2] === undefined ? null : m[2] } : null;
+  }
 
   /* The Settings tree (route batch 4). A page is /settings/<page>; its title is the
      page's own header. A leaf is /settings/<page>/<leaf>, rendered by its own sheet
@@ -193,18 +225,20 @@
       Object.assign({ world: 'settings', view, parent: 'settings-' + page, title }, extra || {}))),
     r('help',           '/help',           Object.assign({ view: 'helpOverlay', world: 'global' }, pub)),
 
-    /* Network & work */
-    r('jobs',        '/jobs',        { world: 'engine', next: '/engine/jobs', parent: 'search' }),
-    r('businesses',  '/businesses',  Object.assign({ world: 'engine', view: 'bizDirectory', next: '/engine/businesses', parent: 'search' }, pub)),
-    r('services',    '/services',    Object.assign({ world: 'engine', view: 'servicesView', next: '/engine/services', parent: 'search' }, pub)),
-    r('events',      '/events',      Object.assign({ world: 'engine', view: 'eventsList', next: '/engine/events', parent: 'search' }, pub)),
-    r('courses',     '/courses',     Object.assign({ world: 'engine', view: 'coursesView', next: '/engine/courses', parent: 'search' }, pub)),
-    r('newsletters', '/newsletters', Object.assign({ world: 'engine', view: 'nlList', next: '/engine/newsletters', parent: 'search' }, pub)),
-    r('communities', '/communities', Object.assign({ world: 'engine', view: 'commList', next: '/engine/communities', parent: 'search' }, pub)),
-    r('showcase',    '/showcase',    Object.assign({ world: 'engine', view: 'showcaseDiscover', next: '/engine/showcase', parent: 'search' }, pub)),
+    /* Engine browse (route batch 7): canonical under /engine/<x>. The flat /<x> each one
+       was issued at is a permanent ALIAS that the app canonicalises by replace (the server
+       301 is batch 9). The Engine ROOT is still /search: batch 8 owns that flip. */
+    r('jobs',        '/engine/jobs',        { world: 'engine', aliases: ['/jobs'], parent: 'search' }),
+    r('businesses',  '/engine/businesses',  Object.assign({ world: 'engine', view: 'bizDirectory', aliases: ['/businesses'], parent: 'search' }, pub)),
+    r('services',    '/engine/services',    Object.assign({ world: 'engine', view: 'servicesView', aliases: ['/services'], parent: 'search' }, pub)),
+    r('events',      '/engine/events',      Object.assign({ world: 'engine', view: 'eventsList', aliases: ['/events'], parent: 'search' }, pub)),
+    r('courses',     '/engine/courses',     Object.assign({ world: 'engine', view: 'coursesView', aliases: ['/courses'], parent: 'search' }, pub)),
+    r('newsletters', '/engine/newsletters', Object.assign({ world: 'engine', view: 'nlList', aliases: ['/newsletters'], parent: 'search' }, pub)),
+    r('communities', '/engine/communities', Object.assign({ world: 'engine', view: 'commList', aliases: ['/communities'], parent: 'search' }, pub)),
+    r('showcase',    '/engine/showcase',    Object.assign({ world: 'engine', view: 'showcaseDiscover', aliases: ['/showcase'], parent: 'search' }, pub)),
 
     /* Shopping */
-    r('marketplace', '/marketplace', Object.assign({ world: 'engine', view: 'marketplaceView', next: '/engine/marketplace', parent: 'search', native: '/marketplace' }, pub)),
+    r('marketplace', '/engine/marketplace', Object.assign({ world: 'engine', view: 'marketplaceView', aliases: ['/marketplace'], parent: 'search', native: '/marketplace' }, pub)),
     r('cart',        '/cart',        { world: 'engine', view: 'cartView', family: 'modal' }),
     r('collections',   '/collections',   { world: 'home', parent: 'home' }),
 
@@ -219,9 +253,19 @@
        legacy form the app upgrades once the author is known. */
     r('post',    '/:username/post/:id', Object.assign({ world: 'home', tail: true, params: { username: 'handle', id: 'int' },
                                           aliases: ['/post/:id'], native: '/post/:id', auth: 'account' }, { privacy: 'public', seo: 'index' })),
-    r('job',     '/job/:id',     { world: 'engine', params: { id: 'int' }, tail: true, next: '/job/:idslug', privacy: 'public', seo: 'index' }),
-    r('listing', '/listing/:id', { world: 'engine', params: { id: 'int' }, tail: true, next: '/listing/:idslug', privacy: 'public', seo: 'index', native: '/listing/:id' }),
-    r('event',   '/event/:id',   { world: 'engine', params: { id: 'int' }, tail: true, next: '/event/:idslug', privacy: 'public', seo: 'index' }),
+    /* Typed public entities (route batch 7): SHORT typed permalinks, never nested under
+       /engine. `{id}-{slug}`: the id is authoritative, the slug decorative (see idslug).
+       /listing, /job and /event keep `tail` — a trailing segment was tolerated before and
+       an issued link must not break. A direct entry's App Back falls to the browse parent;
+       real history always wins. */
+    r('job',     '/job/:idslug',     { world: 'engine', params: { idslug: 'idslug' }, tail: true, parent: 'jobs', privacy: 'public', seo: 'index' }),
+    r('listing', '/listing/:idslug', { world: 'engine', params: { idslug: 'idslug' }, tail: true, parent: 'marketplace', privacy: 'public', seo: 'index', native: '/listing/:id' }),
+    r('event',   '/event/:idslug',   { world: 'engine', params: { idslug: 'idslug' }, tail: true, parent: 'events', privacy: 'public', seo: 'index' }),
+    r('service', '/service/:idslug', { world: 'engine', params: { idslug: 'idslug' }, parent: 'services', privacy: 'public', seo: 'index' }),
+    r('course',  '/course/:idslug',  { world: 'engine', params: { idslug: 'idslug' }, parent: 'courses', privacy: 'public', seo: 'index' }),
+    r('newsletter', '/newsletter/:idslug', { world: 'engine', params: { idslug: 'idslug' }, parent: 'newsletters', privacy: 'public', seo: 'index' }),
+    r('newsletter-issue', '/newsletter/:id/issue/:issue', { world: 'engine', params: { id: 'int', issue: 'int' }, parent: 'newsletter', privacy: 'public', seo: 'index' }),
+    r('community', '/communities/:id', { world: 'engine', params: { id: 'int' }, parent: 'communities', privacy: 'public', seo: 'index' }),
     r('group',   '/group/:slug', { world: 'beam', params: { slug: 'slug' }, tail: true, privacy: 'public', seo: 'index' }),
     r('circle',  '/circle/:slug', { world: 'home', params: { slug: 'slug' }, tail: true, privacy: 'public', seo: 'index' }),
 
@@ -243,10 +287,16 @@
     r('beam-dm',        '/beam/u/:username',            { status: P, world: 'beam', params: { username: 'handle' }, parent: 'messages' }),
     r('beam-group',     '/beam/g/:id',                  { status: P, world: 'beam', params: { id: 'int' }, parent: 'messages' }),
     r('engine-search',  '/engine/search',               { status: P, world: 'engine', parent: 'search', auth: 'public', seo: 'noindex' }),
-    r('service',        '/service/:idslug',             { status: P, world: 'engine', params: { idslug: 'idslug' }, privacy: 'public', seo: 'index' }),
-    r('course',         '/course/:idslug',              { status: P, world: 'engine', params: { idslug: 'idslug' }, privacy: 'public', seo: 'index' }),
-    r('newsletter',     '/newsletter/:idslug',          { status: P, world: 'engine', params: { idslug: 'idslug' }, privacy: 'public', seo: 'index' }),
-    r('community',      '/communities/:id',             { status: P, world: 'engine', params: { id: 'int' }, privacy: 'public', seo: 'index' }),
+    /* Route batch 7 left these planned, each for a recorded reason:
+       · /engine/search — the live app has no committed search-results state: results are a
+         live function of the text box (debounced per keystroke) and the jobs/services/
+         companies scopes render with no query at all, so "landing" vs "results" is not a
+         structural distinction an address can name without a brittle heuristic.
+       · /engine/workers — "Find workers" is the Jobs board's other side (AC._jobBoard), not
+         a standalone destination.
+       · Showcase DETAIL is not listed at all: the approved audit gives it both /showcase/{id}
+         and {id}-{slug}, and nothing in this repository settles which. Founder decision. */
+    r('engine-workers', '/engine/workers',              { status: P, world: 'engine', parent: 'search', auth: 'public' }),
     /* PRIVATE DETAILS STAY PLANNED (route batch 5 audit): orders, wallet transactions,
        invoices and quotes are keyed only by sequential SERIAL ids today, and a private
        detail must not be addressable by an enumerable id. They go live only once each row
@@ -457,7 +507,7 @@
     ROUTES, PARAM_TYPES, SETTINGS_PAGES, SETTINGS_TREE, SETTINGS_LEAVES, PROFILE_SECTIONS, PARSE_DEFENSIVE, SERVER_ROOTS,
     ACCOUNT_SECTIONS, ACCOUNT_TOOLS,
     NEAR_TERM, FILE_EXT_RE, NOTIF_TARGETS,
-    get, match, build, splitPath, firstLiteral, liveRoutes,
+    get, match, build, splitPath, firstLiteral, liveRoutes, slugify, idSlug, parseIdSlug,
     parseReserved, routeRoots, allocationReserved, usernameShapeError,
   };
 });
