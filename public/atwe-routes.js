@@ -294,8 +294,9 @@
          structural distinction an address can name without a brittle heuristic.
        · /engine/workers — "Find workers" is the Jobs board's other side (AC._jobBoard), not
          a standalone destination.
-       · Showcase DETAIL is not listed at all: the approved audit gives it both /showcase/{id}
-         and {id}-{slug}, and nothing in this repository settles which. Founder decision. */
+       · Showcase DETAIL is not listed yet. The audit gave it both /showcase/{id} and
+         {id}-{slug}; the FOUNDER DECIDED (Batch-7 pre-close): /showcase/{id}, no slug.
+         Not routed in Batch 7; a later batch adds it in that shape. */
     r('engine-workers', '/engine/workers',              { status: P, world: 'engine', parent: 'search', auth: 'public' }),
     /* PRIVATE DETAILS STAY PLANNED (route batch 5 audit): orders, wallet transactions,
        invoices and quotes are keyed only by sequential SERIAL ids today, and a private

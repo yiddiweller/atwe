@@ -8858,9 +8858,11 @@ become a username.
   scope chips and typing write no history. Founder/product decision needed.
 - **`/engine/workers`** — "Find workers" is the Jobs board's other side (`AC._jobBoard`), not a
   standalone destination. Planned only.
-- **Showcase detail** — the approved audit gives BOTH `/showcase/{id}` (§engine table, route
-  tree) and `{id}-{slug}` (§26 identifier table), and nothing in the repository settles it. Left
-  unrouted for founder review; `/engine/showcase` (browse) is live.
+- **Showcase detail** — the approved audit gave BOTH `/showcase/{id}` (§engine table, route
+  tree) and `{id}-{slug}` (§26 identifier table). **The founder decided at the Batch-7 pre-close:
+  `/showcase/{id}`, with NO slug.** Still unrouted in Batch 7 (the test that no `/showcase/:`
+  route exists stays, deliberately); a later batch adds it in exactly that shape.
+  `/engine/showcase` (browse) is live and unchanged.
 - Business identity stays `/{username}`; the cart stays the private `/cart` modal; checkout has
   no address; Atwe AI shopping stays a handoff into `/ai`.
 
