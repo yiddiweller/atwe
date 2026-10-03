@@ -8697,6 +8697,28 @@ app.post('/api/atchat/groups/:id/unread', auth.requireAuth, async (req, res) => 
   } catch (err) { res.json({ ok: false }); }
 });
 
+/* A Beam conversation's address names the other person by @username (route batch 8:
+   /beam/u/{username}), and every conversation route takes an id. This turns one into the
+   other and nothing else: no profile, no messages, no relationship. An unknown handle and a
+   deactivated account are the SAME 404, so the address can never be used to tell the two
+   apart. Whether the conversation itself may be read is still decided by /with/:id. */
+app.get('/api/atchat/peer/:username', auth.requireAuth, rateLimit(120, 60000, 'atchat-peer'), async (req, res) => {
+  const un = String(req.params.username || '').replace(/^@/, '').toLowerCase();
+  if (!/^[a-z0-9._-]{1,40}$/.test(un)) return res.status(404).json({ error: 'Conversation not found.' });
+  try {
+    /* A deactivated account resolves ONLY for someone who already shares a conversation with
+       it — their own history, which the inbox shows them anyway. To anyone else it is the
+       same 404 as a handle nobody holds. */
+    const { rows } = await db.query(
+      `SELECT id, username FROM users u WHERE lower(u.username) = $1
+         AND (NOT COALESCE(u.deactivated, false) OR EXISTS (SELECT 1 FROM at_messages m
+              WHERE (m.sender_id = u.id AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = u.id)))
+       LIMIT 1`, [un, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Conversation not found.' });
+    res.json({ id: rows[0].id, username: rows[0].username });
+  } catch (err) { fault(res); }
+});
+
 // Read the thread with one user (marks their messages to me as read).
 app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);

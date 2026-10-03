@@ -204,12 +204,15 @@
   const pub = { auth: 'public', privacy: 'public', seo: 'index' };
 
   const ROUTES = [
-    /* The five worlds (+ the AI inside page). Today's world URLs keep working; the
-       approved canonical roots are recorded in `next` and are NOT switched on yet. */
+    /* The five worlds (+ the AI inside page). Route batch 8 switched the roots on: Beam is
+       /beam, Engine /engine, Account /account. The addresses they replaced (/messages,
+       /search, /me and the older /profile) are permanent ALIASES, canonicalised in the app
+       by replace (the server 301 is batch 9). The route NAMES did not move — every parent in
+       this file still says 'messages' / 'search' / 'me', and that is the point. */
     r('home',      '/',          { world: 'home', family: 'root', parent: null, aliases: ['/feed', '/home', '/go'], native: '/' }),
-    r('messages',  '/messages',  { world: 'beam', family: 'root', parent: null, aliases: ['/beam'], next: '/beam' }),
-    r('search',    '/search',    { world: 'engine', family: 'root', parent: null, aliases: ['/engine'], next: '/engine', seo: 'noindex' }),
-    r('me',        '/me',        { world: 'account', family: 'root', parent: null, aliases: ['/profile'], next: '/account' }),
+    r('messages',  '/beam',      { world: 'beam', family: 'root', parent: null, aliases: ['/messages'] }),
+    r('search',    '/engine',    { world: 'engine', family: 'root', parent: null, aliases: ['/search'], seo: 'noindex' }),
+    r('me',        '/account',   { world: 'account', family: 'root', parent: null, aliases: ['/me', '/profile'] }),
     r('notifications', '/notifications', { world: 'notifications', family: 'root', parent: null, view: 'notifOverlay', native: '/notifications' }),
     r('ai',        '/ai',        { world: 'ai', parent: 'history' }),
 
@@ -267,6 +270,20 @@
     r('newsletter-issue', '/newsletter/:id/issue/:issue', { world: 'engine', params: { id: 'int', issue: 'int' }, parent: 'newsletter', privacy: 'public', seo: 'index' }),
     r('community', '/communities/:id', { world: 'engine', params: { id: 'int' }, parent: 'communities', privacy: 'public', seo: 'index' }),
     r('group',   '/group/:slug', { world: 'beam', params: { slug: 'slug' }, tail: true, privacy: 'public', seo: 'index' }),
+    /* A Showcase item (route batch 8). The FOUNDER'S shape: /showcase/{id}, NO slug — the
+       id alone reconstructs it (GET /api/showcases/:id). Its browse page is the parent. */
+    r('showcase-detail', '/showcase/:id', { world: 'engine', params: { id: 'int' }, parent: 'showcase', privacy: 'public', seo: 'index' }),
+
+    /* Beam conversations (route batch 8). PRIVATE addresses: the conversation is read only if
+       the server says this member may read it, and a conversation that is not theirs answers
+       exactly as one that does not exist. A group's public /group/{slug} above is a
+       DIFFERENT thing (its shareable page) and is left exactly as it was.
+       Extra threads with one person are /beam/u/{username}/{threadId}; the main chat is the
+       bare /beam/u/{username}. Their logical parent is the inbox, /beam. */
+    r('beam-dm',         '/beam/u/:username',         { world: 'beam', params: { username: 'handle' }, parent: 'messages' }),
+    r('beam-thread',     '/beam/u/:username/:thread', { world: 'beam', params: { username: 'handle', thread: 'int' }, parent: 'messages' }),
+    r('beam-group',      '/beam/g/:id',               { world: 'beam', params: { id: 'int' }, parent: 'messages' }),
+    r('beam-group-info', '/beam/g/:id/info',          { world: 'beam', params: { id: 'int' }, parent: 'beam-group' }),
     r('circle',  '/circle/:slug', { world: 'home', params: { slug: 'slug' }, tail: true, privacy: 'public', seo: 'index' }),
 
     /* Signed-out pages. */
@@ -284,8 +301,10 @@
                              aliases: ['/company/:username'], native: '/user/:username' }, pub)),
 
     /* ── APPROVED FUTURE ADDRESSES (Route Audit §44). Data only. ── */
-    r('beam-dm',        '/beam/u/:username',            { status: P, world: 'beam', params: { username: 'handle' }, parent: 'messages' }),
-    r('beam-group',     '/beam/g/:id',                  { status: P, world: 'beam', params: { id: 'int' }, parent: 'messages' }),
+    /* /beam/u/{username}/contact stays PLANNED (route batch 8): Beam has no contact card of
+       its own — the conversation header's picture opens the person's PROFILE, and building a
+       contact page just to give it an address would be inventing a feature. */
+    r('beam-contact',   '/beam/u/:username/contact',    { status: P, world: 'beam', params: { username: 'handle' }, parent: 'beam-dm' }),
     r('engine-search',  '/engine/search',               { status: P, world: 'engine', parent: 'search', auth: 'public', seo: 'noindex' }),
     /* Route batch 7 left these planned, each for a recorded reason:
        · /engine/search — the live app has no committed search-results state: results are a
@@ -294,9 +313,10 @@
          structural distinction an address can name without a brittle heuristic.
        · /engine/workers — "Find workers" is the Jobs board's other side (AC._jobBoard), not
          a standalone destination.
-       · Showcase DETAIL is not listed yet. The audit gave it both /showcase/{id} and
-         {id}-{slug}; the FOUNDER DECIDED (Batch-7 pre-close): /showcase/{id}, no slug.
-         Not routed in Batch 7; a later batch adds it in that shape. */
+       · Showcase DETAIL: the audit gave it both /showcase/{id} and {id}-{slug}; the FOUNDER
+         DECIDED (Batch-7 pre-close) /showcase/{id}, no slug. Batch 8 made it live, above.
+       Batch 8 kept /engine/search planned for the same reason as batch 7: nothing changed
+       about how search works, and an address must not be invented for it. */
     r('engine-workers', '/engine/workers',              { status: P, world: 'engine', parent: 'search', auth: 'public' }),
     /* PRIVATE DETAILS STAY PLANNED (route batch 5 audit): orders, wallet transactions,
        invoices and quotes are keyed only by sequential SERIAL ids today, and a private

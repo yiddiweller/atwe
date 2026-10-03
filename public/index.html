@@ -24079,9 +24079,22 @@ async function handleUrlParams() {
     // NOTE: deliberately NOT called WORLD_PATH — that name is the canonical
     // tab → path map at the top of the router, and shadowing it here would be a
     // trap for the next person editing either one.
-    const LEGACY_WORLD_PATH = { '/beam': 'chat', '/engine': 'search', '/home': 'home', '/profile': 'profile', '/ai': 'ai' };
+    /* Route batch 8: /beam, /engine and /account are the worlds' REAL roots now, and
+       /messages, /search, /me and /profile are aliases — all of them are parsed by
+       parseDeepLink like any route. Only these two remain old world paths. */
+    const LEGACY_WORLD_PATH = { '/home': 'home', '/ai': 'ai' };
     const wp = LEGACY_WORLD_PATH[location.pathname.toLowerCase().replace(/\/$/, '')];
     if (wp) { _pendingGo = wp; acSetPath(WORLD_PATH[wp] || '/'); }
+    else {
+      /* A WORLD ROOT (or one of its aliases) is where boot LANDS, not a destination opened
+         80ms after boot lands somewhere else — that pair is the known boot race (boot's
+         appTab(lastTab) and the deep link coalescing). So it becomes the boot tab directly;
+         the route stays pending too, so a signed-out visitor resumes there after signing in. */
+      const dl0 = parseDeepLink();
+      const w0 = dl0 && ((dl0.type === 'route' && WORLD_OF_ROUTE[dl0.key])
+        || (['beam', 'beamdm', 'beamgroup'].includes(dl0.type) && 'chat'));   // a conversation lives in Beam
+      if (w0) _pendingGo = w0;
+    }
   }
   // Email links: /verify-email?token=… and /reset-password?token=… are the clean
   // shapes we send now; the old /?verify= and /?reset= forms are still honoured so
@@ -24372,7 +24385,9 @@ const RESERVED_PATHS = (() => {
 
 /* Which world each bottom-nav tab lives at. Home is the bare domain — the brief's
    rule that the homepage carries no extra path. */
-const WORLD_PATH = { home: '/', chat: '/messages', search: '/search', ai: '/ai', profile: '/me' };
+const WORLD_PATH = { home: '/', chat: '/beam', search: '/engine', ai: '/ai', profile: '/account' };
+/* The APP_ROUTES key that IS a world root → the tab it is. */
+const WORLD_OF_ROUTE = { messages: 'chat', search: 'search', me: 'profile' };
 
 /* view id → route key, so the URL can be DERIVED from whatever is on screen
    instead of every one of the 45 openers having to remember to set it. */
@@ -24403,7 +24418,7 @@ function acAccountSectionPath(meId) {
 
 /* Screens that own their own address (a person, a post, a circle, a group). The
    sync below leaves these alone — they set a richer path than any tab could. */
-const SELF_ROUTED_SCREENS = ['acProfileScreen', 'acPostViewScreen', 'acCircleScreen', 'acThreadScreen'];
+const SELF_ROUTED_SCREENS = ['acProfileScreen', 'acPostViewScreen', 'acCircleScreen', 'acThreadScreen', 'acGroupInfoScreen'];
 
 /* ── The one place the address bar is kept true ──
    Rather than 45 openers each remembering to write a URL, we work out what the
@@ -24482,7 +24497,12 @@ function acSyncPath(opts) {
          overwrites the entry the member came FROM and real Back can never return there. */
       for (const id of SELF_ROUTED_SCREENS) {
         const el = document.getElementById(id);
-        if (el && !el.classList.contains('hidden') && !(push && id === 'acThreadScreen')) return;
+        if (!el || el.classList.contains('hidden')) continue;
+        /* A Beam conversation (or a group's info page) OWNS its address since route batch 8,
+           exactly as an entity sheet does: honour it, or keep the push for when it settles. */
+        if (el._ownPath) { acSetPath(el._ownPath, { push }); return; }
+        if (el._ownWait) { if (push) el._ownWait.push = true; return; }
+        if (!(push && id === 'acThreadScreen')) return;
       }
       // Two destinations are a tab PLUS a scope rather than a panel — derive them
       // the same way, from the live state, so they stay right without a hint.
@@ -24490,7 +24510,7 @@ function acSyncPath(opts) {
       /* The Account page on one of its sections is /account/<key> (route batch 5). Read from
          what is RENDERED (acMeShownSection), the same way Settings derives its address from the
          page it is showing — never from history.state. */
-      if (_appTab === 'profile') { const sec = acMeShownSection(); if (sec) { acSetPath(acAccountSectionPath(sec) || '/me', _push); return; } }
+      if (_appTab === 'profile') { const sec = acMeShownSection(); if (sec) { acSetPath(acAccountSectionPath(sec) || WORLD_PATH.profile, _push); return; } }
       if (_appTab === 'search' && _searchScope === 'jobs') { acSetPath(acRouteKeyPath('jobs'), _push); return; }
       if (_appTab === 'home' && _acFeedScope === 'bookmarks') { acSetPath('/collections', _push); return; }
       acSetPath(WORLD_PATH[_appTab] || '/', _push);
@@ -24524,6 +24544,29 @@ function parseDeepLink() {
      Anything else under /account says so (`unknown`): it never falls through to a username
      ('account' is reserved) and never silently renders some other page. The bare /account is
      the batch-8 root and is left exactly as it was. */
+  /* The three world ROOTS (route batch 8). Their old addresses are aliases: they open the
+     same world and the path sync writes the canonical root by replace. */
+  if (segs.length === 1 && (s0 === 'beam' || s0 === 'messages')) return { type: 'route', key: 'messages', alias: s0 !== 'beam' };
+  if (segs.length === 1 && (s0 === 'engine' || s0 === 'search')) return { type: 'route', key: 'search', alias: s0 !== 'engine' };
+  if (segs.length === 1 && (s0 === 'account' || s0 === 'me' || s0 === 'profile')) return { type: 'route', key: 'me', alias: s0 !== 'account' };
+  /* Beam conversations (route batch 8). /beam/u/<username>[/<threadId>], /beam/g/<id>[/info].
+     Anything else under /beam says so (`unknown`) and lands on the inbox; it never falls
+     through to a username ('beam' is reserved). */
+  if (s0 === 'beam') {
+    const k = segs[1].toLowerCase(), a = segs[2] || '', b = segs[3];
+    if (k === 'u' && /^@?[a-z0-9._-]{1,40}$/i.test(a)) {
+      const username = a.replace(/^@/, '').toLowerCase();
+      if (segs.length === 3) return { type: 'beamdm', username };
+      if (segs.length === 4 && /^\d+$/.test(b)) return { type: 'beamdm', username, thread: parseInt(b, 10) };
+    }
+    if (k === 'g' && /^\d+$/.test(a)) {
+      if (segs.length === 3) return { type: 'beamgroup', id: parseInt(a, 10) };
+      if (segs.length === 4 && b.toLowerCase() === 'info') return { type: 'beamgroup', id: parseInt(a, 10), info: true };
+    }
+    return { type: 'beam', unknown: true };
+  }
+  // /showcase/<id> — a Showcase item (route batch 8, the founder's shape: no slug).
+  if (s0 === 'showcase' && segs.length === 2 && /^\d+$/.test(segs[1])) return { type: 'showcase', id: parseInt(segs[1], 10) };
   if (s0 === 'account' && segs.length > 1) {
     const sub = segs.slice(1).join('/').toLowerCase();
     if (segs.length === 2 && Object.prototype.hasOwnProperty.call(ACCOUNT_SECTION_IDS, sub)) return { type: 'account', section: sub };
@@ -24589,6 +24632,9 @@ function openDeepLink(r, opts) {
       const def = APP_ROUTES[r.key];
       if (!def) return;
       if (def.auth && !isAccount()) { openLogin(); return; }
+      /* A world root arriving at boot: boot already LANDED there (handleUrlParams made it the
+         boot tab). Opening it again 80ms later is the boot race, so it is a no-op. */
+      if (opts && opts.boot && WORLD_OF_ROUTE[r.key] && _appTab === WORLD_OF_ROUTE[r.key]) return;
       /* A DIRECT entry onto an Account tool rebuilds the Account world with the tool's own
          section underneath (route batch 5), so the tool's own Back walks tool -> section ->
          /me instead of dropping onto whatever world boot happened to restore. A Back/Forward
@@ -24635,6 +24681,24 @@ function openDeepLink(r, opts) {
       if (r.section) setTimeout(() => { try { acProfTab(r.section); } catch (e) {} }, 420);
       return;
     }
+    /* Beam (route batch 8): the inbox, a person, an extra thread, a group, its info page. The
+       world is Beam whatever was on screen; a locked Chats section still asks first. */
+    if (r.type === 'beam' || r.type === 'beamdm' || r.type === 'beamgroup') {
+      if (!isAccount()) { openLogin(); return; }
+      if (r.type === 'beam') { appTab('chat'); if (r.unknown) showNotif('That conversation doesn’t exist.'); return; }
+      if (_appTab !== 'chat') appTab('chat', { silent: true });
+      requireSectionUnlock('chats', () => {
+        acGoMessages();
+        if (r.type === 'beamdm') acOpenChatByUsername(r.username, r.thread || null);
+        else acOpenGroup(r.id, { info: !!r.info });
+      });
+      return;
+    }
+    if (r.type === 'showcase') {
+      if (!isAccount()) { openLogin(); return; }
+      acOpenShowcase(r.id);
+      return;
+    }
     if (r.type === 'engine') {
       // An address under /engine that names nothing: the Engine root, said plainly.
       appTab('search');
@@ -24642,7 +24706,9 @@ function openDeepLink(r, opts) {
       return;
     }
     if (r.type === 'circle') acOpenCircleByUsername(r.username);
-    else if (r.type === 'group') acOpenGroupByUsername(r.username);
+    /* Arrived by the group's PUBLIC address: it is kept (route batch 8). Passed in, because by
+       the time the group has loaded boot may already have rewritten the bar to its world. */
+    else if (r.type === 'group') acOpenGroupByUsername(r.username, { publicPath: acRoutePath('group', { slug: r.username }, '/group/' + r.username) });
     else if (r.type === 'post') acOpenPostView(r.id);
     else if (r.type === 'job') acOpenJob(r.id);
     else if (r.type === 'listing') acOpenListing(r.id);
@@ -24914,6 +24980,102 @@ function acEntitySettle(el, tok, type, id, path) {
   el._ownPath = path;
   acSyncPath(wait && wait.push ? { push: true } : undefined);
 }
+/* ── BEAM CONVERSATION ADDRESSES (route batch 8) ──────────────────────────────────────
+   A conversation is a SCREEN, not a sheet, but it owns its address the same way an entity
+   sheet does: `_ownPath` on the screen element, honoured by acSyncPath. A DM is named by the
+   other person's @username, which an in-app open (by id) may not know until the thread has
+   loaded — so, like a typed entity, it WAITS (`_ownWait`, keeping the push it was asked for)
+   and settles once. One open, one entry, one NavEvent.
+   Nothing here remembers where the member came FROM: Back is the real history, or the
+   registry parent (/beam), exactly as batch 6 made it for everything else. */
+let _beamTok = 0;
+function acBeamDmPath(username, thread) {
+  const u = String(username || '').replace(/^@/, '').toLowerCase();
+  if (!u) return null;
+  return thread ? acRoutePath('beam-thread', { username: u, thread }, '/beam/u/' + u + '/' + thread)
+                : acRoutePath('beam-dm', { username: u }, '/beam/u/' + u);
+}
+function acBeamGroupPath(id, info) {
+  return acRoutePath(info ? 'beam-group-info' : 'beam-group', { id }, '/beam/g/' + id + (info ? '/info' : ''));
+}
+/* The handle of a person the app already has in hand (no request). */
+function acBeamKnownUsername(id) {
+  if (S.user && S.user.id === id) return S.user.username || null;
+  const row = (AC.conversations || []).find((x) => x.id === id && x.username);
+  if (row) return row.username;
+  const c = AC._dmCache && AC._dmCache[id];
+  if (c && c.peer && c.peer.username) return c.peer.username;
+  return (AC._beamUn && AC._beamUn[id]) || null;
+}
+function acBeamKnownId(username) {
+  const u = String(username || '').toLowerCase();
+  if (S.user && (S.user.username || '').toLowerCase() === u) return S.user.id;
+  const row = (AC.conversations || []).find((x) => (x.username || '').toLowerCase() === u);
+  if (row) return row.id;
+  for (const [id, un] of Object.entries(AC._beamUn || {})) if (String(un).toLowerCase() === u) return parseInt(id, 10);
+  return null;
+}
+/* The thread screen owns `path` now (null: resolving). `push`: this open is a new place. */
+function acBeamOwn(path, push) {
+  const el = document.getElementById('acThreadScreen');
+  if (!el) return 0;
+  const tok = ++_beamTok;
+  el._ownTok = tok;
+  if (path) { el._ownPath = path; el._ownWait = null; } else { el._ownPath = null; el._ownWait = { push: false }; }
+  acSyncPath(push ? { push: true } : undefined);
+  return tok;
+}
+/* The conversation loaded (path = its canonical address) or could not be (null). */
+function acBeamSettle(tok, path) {
+  const el = document.getElementById('acThreadScreen');
+  if (!el || el._ownTok !== tok) return;
+  const wait = el._ownWait;
+  el._ownWait = null;
+  if (!path) return;
+  if (el._ownPath === path && !wait) return;
+  el._ownPath = path;
+  if (el.classList.contains('hidden')) return;
+  acSyncPath(wait && wait.push ? { push: true } : undefined);
+}
+/* ONE safe not-found state for a conversation this member cannot read — whether it does not
+   exist or belongs to somebody else (the server answers both with the same 404, and the
+   resolver does the same for an unknown handle). Nothing of it is shown; the inbox is, and
+   the address becomes /beam by REPLACE. `tok`: only the open that failed may do this. */
+function acBeamNotFound(tok) {
+  const el = document.getElementById('acThreadScreen');
+  if (tok != null && el && el._ownTok !== tok) return;
+  if (el) { el._ownPath = null; el._ownWait = null; el._ownTok = ++_beamTok; }
+  AC.peer = null; AC.group = null; AC.messages = [];
+  const t = document.getElementById('acThread'); if (t) t.innerHTML = '';
+  showNotif('That conversation doesn’t exist.');
+  acBackReplace(WORLD_PATH.chat);
+}
+/* A conversation lives in Beam: opened from another world (a handoff — Connections, a
+   profile, an order), the world becomes Beam with it, so the lit nav, the screen and the
+   /beam/... address agree. Silent: the conversation is the screen, not the inbox; the push
+   the world switch queues merges with the conversation's own (one entry). */
+function acBeamEnsureWorld() {
+  if (_appTab === 'chat') return;
+  try { appTab('chat', { silent: true }); } catch (e) {}
+  try { if (_lw() > 768 && !AC._chatsEverLoaded) acLoadChats({ silent: true }); } catch (e) {}
+}
+/* /beam/u/<username>[/<threadId>] arrived by URL: name → id (only), then the ordinary open. */
+async function acOpenChatByUsername(username, thread) {
+  const un = String(username || '').replace(/^@/, '').toLowerCase();
+  let id = acBeamKnownId(un);
+  if (!id) {
+    /* "The member moved on while it resolved" is a change of history POSITION. The address
+       itself may legitimately be rewritten meanwhile (boot's own world landing, the inbox
+       underneath), so it is not the signal. */
+    const at = (AtweHistory.current || {}).idx, seq = ++_beamTok;
+    const moved = () => (AtweHistory.current || {}).idx !== at || _beamTok !== seq;
+    try { id = (await API.req('GET', '/api/atchat/peer/' + encodeURIComponent(un))).id; }
+    catch (e) { if (!moved()) { if (e.status === 404) acBeamNotFound(); else showNotif(e.message || 'Could not open the conversation.'); } return; }
+    if (moved()) return;
+    (AC._beamUn = AC._beamUn || {})[id] = un;
+  }
+  acOpenChat(id, thread || null);
+}
 /* overlay id → the leaf address it owns, derived from the registry's Settings leaves (the
    same list SETTINGS_LEAVES binds openers to). A leaf sheet carries its address as
    `_ownPath` — the route-batch-3 mechanism the listing/job/event sheets use — so the
@@ -25049,12 +25211,14 @@ async function acOpenCircleByUsername(username) {
     acOpenCircle(id);
   } catch (e) { showNotif(e.message || 'Circle not found.'); }
 }
-async function acOpenGroupByUsername(username) {
+async function acOpenGroupByUsername(username, opts) {
   const u = (username || '').replace(/^@/, '');
   if (!u) return;
   try {
     const { group } = await API.req('GET', '/api/atchat/groups/by-username/' + encodeURIComponent(u));
-    if (group.isMember || group.isAdmin) { acOpenGroup(group.id); return; }
+    /* Arriving by the group's PUBLIC address keeps it (route batch 8); an in-app open of a
+       shared link becomes the private conversation's own address. */
+    if (group.isMember || group.isAdmin) { acOpenGroup(group.id, { publicPath: (opts && opts.publicPath) || null }); return; }
     acShowGroupPreview(group);
   } catch (e) { showNotif(e.message || 'Group not found.'); }
 }
@@ -25630,6 +25794,7 @@ function hideAll() {
 function closeOverlay(id, noHistory) {
   const el = document.getElementById(id);
   if (!el || el.classList.contains('hidden')) return;
+  el._handoffRestored = false;
   // Notifications borrows the nav highlight while it is open — give it back.
   if (id === 'notifOverlay' && typeof acSyncNavActive === 'function') acSyncNavActive();
   el.classList.add('closing');
@@ -37331,7 +37496,10 @@ function routeFor(n) {
   if (/^appt_/.test(t) && ['appt_request', 'appt_confirmed', 'appt_declined', 'appt_cancelled', 'appt_rescheduled', 'appt_reminder'].includes(t)) return R('appointments');
   if (['rental_request', 'rental_booked', 'rental_paid'].includes(t)) return O("acOpenBookings('host')");
   if (['rental_confirmed', 'rental_declined', 'rental_cancelled'].includes(t)) return R('bookings');
-  if (['call_scheduled', 'call_confirmed', 'call_declined', 'call_cancelled', 'call_reminder'].includes(t)) return O(`appTab('chat');acOpenChat(${Number(a.id)})`, 'chat');
+  /* A conversation has an address since route batch 8: /beam/u/<username>, /beam/g/<id>. */
+  const DM = () => (a.username ? R('beam-dm', { username: a.username }, 'chat') : O(`appTab('chat');acOpenChat(${Number(a.id)})`, 'chat'));
+  const GRP = () => (n.groupId ? R('beam-group', { id: Number(n.groupId) }, 'group') : O("appTab('chat')", 'group'));
+  if (['call_scheduled', 'call_confirmed', 'call_declined', 'call_cancelled', 'call_reminder'].includes(t)) return DM();
   if (t === 'inquiry') return O('acOpenLeads()');
   if (['money_request', 'money_request_paid', 'money_request_declined'].includes(t)) return R('money-requests');
   if (['invoice', 'invoice_reminder'].includes(t)) return R('invoices');
@@ -37339,7 +37507,7 @@ function routeFor(n) {
   if (t === 'split_paid') return O("acOpenSplits();acSplitTab('created')");
   if (t === 'split_request' || t === 'split_reminder') return O('acOpenSplits()');
   if (t === 'mention') {
-    if (n.groupId) return O(`appTab('chat');acOpenGroup(${Number(n.groupId)})`, 'group');
+    if (n.groupId) return GRP();
     if (n.postId) return R('post', { id: n.postId, username: n.postAuthor || null });
     return R('profile', { username: a.username });
   }
@@ -37347,8 +37515,8 @@ function routeFor(n) {
   if (t === 'dmca_removed' && n.metaNum) return O(`acOpenCounter(${Number(n.metaNum)})`);
   if (t === 'feed_request' || t === 'feed_approved') return O(`acOpenFeed(${Number(n.feedId)})`, 'feed');
   if (t === 'group_request') return O(`appTab('chat');acOpenGroupRequests(${Number(n.groupId)})`, 'group');
-  if (['group_join_paid', 'group_approved', 'task_assigned', 'group_admin_added', 'group_admin_removed'].includes(t)) return O(`appTab('chat');acOpenGroup(${Number(n.groupId)})`, 'group');
-  if (['message', 'call', 'video_call', 'chat_request', 'chat_allowed', 'offer', 'crm_followup'].includes(t)) return O(`appTab('chat');acOpenChat(${Number(a.id)})`, 'chat');
+  if (['group_join_paid', 'group_approved', 'task_assigned', 'group_admin_added', 'group_admin_removed'].includes(t)) return GRP();
+  if (['message', 'call', 'video_call', 'chat_request', 'chat_allowed', 'offer', 'crm_followup'].includes(t)) return DM();
   if (['job_application', 'job_match', 'app_reviewed', 'app_shortlisted', 'app_hired', 'app_rejected', 'referral_request'].includes(t)) return n.jobId ? R('job', { id: n.jobId, title: n.jobTitle }, 'job') : R('search', null, 'job');
   if (t === 'rec_received') return O('acOpenPendingRecs()');
   if (t === 'rec_request') return O(`acWriteRecOpen(${jsAttr(a.username || '')},${jsAttr(a.name || '')})`);
@@ -37374,7 +37542,9 @@ function acNotifPath(d) {
   /* A typed entity's `{id}-{slug}` (route batch 7). The row carries the title when it has one
      (a product's name); otherwise the bare id, which the sheet corrects by replace on load. */
   if (d.route === 'listing' || d.route === 'job' || d.route === 'event') return acEntityPath(d.route, p.id, p.title || '');
-  if (d.route === 'search') return acRoutePath('search', null, '/search');
+  if (d.route === 'search') return acRoutePath('search', null, '/engine');
+  if (d.route === 'beam-dm') return p.username ? acBeamDmPath(p.username, null) : null;
+  if (d.route === 'beam-group') return p.id ? acBeamGroupPath(p.id, false) : null;
   if (APP_ROUTES[d.route]) return acRouteKeyPath(d.route);
   return null;
 }
@@ -37384,6 +37554,11 @@ function acNotifPath(d) {
 function acNavGo(path) {
   if (!path) return false;
   if (location.pathname === path) { _navApplyUrl(); return true; }
+  /* The screen under the panel this was tapped in belongs to the entry being LEFT: record it
+     now, because the render below runs as a restore and records nothing. Without it, Back
+     from a conversation opened here (route batch 8 makes that a Beam destination) brought
+     Notifications back over Beam instead of over the world it was opened from. */
+  try { navStackPush(AC_SCREENS.find((id) => { const e = document.getElementById(id); return e && !e.classList.contains('hidden'); })); } catch (e) {}
   acSetPath(path, { push: true });
   const was = _histRestoring;
   _histRestoring = true;
@@ -37590,7 +37765,10 @@ function _navScrollCandidates(screenEl) {
   return out;
 }
 function _navChatId() {
-  try { return AC.mode === 'group' ? 'g' + (AC.groupId || '') : 'd' + ((AC.peer && AC.peer.id) || ''); } catch (e) { return ''; }
+  /* The extra-thread id is part of WHICH conversation it is (route batch 8): two threads with
+     one person are two conversations, and restoring one for the other would show the wrong
+     messages under the right address. */
+  try { return AC.mode === 'group' ? 'g' + (AC.groupId || '') : 'd' + ((AC.peer && AC.peer.id) || '') + (AC.threadId ? ':' + AC.threadId : ''); } catch (e) { return ''; }
 }
 function navStackPush(fromScreen) {
   if (_navRestoring || _histRestoring || !fromScreen) return;
@@ -37637,9 +37815,15 @@ function navRestoreRecord(e) {
   _navRestoring = true;
   try {
     if (e.appTab && e.appTab !== _appTab) appTab(e.appTab, { silent: restorable || staleChat });
-    /* LEGACY-UNROUTED: the conversation this entry held is no longer the one in memory, and
-       it has no address to re-open it from - its inbox stands in, in its own world. */
-    if (staleChat) { acGoMessages(); return true; }
+    /* The conversation this entry held is no longer the one in memory. Since route batch 8 a
+       conversation HAS an address, so it is re-opened from that (false: the caller renders
+       the URL). Only an entry with no conversation address — an older tab's, written on "/"
+       — still falls back to the inbox. */
+    if (staleChat) {
+      const pr = parseDeepLink();
+      if (pr && (pr.type === 'beamdm' || pr.type === 'beamgroup' || pr.type === 'group')) return false;
+      acGoMessages(); return true;
+    }
     if (!restorable) return false;
     acShow(e.screen, e.acTab);
     const el = document.getElementById(e.screen);
@@ -40955,7 +41139,9 @@ function acHandoffRestoreSheets() {
   const h = _handoffPanel, cur = AtweHistory.current;
   if (!h || !cur || cur.idx !== h.idx) return;
   _handoffPanel = null;
-  h.sheets.forEach((id) => { if (document.getElementById(id)) showOverlay(id); });
+  /* Marked: a sheet that came back WITH an entry belongs to that entry, so a Forward off it is
+     a real move and must not be read as "Back cancels this sheet" (see the popstate handler). */
+  h.sheets.forEach((id) => { const el = document.getElementById(id); if (el) { showOverlay(id); el._handoffRestored = true; } });
 }
 /* A profile's own arrow means "go back": the unified App Back decides where. */
 function acProfileBack() { appGoBack(); }
@@ -40984,6 +41170,10 @@ function acBackToList() {
      panel it was handed off from, that is REAL history and it is walked; otherwise the
      inbox. */
   const go = () => {
+    /* A conversation that owns its address (route batch 8) goes back through the unified App
+       Back: real history, or the registry parent /beam. What follows is only for a thread
+       shown with no address of its own (LEGACY-UNROUTED). */
+    if (!_navBackOwner().legacy) { appGoBack(); return; }
     const h = _handoffPanel, cur = AtweHistory.current;
     if (h && cur && h.next != null && cur.idx === h.next && AtweHistory.hasPrev()) { _histDepth = Math.max(0, _histDepth - 1); history.back(); return; }
     if (AC.mode === 'group') acGoGroups(); else acGoMessages();
@@ -55802,6 +55992,10 @@ function acShowcaseCard(s) {
   </div>`;
 }
 async function acOpenShowcase(id) {
+  /* The item's own address, /showcase/{id} (route batch 8) — no slug, so it is known before
+     anything loads and is owned at once, the way a routed sheet's is. */
+  const _scEl = document.getElementById('showcaseView');
+  if (_scEl) { _scEl._ownPath = acRoutePath('showcase-detail', { id }, '/showcase/' + id); _scEl._ownWait = null; }
   AC._scId = id; showOverlay('showcaseView');
   const b = document.getElementById('showcaseViewBody'); b.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
   try {
@@ -56893,13 +57087,19 @@ async function acSubmitGroup() {
     }
   } catch (e) { showNotif(e.message || 'Could not save the group.'); btn.disabled = false; }
 }
-function acOpenGroupInfo() {
+function acOpenGroupInfo(opts) {
   if (!AC.group) return;
   const isChannel = !!AC.group.broadcast;
   const kind = isChannel ? 'channel' : 'group';
   acShow('acGroupInfoScreen', null);
+  /* /beam/g/<id>/info (route batch 8): a destination of its own, pushed when tapped; arriving
+     by that URL it is already in the bar. Its arrow is the unified App Back — real history
+     to the conversation, or (a direct entry) the registry parent /beam/g/<id> by replace. */
+  const _gi = document.getElementById('acGroupInfoScreen');
+  if (_gi) { _gi._ownPath = acBeamGroupPath(AC.groupId, true); _gi._ownWait = null; }
+  acSyncPath(opts && opts.fromUrl ? undefined : { push: true });
   document.getElementById('acGroupInfoTop').innerHTML =
-    `<button class="msg-back" onclick="acOpenGroup(${AC.groupId})" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    `<button class="msg-back" onclick="appGoBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
      <div class="ac-headtitle"><div class="ac-title">${isChannel ? 'Channel' : 'Group'} info</div></div><span class="msg-spacer"></span>`;
   const members = AC.members || [];
   const isAdmin = !!AC.group.iAmAdmin;
@@ -59160,16 +59360,12 @@ async function acOpenChat(id, threadId) {
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
   _revealedMsgs.clear(); // re-conceal any peeked messages when leaving a thread
   acCancelReply(); // drop any in-progress reply
-  /* A DM isn't a shareable pretty URL. But when a world switch has a PUSH queued (a handoff:
-     `appTab('chat'); acOpenChat(id)`), replacing now would overwrite the entry the member
-     came from before that push is even written — the queued push gives the conversation an
-     entry of its own instead (route batch 6). */
-  /* And a conversation opened by a HANDOFF with no world switch (Connections -> Message) is
-     a move forward too: its own entry is PUSHED over the panel's, never written over it, so
-     real Back can return to the panel. */
-  const _ho = _handoffPanel, _hc = AtweHistory.current;
-  const _fromHandoff = !!(_ho && _ho.next == null && _hc && _hc.idx === _ho.idx) && !_histRestoring;
-  if (!(_pathSyncQueued && _pathSyncWantPush)) acSetPath('/', { push: _fromHandoff });
+  /* The conversation OWNS its address (route batch 8): /beam/u/<username>, or
+     /beam/u/<username>/<threadId> for an extra conversation with them. Opening one is a new
+     destination, so it is pushed (a Back/Forward restore never pushes). When the handle is
+     not known yet it is resolved by the load below and pushed then — still ONE entry. */
+  acBeamEnsureWorld();
+  const _bTok = acBeamOwn(acBeamDmPath(acBeamKnownUsername(id), threadId), true);
   document.getElementById('acBroadcastBar').classList.add('hidden'); // not a channel
   document.getElementById('acInput').value = ''; acAutosize();
   document.getElementById('acSearchInput').value = '';
@@ -59192,6 +59388,7 @@ async function acOpenChat(id, threadId) {
   try {
     const d = await API.req('GET', '/api/atchat/with/' + id + tq);
     if (AC._loadSeq !== _seq) return; // a newer chat was opened while this one loaded
+    acBeamSettle(_bTok, acBeamDmPath(d.peer && d.peer.username, AC.threadId));
     if (!AC.threadId) { (AC._dmCache = AC._dmCache || {})[id] = d; acCapCache(AC._dmCache, id); }
     acApplyDmData(id, d, !cached, false); // fade in only on the first (non-cached) paint
     // Mark the thread read on open, then refresh the unread badge. Once read is
@@ -59204,6 +59401,10 @@ async function acOpenChat(id, threadId) {
     // the deferred focus on the load sequence so it can't fire on a thread you left.
     if (AC.canMessage && AC.messages.length === 0) setTimeout(() => { if (AC._loadSeq === _seq) document.getElementById('acInput').focus(); }, 200);
   } catch (e) {
+    /* Not theirs, or not there: the server answers both with the same 404, and so does this
+       — one safe not-found state, with nothing of the conversation shown. */
+    if (AC._loadSeq === _seq && e.status === 404) { acBeamNotFound(_bTok); return; }
+    if (AC._loadSeq === _seq) acBeamSettle(_bTok, null);
     if (AC._loadSeq === _seq && !cached) acErr(_thread, '');
     // Belt-and-braces: even if the thread GET failed, still mark the chat read —
     // the unread badge must NEVER stay stuck because one load hiccuped (the read
@@ -59219,6 +59420,7 @@ async function acOpenChat(id, threadId) {
 function acApplyDmData(id, d, firstPaint, fromCache) {
   if (!firstPaint) d.messages = acMergeLive(d.messages, AC.messages); // keep SSE msgs the snapshot predates
   AC.peer = d.peer; AC.messages = d.messages || [];
+  if (d.peer && d.peer.id && d.peer.username) (AC._beamUn = AC._beamUn || {})[d.peer.id] = d.peer.username;
   // Is this business answered by a team, and has somebody picked it up?
   AC._handledByTeam = !!d.handledByTeam;
   AC._agent = d.agent || null;
@@ -63781,8 +63983,15 @@ async function acLoadLiveStrip() {
   acRenderStoryTray();
 }
 
-async function acOpenGroup(id) {
+async function acOpenGroup(id, opts) {
   if (window._crashTab) _crashTab('group-thread');
+  /* A group's conversation is /beam/g/<id> (route batch 8) — known at once, so owned at once
+     and pushed. Arriving by its PUBLIC address (/group/<slug>) keeps that address: the public
+     page and the private conversation are two different things and neither replaces the
+     other. `info`: the address is the info page; the conversation loads underneath it. */
+  const _gOpts = opts || {};
+  acBeamEnsureWorld();
+  const _bTok = acBeamOwn(_gOpts.publicPath || acBeamGroupPath(id, !!_gOpts.info), !_gOpts.info);
   acHideSendUndo && acHideSendUndo(true);   // an Undo never carries into another conversation
   // Optimistic: zero the group row's unread the instant it's opened (the badge
   // never outlives entering the chat); the server confirms on refresh.
@@ -63829,6 +64038,7 @@ async function acOpenGroup(id) {
     if (AC._loadSeq !== _seq) return; // a newer thread was opened while this one loaded
     (AC._grpCache = AC._grpCache || {})[id] = d; acCapCache(AC._grpCache, id);
     acApplyGroupData(id, d, !cached, false);
+    if (_gOpts.info) acOpenGroupInfo({ fromUrl: true });
     API.req('GET', '/api/rt/group-call/' + id).then(r => {
       const inCall = r.inCall || [];
       if (inCall.length) _gcRosters.set(id, new Set(inCall)); else _gcRosters.delete(id);
@@ -63839,6 +64049,8 @@ async function acOpenGroup(id) {
     // Same rule as DMs: only auto-focus a brand-new (empty) group, never an existing one.
     if (AC.messages.length === 0) setTimeout(() => { if (AC._loadSeq === _seq) document.getElementById('acInput').focus(); }, 200);
   } catch (e) {
+    // Not a member, or no such group: one 404, one safe not-found state (route batch 8).
+    if (AC._loadSeq === _seq && e.status === 404) { acBeamNotFound(_bTok); return; }
     if (AC._loadSeq === _seq && !cached) acErr(_thread, '');
     // Belt-and-braces (same as DMs): a failed group load must still clear its unread.
     API.req('POST', '/api/atchat/groups/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
@@ -63862,7 +64074,6 @@ function acApplyGroupData(id, d, firstPaint, fromCache) {
   }
   AC._groupLive = AC._groupLive || {};
   if (d.live) AC._groupLive[id] = d.live; else delete AC._groupLive[id];
-  acSetPath(group.username ? '/group/' + group.username : '/');
   document.getElementById('acPeerName').textContent = group.name;
   const memTxt = `${members.length} member${members.length === 1 ? '' : 's'}`;
   document.getElementById('acPeerHandle').textContent = group.broadcast ? `Channel · ${memTxt}` : memTxt;
@@ -69249,7 +69460,9 @@ function _navBackOwner() {
   const r = parseDeepLink();
   const mine = (scr === 'acProfileScreen' && r && r.type === 'profile')
     || (scr === 'acPostViewScreen' && r && r.type === 'post')
-    || (scr === 'acCircleScreen' && r && r.type === 'circle');
+    || (scr === 'acCircleScreen' && r && r.type === 'circle')
+    || (scr === 'acThreadScreen' && r && (r.type === 'beamdm' || (r.type === 'beamgroup' && !r.info) || r.type === 'group'))
+    || (scr === 'acGroupInfoScreen' && r && r.type === 'beamgroup' && r.info);
   return mine ? { screen: scr } : { screen: scr, legacy: true };
 }
 /* The current root address of a registry world: its live `root` route. A world with none
@@ -69390,7 +69603,7 @@ function _navApplyUrl(opts) {
   const r = parseDeepLink();
   const wantView = (r && r.type === 'settings') ? 'settingsOverlay'
     : (r && r.type === 'route' && APP_ROUTES[r.key] && APP_ROUTES[r.key].view);
-  const _toSheet = !!wantView || !!(r && ['listing', 'job', 'event', 'service', 'course', 'newsletter', 'nlissue', 'community'].includes(r.type));
+  const _toSheet = !!wantView || !!(r && ['listing', 'job', 'event', 'service', 'course', 'newsletter', 'nlissue', 'community', 'showcase'].includes(r.type));
   /* THE WORLD UNDER A RESTORED ENTRY COMES FROM THAT ENTRY. When the screen memory holds
      this exact entry, its world and (for a world screen) the screen itself come back as
      they were left, scroll included. A profile/post/circle re-renders from its URL. */
@@ -69398,6 +69611,12 @@ function _navApplyUrl(opts) {
   let restored = false;
   if (rec && (_toSheet || !r || r.type === 'route' || rec.screen === 'acThreadScreen')) {
     try { restored = navRestoreRecord(rec); } catch (e) {}
+  }
+  /* A profile / post / circle re-renders from its URL, but the WORLD it sat in comes from the
+     entry too (route batch 8): a conversation opened from a profile switches the world to
+     Beam, and Back to that profile must hand the world back, or the profile shows under Beam. */
+  if (rec && !restored && r && ['profile', 'post', 'circle'].includes(r.type) && rec.appTab && rec.appTab !== 'ai' && rec.appTab !== _appTab) {
+    try { appTab(rec.appTab, { silent: true }); } catch (e) {}
   }
   /* Leaving the Atwe AI page for any other address: the AI page is an inside page with its
      own chrome (no bar, a back arrow), so a destination that is not /ai needs a world under
@@ -69458,6 +69677,16 @@ function navInit() {
     const _stay = AtweHistory.current;
     try { AtweHistory.traverse(e); } catch (x) {}
     try { acSyncTabTitle(); } catch (x) {}
+    /* A FORWARD off an entry whose handoff sheets were restored with it (an order sheet under
+       "Message the seller") is a real move to the entry ahead: those sheets go quietly, they do
+       not turn the Forward into a cancel. Found in route batch 8; the same on 2662387, where a
+       Forward re-pushed the orders entry and threw the forward history away. */
+    {
+      const _to = AtweHistory.current;
+      if (_stay && _to && Number.isInteger(_stay.idx) && Number.isInteger(_to.idx) && _to.idx > _stay.idx) {
+        document.querySelectorAll('.overlay:not(.hidden):not(.closing)').forEach((o) => { if (o._handoffRestored) { try { closeOverlay(o.id, true); } catch (x) {} } });
+      }
+    }
     // A menu / dialog / call is open → Back cancels THAT, and the page stays put. The
     // entry is put back with the position the member is still standing on.
     if (_navDismissModal()) { try { AtweHistory.repush({}, _stay, 'dismiss'); } catch (x) { try { history.pushState({}, ''); } catch (y) {} } return; }

@@ -7943,7 +7943,7 @@ reserves its name so no member can register a username that shadows it. The shap
 | pattern | what it is |
 |---|---|
 | `atwe.com/` | the home feed |
-| `atwe.com/<route>` | a feature — `/messages` `/jobs` `/wallet` `/notifications` |
+| `atwe.com/<route>` | a world or a feature — `/beam` `/engine` `/account` `/notifications` (the world roots since route batch 8) |
 | `atwe.com/settings/<page>` | a settings page — kept ONE level deep, never `/account/settings/user/x` |
 | `atwe.com/<username>` | a person **or a business** — in Atwe a business IS an account, so both share the clean address; `/company/<username>` is an alias that canonicalises here |
 | `atwe.com/<username>/post/<id>` | one of their posts (X-shaped: identity first, id because posts need a unique key) |
@@ -8004,7 +8004,7 @@ nothing left in history rather than on a sentinel.
 
 **Nothing that used to work breaks.** Every old address still resolves and then
 quietly rewrites itself to the canonical one, so there is never a second URL for
-one page: `/beam`→`/messages`, `/engine`→`/search`, `/home`→`/`, `/profile`→`/me`,
+one page: `/messages`→`/beam`, `/search`→`/engine`, `/me` and `/profile`→`/account` (route batch 8 turned these round), `/home`→`/`,
 `?u=john`→`/john`, `/post/123`→`/john/post/123` (upgraded once the author loads),
 `/company/john`→`/john`. Emailed action links are now `/verify-email?token=…` and
 `/reset-password?token=…`; the old `/?verify=` and `/?reset=` forms are still
@@ -8248,6 +8248,7 @@ page out of it, and the same address always rebuilds the same node from any star
   no `history.state` Settings routing left).
 ### Account canonical sections + tools (Route Audit batch 5)
 
+**(Superseded by route batch 8: the Account ROOT is now `/account`, `/me` its alias — see below.)**
 **The Account ROOT is still `/me`; its children already live under `/account/...`.** One
 root identity in the registry — the live `me` route, pattern `/me`, `next: '/account'` —
 and every section and tool names `me` (directly or through a section) as its logical
@@ -8340,8 +8341,8 @@ app. The model, in order:
    the registry's live `root` routes — `/ai` and Settings have none and fall to Home). ONE
    `replace` NavEvent, no fabricated history, so browser Back from a deep link still leaves;
 6. **a root with nothing behind** → `'exit'` (nothing): the exit behaviour belongs to
-   popstate, untouched. The current roots stay `/`, `/messages`, `/search`, `/me` (batch 8
-   flips them).
+   popstate, untouched. The roots were `/`, `/messages`, `/search`, `/me` in batch 6; since
+   batch 8 they are `/`, `/beam`, `/engine`, `/account`.
 
 **Real history wins over every static parent.** Wallet opened from Settings → Premium goes
 back to Settings → Premium, not `/account/money`; a profile opened from Notifications goes
@@ -8406,7 +8407,7 @@ of 60, so counting NavEvents by its length stops working — keep an unbounded l
 jobs, events, businesses, courses, newsletters, communities, showcase. Each flat `/<key>` it was
 issued at is a **permanent alias**, canonicalised by REPLACE (the server 301 is batch 9). In the
 app, `APP_ROUTES` marks them `engine: true` and `acRouteKeyPath` builds the canonical through the
-registry. **The Engine ROOT is still `/search`** (`next: '/engine'`): batch 8 owns that flip. An
+registry. **The Engine ROOT is still `/search`** (`next: '/engine'`): batch 8 owns that flip (done: `/engine` since batch 8). An
 unknown `/engine/<x>` lands on the Engine root with "That page doesn't exist" and can never
 become a username.
 
@@ -8473,6 +8474,108 @@ titles chosen to stress the slug rule; 390 + 1440 full matrix + 820 smoke) and 9
 `test/route-registry.test.js`. Self-tests: `--break=flat` (a flat URL stops canonicalising),
 `--break=slug` (a slug correction pushes), `--break=parent` (a listing's parent becomes Services).
 `route3`, `route6` and `navhandoff` were updated from the old flat addresses.
+
+
+### Beam conversation URLs + canonical world roots (Route Audit batch 8)
+
+**The three world roots are real addresses now: Beam `/beam`, Engine `/engine`, Account
+`/account`.** The old `/messages`, `/search`, `/me` (and the older `/profile`) are **permanent
+aliases**: they open the same world and the address canonicalises by REPLACE, adding no entry
+(the server 301 is batch 9). The route NAMES did not move — `messages`, `search`, `me` — so every
+parent in the registry still climbs to them, and every Account parent chain ends at `/account`,
+every Engine child at `/engine`. `WORLD_PATH` is still the ONE world → path table
+(`{ home: '/', chat: '/beam', search: '/engine', ai: '/ai', profile: '/account' }`), and
+`LEGACY_WORLD_PATH` now holds only `/home` and `/ai`.
+
+**A world root arriving by URL is where boot LANDS** (`handleUrlParams` sets `_pendingGo` from
+`WORLD_OF_ROUTE`, and a conversation link lands in Beam the same way), and `openDeepLink`
+ignores a world root at boot when boot is already there. The route stays pending too, so a
+signed-out visitor resumes there after signing in.
+
+| address | what it is | parent |
+|---|---|---|
+| `/beam/u/{username}` | the main conversation with a person | `/beam` |
+| `/beam/u/{username}/{threadId}` | an extra conversation with them (`dm_threads`) | `/beam` |
+| `/beam/g/{id}` | a group's conversation | `/beam` |
+| `/beam/g/{id}/info` | its info page | `/beam/g/{id}` |
+| `/showcase/{id}` | a Showcase item — **no slug** (the founder's shape) | `/engine/showcase` |
+| `/beam/u/{username}/contact` | **planned** — Beam has no contact page (the header picture opens the PROFILE) | |
+| `/engine/search` | **planned** — unchanged from batch 7; search has no committed-results state | |
+
+**A conversation OWNS its address the way an entity sheet does** — `_ownPath` on the
+`#acThreadScreen` element (and `#acGroupInfoScreen`), honoured by `acSyncPath`, which now reads
+`_ownPath`/`_ownWait` on the self-routed SCREENS too. `acBeamOwn(path, push)` claims it;
+an in-app open (by id) that does not know the person's handle yet WAITS (`_ownWait`, keeping the
+push it was asked for) and `acBeamSettle` pushes the canonical once the thread has loaded. One
+open, one entry, one NavEvent. A Back/Forward restore never pushes. A direct entry by handle
+resolves name → id through **`GET /api/atchat/peer/:username`** (id + username only; an unknown
+handle and a deactivated account are the SAME 404 — except to someone who already shares a
+conversation with that account, whose own history the inbox shows them anyway), then opens
+normally. "The member moved on while it resolved" is judged by the history POSITION, never the
+address: boot's own world landing rewrites the address meanwhile, and testing the path made a
+signed-out visitor's resume land on the inbox instead of the conversation.
+
+**A conversation lives in Beam.** `acBeamEnsureWorld()` switches the world silently when one is
+opened from elsewhere (Connections, a profile, an order, Services), so the lit nav, the screen
+and the `/beam/...` address agree; the world switch's queued push merges with the
+conversation's own. Back puts the source's world back: from the screen memory for a panel or a
+world screen, and — new — for a profile/post/circle re-rendered from its URL (`_navApplyUrl`
+hands `rec.appTab` back). `acNavGo` records the screen under the panel BEFORE its push, because
+its render runs as a restore and records nothing (Notifications → DM → Back used to reopen
+Notifications over Beam).
+
+**The public `/group/{slug}` is unchanged and distinct.** A member arriving by it gets the
+conversation AT that address (`publicPath`, passed in by `openDeepLink` — by the time the group
+has loaded, boot's own world landing has already rewritten the bar, so it cannot be read back);
+an in-app open owns `/beam/g/{id}`. The group render
+no longer rewrites the address to `/group/<slug>` as it paints.
+
+**PRIVACY: one safe not-found state.** A thread that belongs to two other people, a group the
+member is not in, a deactivated account they never talked to, and an address that simply does
+not exist all end the
+same way — `acBeamNotFound`: the conversation's memory is cleared, nothing of it is shown, the
+member gets "That conversation doesn't exist." and the address REPLACES to `/beam`. The server
+already answers the wrong-member and the nonexistent cases with the same 404
+(`resolveDmThread`, the group loader); the client must not distinguish them either.
+
+**Back is batch 6, unchanged in kind.** A conversation's arrow (`acBackToList`) and the group
+info arrow go through `appGoBack()`: real history, or the registry parent by REPLACE. No
+`_beamFrom`/`_chatFrom` memory exists (a test fails if one appears). `_navChatId` now includes
+the extra-thread id — two threads with one person are two conversations, and restoring one for
+the other showed the wrong messages under the right address. A stale conversation record
+re-opens from the URL instead of falling to the inbox.
+
+**Notifications** open conversations through `routeFor` at their canonical address
+(`R('beam-dm', {username})`, `R('beam-group', {id})`); the legacy opener remains only as the
+fallback when the payload carries no handle.
+
+**ONE FORWARD BUG FIXED THAT PREDATES THIS BATCH.** After a handoff Back (Order → Message,
+Services → Message), the unrouted sheet the handoff restores (`orderView`, `serviceView`) was
+treated by the popstate handler as "Back cancels this sheet" on the FORWARD too: Forward
+re-pushed the panel's entry and threw the forward history away. Reproduced identically on
+2662387 (history 4 → 5, still on `/account/orders`). A sheet reopened by
+`acHandoffRestoreSheets` is now marked `_handoffRestored`, and a Forward traversal closes it
+quietly instead of cancelling.
+
+**THE BOOT RACE WAS MEASURED, NOT WAIVED.** 90 cold boots per tree onto nine deep links, each
+with a DIFFERENT last world so boot's own landing had to be overruled: 2662387 and this tree
+fail identically — `/engine/marketplace` lands its panel over the restored world (Home, Account,
+Beam) 7 times in 10, everything else 0. So it is pre-existing and not more frequent; the world
+roots themselves can no longer race at all (they are where boot lands). Boot's early world
+landing ALSO rewrites the address before the deep link opens, which is why anything that needs
+to know how it arrived (`publicPath`) is passed in rather than read back.
+
+**Reserved words: unchanged.** `SYSTEM_ROUTES` stays 140 — `beam`, `engine`, `account`,
+`showcase`, `messages`, `search`, `me`, `profile` were all first literals already.
+
+Guarded by `scratchpad/route8.js` (owns its fixture: two businesses, a foreign pair with a
+private thread, a foreign group, a deactivated account, an extra thread, a public group, an
+order, a service, a showcase item, a message notification; 390 + 1440 full matrix + an 820
+smoke, plus 60 cold boots onto deep links) and 9 batch-8 tests in `test/route-registry.test.js`.
+Self-tests: `--break=messages`, `--break=me`, `--break=dmreplace`, `--break=groupinfo`,
+`--break=leak` (a server that answered a foreign thread — the probe's own detector),
+`--break=slug`. `route5`, `route6`, `route7`, `histv2`, `setdeep` and `setroutes` were updated
+from the old root addresses.
 
 ## Search & typeahead
 
