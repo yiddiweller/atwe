@@ -3,7 +3,7 @@
  *   ENGINE BROWSE   /engine/{marketplace|services|jobs|events|businesses|courses|
  *                   newsletters|communities|showcase}; each flat /<key> it used to live at
  *                   is a permanent alias, canonicalised by REPLACE. The Engine ROOT is still
- *                   /search (batch 8 owns that flip).
+ *                   /search until batch 8; /engine since.
  *   ENTITIES        /listing /service /job /event /course /newsletter : `{id}-{slug}`, the id
  *                   authoritative, the slug from the ONE registry rule; an issue is
  *                   /newsletter/<id>/issue/<n>; a community /communities/<id>.
@@ -155,7 +155,7 @@ async function browse(p, errs, tag) {
     say(r.path === '/engine/' + key && onScreen(r) && r.idx === s.idx && r.coherent, `${tag} ${key}: refresh stays canonical, same entry, same surface`, { path: r.path, top: r.top, scope: r.scope, why: r.why });
     await back(p);
     const b = await snap(p);
-    say(b.path === '/search' && b.screen === 'acSearchScreen' && b.top === null && b.idx === s0.idx && b.coherent, `${tag} ${key}: browser Back returns to the Engine root`, { path: b.path, top: b.top, why: b.why });
+    say(b.path === '/engine' && b.screen === 'acSearchScreen' && b.top === null && b.idx === s0.idx && b.coherent, `${tag} ${key}: browser Back returns to the Engine root`, { path: b.path, top: b.top, why: b.why });
     await fwd(p);
     const f = await snap(p);
     say(f.path === '/engine/' + key && onScreen(f) && f.idx === s.idx && f.coherent, `${tag} ${key}: browser Forward restores it`, { path: f.path, top: f.top, why: f.why });
@@ -163,7 +163,7 @@ async function browse(p, errs, tag) {
     await appBack(p);
     const a = await snap(p);
     const aev = navEv(await evSince(p, n));
-    say(a.path === '/search' && a.top === null && a.idx === s0.idx && aev.length === 1 && aev[0].kind === 'traverse' && a.coherent,
+    say(a.path === '/engine' && a.top === null && a.idx === s0.idx && aev.length === 1 && aev[0].kind === 'traverse' && a.coherent,
       `${tag} ${key}: App Back walks the REAL history to /search`, { path: a.path, ev: aev, top: a.top });
   }
   say(errs.length === 0, `${tag} A. no JS errors`, errs.slice(0, 2));
@@ -188,7 +188,7 @@ async function aliases(browser, token, vp, tag) {
         await appBack(p);
         const a = await snap(p);
         const aev = navEv(await evSince(p, n));
-        say(a.path === '/search' && a.top === null && aev.length === 1 && aev[0].kind === 'replace' && a.idx === r.idx && a.coherent,
+        say(a.path === '/engine' && a.top === null && aev.length === 1 && aev[0].kind === 'replace' && a.idx === r.idx && a.coherent,
           `${tag} /engine/${key} (direct): App Back REPLACES to the Engine root, fabricating no history`, { path: a.path, ev: aev, idx: [r.idx, a.idx] });
       }
     }
@@ -197,7 +197,7 @@ async function aliases(browser, token, vp, tag) {
   for (const url of ['/engine/nope', '/engine/search', '/engine/workers']) {
     await go(p, url); await settle(p, 900);
     const s = await snap(p);
-    say(s.screen === 'acSearchScreen' && s.tab === 'search' && s.path === '/search' && s.top === null, `${tag} ${url}: lands on the Engine root, never a profile`, { path: s.path, screen: s.screen, top: s.top });
+    say(s.screen === 'acSearchScreen' && s.tab === 'search' && s.path === '/engine' && s.top === null, `${tag} ${url}: lands on the Engine root, never a profile`, { path: s.path, screen: s.screen, top: s.top });
   }
   say(errs.length === 0, `${tag} B. no JS errors`, errs.slice(0, 2));
   await ctx.close();
@@ -304,10 +304,10 @@ async function directEntities(browser, token, vp, tag, fx) {
   await go(p, '/newsletter/' + fx.newsletter2 + '/issue/' + fx.issue); await settle(p, 1400);
   s = await snap(p);
   say(s.path === issuePath && s.prev === null, `${tag} an issue under the wrong newsletter id is corrected by replace`, s.path);
-  // Showcase detail is not routed: /showcase/<id> is nobody's profile and opens nothing
+  // Showcase detail is routed since batch 8 (/showcase/<id>, no slug): never a profile
   await go(p, '/showcase/' + fx.showcase); await settle(p, 900);
   s = await snap(p);
-  say(s.screen !== 'acProfileScreen' && !s.open.includes('showcaseView'), `${tag} /showcase/<id> stays unrouted (founder decision pending)`, { screen: s.screen, open: s.open });
+  say(s.screen !== 'acProfileScreen' && s.open.includes('showcaseView') && s.path === '/showcase/' + fx.showcase, `${tag} /showcase/<id> opens the item at its own address (batch 8)`, { screen: s.screen, open: s.open });
   // malformed typed paths never become a profile
   for (const url of ['/service/abc', '/course/12/x', '/newsletter/x/issue/2', '/communities/x', '/listing/abc-12']) {
     await go(p, url); await settle(p, 800);
@@ -327,10 +327,10 @@ async function search(p, errs, tag) {
   await settle(p, 1200);
   let s = await snap(p);
   let ev = navEv(await evSince(p, s0.events));
-  say(s.path === '/search' && s.idx === s0.idx && ev.length === 0, `${tag} typing a query keeps the Engine root /search, no entries (search URLs are batch-7 planned)`, { path: s.path, ev });
+  say(s.path === '/engine' && s.idx === s0.idx && ev.length === 0, `${tag} typing a query keeps the Engine root /search, no entries (search URLs are batch-7 planned)`, { path: s.path, ev });
   for (const sc of ['people', 'shop', 'posts']) { await p.evaluate((x) => acSetSearchScope(x), sc); await settle(p, 500); }
   s = await snap(p); ev = navEv(await evSince(p, s0.events));
-  say(s.path === '/search' && pushes(ev).length === 0, `${tag} scope chips never push`, { path: s.path, ev });
+  say(s.path === '/engine' && pushes(ev).length === 0, `${tag} scope chips never push`, { path: s.path, ev });
   await p.evaluate(() => { const i = document.getElementById('tbSearchInput'); i.value = ''; acSetSearchScope('all'); });
   await settle(p);
   // Marketplace filters are local: no entry per chip, one Back leaves the surface
@@ -347,7 +347,7 @@ async function search(p, errs, tag) {
   say(m1.path === '/engine/marketplace' && m1.idx === m0.idx && mev.length === 0, `${tag} Marketplace filter chips + query replace nothing and push nothing`, { path: m1.path, ev: mev });
   await back(p);
   const mb = await snap(p);
-  say(mb.path === '/search' && mb.top === null, `${tag} one Back leaves the Marketplace (not each filter)`, { path: mb.path, top: mb.top });
+  say(mb.path === '/engine' && mb.top === null, `${tag} one Back leaves the Marketplace (not each filter)`, { path: mb.path, top: mb.top });
   // unknown query params never survive canonicalisation
   await go(p, '/marketplace?utm_x=1&junk=2'); await settle(p, 900);
   s = await snap(p);
@@ -398,7 +398,7 @@ async function contextual(p, errs, tag, fx) {
   // another routed origin: a profile, then the Engine root
   for (const [label, start, want] of [
     ['a profile', (u) => { appTab('home'); acGoProfile(u); }, (fx2) => '/' + fx2.b.username],
-    ['the Engine root', () => appTab('search'), () => '/search'],
+    ['the Engine root', () => appTab('search'), () => '/engine'],
   ]) {
     await closeAll(p); await p.evaluate(start, fx.b.username); await settle(p, 1500);
     const s0 = await snap(p);

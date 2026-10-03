@@ -79,9 +79,9 @@ async function run(browser, token, viewport) {
   say(c.state.idx === b.state.idx && c.state.key === b.state.key, tag + ' 3. a replace preserves idx and key', [b.state.idx, c.state.idx]);
   say(c.len === b.len, tag + ' 3b. ...and adds no entry', [b.len, c.len]);
   say(c.state.path === '/notifications' && c.state.path === c.path, tag + ' 3c. the replaced entry\'s path is the real URL', c.state.path);
-  await p.evaluate(() => acSetPath('/messages')); await settle(p, 300);
+  await p.evaluate(() => acSetPath('/beam')); await settle(p, 300);
 
-  // more pushes for the traversal checks: /messages -> /search -> Settings -> Security (same-URL push)
+  // more pushes for the traversal checks: /beam -> /engine -> Settings -> Security (same-URL push)
   await p.evaluate(() => appTab('search')); await settle(p);
   const sSearch = (await st(p)).state; keys.add(sSearch.key);
   await p.evaluate(() => openSettings()); await settle(p);
@@ -118,7 +118,7 @@ async function run(browser, token, viewport) {
   await p.evaluate(() => history.go(-2)); await settle(p, 1400);
   ev = await lastEvent(p, 'traverse');
   say(ev && ev.direction === 'back' && ev.delta === -2, tag + ' 8. history.go(-2) reports back, delta -2', ev && [ev.direction, ev.delta]);
-  say((await st(p)).path === '/search', tag + ' 8b. ...and lands on /search', (await st(p)).path);
+  say((await st(p)).path === '/engine', tag + ' 8b. ...and lands on /engine (the Engine root since route batch 8)', (await st(p)).path);
 
   // 4/5. reload keeps the position and adds nothing
   const beforeReload = await st(p);

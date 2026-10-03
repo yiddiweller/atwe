@@ -270,9 +270,9 @@ async function contextual(p, errs, tag, fx) {
   console.log(`\n${tag} 5. the same destination from two origins`);
   const B = fx.b.username;
   for (const [origin, start, want, check] of [
-    ['Engine', () => appTab('search'), '/search', (s) => s.screen === 'acSearchScreen' && s.tab === 'search'],
+    ['Engine', () => appTab('search'), '/engine', (s) => s.screen === 'acSearchScreen' && s.tab === 'search'],
     ['Home', () => appTab('home'), '/', (s) => s.screen === 'acHomeScreen' && s.tab === 'home'],
-    ['Account', () => appTab('profile'), '/me', (s) => s.screen === 'acMeScreen' && s.tab === 'profile'],
+    ['Account', () => appTab('profile'), '/account', (s) => s.screen === 'acMeScreen' && s.tab === 'profile'],
   ]) {
     await p.evaluate(start); await settle(p, 1300);
     await p.evaluate((u) => acGoProfile(u), B); await settle(p, 1400);
@@ -389,7 +389,7 @@ async function poison(p, errs, tag, fx) {
   await p.evaluate(poisonIt);
   await p.evaluate(() => acAiBack()); await settle(p, 1400);
   s = await snap(p);
-  say(s.path === '/search' && s.tab === 'search', `${tag} poisoned _aiFrom: AI Back returns to the world it really came from`, { path: s.path, tab: s.tab });
+  say(s.path === '/engine' && s.tab === 'search', `${tag} poisoned _aiFrom: AI Back returns to the world it really came from`, { path: s.path, tab: s.tab });
   const leftover = await p.evaluate(() => !document.getElementById('tipSheet').classList.contains('hidden'));
   say(!leftover, `${tag} a stale handoff mark reopens nothing`, leftover);
   await p.evaluate(() => { _navStack.length = 0; _handoffPanel = null; delete AC._profFrom; delete AC._postNav; delete window._aiFrom; delete window._profFrom; });
@@ -420,7 +420,10 @@ async function mixedState(p, errs, tag, fx) {
   const ordIdx = (await snap(p)).idx;
   await p.evaluate((id) => { acHandoffFrom('ordersView'); appTab('chat'); acOpenChat(id); }, fx.b.id); await settle(p, 2000);
   s = await snap(p);
-  say(s.screen === 'acThreadScreen' && s.ownLeg && s.prev === ordIdx, `${tag} Orders -> conversation (a conversation owns no URL: legacy-unrouted)`, { screen: s.screen, prev: s.prev, ordIdx });
+  /* Route batch 8: a conversation OWNS its address (/beam/u/<username>), so it is no longer the
+     legacy-unrouted case this used to assert: one push straight off the Orders entry. */
+  say(s.screen === 'acThreadScreen' && !s.ownLeg && s.path === '/beam/u/' + fx.b.username && s.prev === ordIdx,
+    `${tag} Orders -> conversation: ONE push to its own /beam/u/<username> (route batch 8)`, { screen: s.screen, path: s.path, prev: s.prev, ordIdx });
   await p.evaluate(() => acBackToList()); await settle(p, 1800);
   s = await snap(p);
   say(s.path === '/account/orders' && s.top === 'ordersView' && s.tab === 'profile' && s.screen === 'acMeScreen' && s.coherent,
@@ -440,14 +443,14 @@ async function directEntries(browser, token, vp, tag, fx) {
     ['circle', '/circle/' + fx.circle, ['/']],
     ['Settings page', '/settings/privacy', ['/settings']],
     ['Settings leaf', '/settings/security/devices', ['/settings/security', '/settings']],
-    ['Account section', '/account/money', ['/me']],
-    ['Account tool', '/account/wallet', ['/account/money', '/me']],
+    ['Account section', '/account/money', ['/account']],
+    ['Account tool', '/account/wallet', ['/account/money', '/account']],
     /* Route batch 7: Engine browse is /engine/<x>, an entity is `{id}-{slug}` and its
        direct-entry parent is its browse surface (it used to be the world under the layer). */
-    ['Marketplace', '/engine/marketplace', ['/search']],
-    ['listing', '/listing/' + REG.idSlug(fx.listingId, 'route6 listing'), ['/engine/marketplace', '/search']],
-    ['job', '/job/' + REG.idSlug(fx.jobId, 'route6 job'), ['/engine/jobs', '/search']],
-    ['event', '/event/' + REG.idSlug(fx.eventId, 'route6 event'), ['/engine/events', '/search']],
+    ['Marketplace', '/engine/marketplace', ['/engine']],
+    ['listing', '/listing/' + REG.idSlug(fx.listingId, 'route6 listing'), ['/engine/marketplace', '/engine']],
+    ['job', '/job/' + REG.idSlug(fx.jobId, 'route6 job'), ['/engine/jobs', '/engine']],
+    ['event', '/event/' + REG.idSlug(fx.eventId, 'route6 event'), ['/engine/events', '/engine']],
     ['/ai', '/ai', ['/']],
   ];
   for (const [name, url, wants] of cases) {
@@ -461,7 +464,7 @@ async function directEntries(browser, token, vp, tag, fx) {
       const r = await appBack(p);
       s = await snap(p);
       const ev = navEvents(await evSince(p, n0));
-      const okPath = want === null ? (['/', '/messages', '/search', '/me'].includes(s.path) && !s.open.length) : s.path === want;
+      const okPath = want === null ? (['/', '/beam', '/engine', '/account'].includes(s.path) && !s.open.length) : s.path === want;
       const okEv = want === null ? ev.every((e) => e.kind === 'replace') : (ev.length === 1 && ev[0].kind === 'replace');
       say(r === 'x' && okPath && s.idx === idx0 && s.len === len0 && okEv && s.coherent,
         `${tag} ${name}: App Back -> ${want === null ? 'the world it was shown over (layer close)' : want} by REPLACE, history does not grow`,

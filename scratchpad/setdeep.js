@@ -274,7 +274,7 @@ async function run(browser, u, viewport, tag) {
           else await p.evaluate(() => { try { appGoBack(); } catch (e) {} });
           await settle(p);
           const out = await state(p);
-          say(!out.open.includes('settingsOverlay') && out.screen === 'acMeScreen' && out.path === '/me' && clean(out),
+          say(!out.open.includes('settingsOverlay') && out.screen === 'acMeScreen' && out.path === '/account' && clean(out),
             `${tag} ${name} [${how}]: Back from the hub leaves Settings for the Account page`,
             JSON.stringify({ open: out.open, path: out.path, screen: out.screen }));
           // Forward rebuilds Settings, then the level it came back from - never a stale sheet

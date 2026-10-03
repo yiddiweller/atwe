@@ -65,6 +65,11 @@ function appName(d) {
     // Route batch 7: an unknown /engine/<x> matches nothing; an issue is its own route.
     case 'engine': return null;
     case 'nlissue': return 'newsletter-issue';
+    // Route batch 8: Beam conversations and the Showcase item; an unknown /beam/<x> matches nothing.
+    case 'beam': return null;
+    case 'beamdm': return d.thread ? 'beam-thread' : 'beam-dm';
+    case 'beamgroup': return d.info ? 'beam-group-info' : 'beam-group';
+    case 'showcase': return 'showcase-detail';
     default: return d.type; // post, job, listing, event, service, course, newsletter, community, group, circle
   }
 }
@@ -80,6 +85,7 @@ function appParams(d) {
   }
   // Route batch 7: a typed entity's segment is `{id}-{slug}`; an issue names its newsletter.
   if (d.type === 'nlissue') return { id: String(d.nl), issue: String(d.id) };
+  if (d.type === 'beamdm') return d.thread ? { username: d.username, thread: String(d.thread) } : { username: d.username };
   if (TYPED.includes(d.type)) return { idslug: String(d.id) + (d.slug === null || d.slug === undefined ? '' : '-' + String(d.slug).toLowerCase()) };
   if (d.id !== undefined) out.id = String(d.id);
   // A profile's /<username>/<section> is a parameter; an Account section is its own route.
@@ -168,7 +174,7 @@ test('builders produce valid paths that parse straight back (round trip)', () =>
 });
 
 test('a builder refuses planned routes and bad parameters instead of inventing a URL', () => {
-  assert.throws(() => R.build('beam-dm', { username: 'john' }), /planned/);
+  assert.throws(() => R.build('beam-contact', { username: 'john' }), /planned/);
   assert.throws(() => R.build('listing', {}), /missing id/);
   assert.throws(() => R.build('listing', { idslug: 'abc' }), /invalid idslug/);
   assert.throws(() => R.build('listing', { idslug: 'oak-chair' }), /invalid idslug/);
@@ -207,7 +213,7 @@ function corpus() {
   let s = 1874;
   const rnd = (n) => { s = (s * 1103515245 + 12345) & 0x7fffffff; return (s >>> 16) % n; };
   const pieces = ['post', 'job', 'listing', 'event', 'group', 'circle', 'company', 'settings', 'security',
-    'engine', 'marketplace', 'service', 'course', 'newsletter', 'issue', 'communities', 'showcase', '12-oak', '7-Café-&-co', '0-', 'search', 'workers',
+    'engine', 'beam', 'u', 'g', 'info', 'contact', 'account', 'me', 'messages', 'marketplace', 'service', 'course', 'newsletter', 'issue', 'communities', 'showcase', '12-oak', '7-Café-&-co', '0-', 'search', 'workers',
     'media', 'about', 'john', 'Jane.Doe', '@bob', '12', 'x', '0', 'wallet', 'login', 'photo', 'MEDIA', '-a', 'a-'];
   for (let k = 0; k < 900; k++) {
     const n = 1 + rnd(4);
@@ -317,7 +323,7 @@ test('approved future addresses are data only: never matched, always reserved', 
   }
   for (const x of live) if (x.next) { const f = R.firstLiteral(x.next); if (f) assert.ok(alloc.has(f), x.name + ' next ' + x.next); }
   // Nothing planned is reachable yet.
-  assert.notStrictEqual((R.match('/beam/u/john') || {}).name, 'beam-dm');
+  assert.notStrictEqual((R.match('/beam/u/john/contact') || {}).name, 'beam-contact');
   for (const p of ['/account/orders/5', '/account/store/orders/5', '/account/wallet/tx/5', '/account/store/pause', '/account/certified']) {
     assert.strictEqual(R.match(p), null, p + ' is planned and must not match yet');
   }
@@ -427,15 +433,19 @@ test('batch 4: no history.state Settings routing is left in the app', () => {
 /* ── Route batch 5 — Account sections and tools are canonical URLs ────────────────── */
 const ACCT_SECTIONS = ['profile', 'money', 'selling', 'customers', 'marketing', 'jobs', 'library', 'planning', 'creating', 'ai', 'help'];
 
-test('batch 5: the Account root is still /me, and /account is only its FUTURE canonical', () => {
+test('batch 8: the Account root is /account; /me and /profile are its aliases (ONE root identity)', () => {
   const me = R.get('me');
-  assert.strictEqual(me.pattern, '/me');
-  assert.strictEqual(me.next, '/account', 'the batch-8 flip is recorded, not performed');
+  assert.strictEqual(me.pattern, '/account');
+  assert.strictEqual(me.next, null, 'the flip has been performed');
+  assert.deepStrictEqual(me.aliases, ['/me', '/profile']);
   assert.strictEqual(me.family, 'root');
   assert.strictEqual(me.parent, null);
-  assert.strictEqual(R.match('/me').name, 'me');
-  assert.strictEqual(R.match('/account'), null, 'the bare /account is not live before batch 8');
-  assert.strictEqual(APP.parse('/account'), null);
+  assert.deepStrictEqual(R.match('/account'), { name: 'me', params: {}, alias: false });
+  assert.deepStrictEqual(R.match('/me'), { name: 'me', params: {}, alias: true });
+  assert.deepStrictEqual(R.match('/profile'), { name: 'me', params: {}, alias: true });
+  assert.deepStrictEqual(APP.parse('/account'), { type: 'route', key: 'me', alias: false });
+  assert.deepStrictEqual(APP.parse('/me'), { type: 'route', key: 'me', alias: true });
+  assert.deepStrictEqual(APP.parse('/profile'), { type: 'route', key: 'me', alias: true });
   assert.strictEqual(R.ROUTES.filter((x) => x.world === 'account' && x.family === 'root').length, 1, 'ONE Account root');
 });
 
@@ -518,9 +528,15 @@ test('batch 5: private details stay unrouted (no sequential ids made addressable
   assert.ok(!/\/account\/(orders|store\/orders|wallet\/tx|invoices|quotes)\/'\s*\+/.test(html), 'the app builds a private detail URL');
 });
 
-test('batch 5: the Account root flip stays for batch 8 — nothing in the app routes /me to /account', () => {
-  assert.ok(/WORLD_PATH = \{[^}]*profile: '\/me'/.test(html), 'the Account world still lives at /me');
-  assert.ok(!/acSetPath\('\/account'[,)]/.test(html), 'something writes the bare /account');
+test('batch 8: the Account world lives at /account, and every Account parent chain ends there', () => {
+  assert.ok(/WORLD_PATH = \{[^}]*profile: '\/account'/.test(html), 'the Account world lives at /account');
+  for (const x of R.liveRoutes().filter((y) => y.world === 'account' && y.name !== 'me')) {
+    let n = x, hops = 0;
+    while (n.parent && n.parent !== 'history' && hops++ < 6) n = R.get(n.parent);
+    assert.strictEqual(n.name, 'me', x.name + ' climbs to ' + n.name);
+    assert.strictEqual(R.build(n.name), '/account', x.name);
+  }
+  assert.ok(!/acSetPath\('\/me'[,)]/.test(html), 'something still writes the old /me');
 });
 
 /* ── Route batch 7 — Engine browse under /engine, typed public entity permalinks ───────── */
@@ -548,13 +564,16 @@ test('batch 7: every Engine browse destination is canonical at /engine/<key>, it
   assert.ok(APP.reserved.includes('engine'));
 });
 
-test('batch 7: the Engine ROOT is still /search — batch 8 owns that flip', () => {
+test('batch 8: the Engine ROOT is /engine, /search its alias; every Engine child climbs to it', () => {
   const s = R.get('search');
-  assert.strictEqual(s.pattern, '/search');
-  assert.strictEqual(s.next, '/engine', 'the flip is recorded, not performed');
-  assert.deepStrictEqual(s.aliases, ['/engine']);
-  assert.ok(/WORLD_PATH = \{[^}]*search: '\/search'/.test(html), 'the Engine world still lives at /search');
-  assert.ok(!/acSetPath\('\/engine'[,)]/.test(html), 'something writes the bare /engine');
+  assert.strictEqual(s.pattern, '/engine');
+  assert.strictEqual(s.next, null, 'the flip has been performed');
+  assert.deepStrictEqual(s.aliases, ['/search']);
+  assert.deepStrictEqual(APP.parse('/engine'), { type: 'route', key: 'search', alias: false });
+  assert.deepStrictEqual(APP.parse('/search'), { type: 'route', key: 'search', alias: true });
+  assert.ok(/WORLD_PATH = \{[^}]*search: '\/engine'/.test(html), 'the Engine world lives at /engine');
+  for (const k of ENGINE_BROWSE) assert.strictEqual(R.build(R.get(k).parent), '/engine', k);
+  assert.ok(!/acSetPath\('\/search'[,)]/.test(html), 'something still writes the old /search');
 });
 
 test('batch 7: what stayed planned is not reachable, and never becomes a profile', () => {
@@ -567,9 +586,10 @@ test('batch 7: what stayed planned is not reachable, and never becomes a profile
     const d = APP.parse(p);
     assert.ok(!d || (d.type === 'engine' && d.unknown), p + ' parsed as ' + JSON.stringify(d));
   }
-  // Showcase DETAIL: the approved audit gives two shapes; nothing here picks one.
-  assert.ok(!R.ROUTES.some((x) => /^\/showcase\/:/.test(x.pattern)), 'a Showcase detail route was invented');
-  for (const p of ['/showcase/3', '/showcase/3-sunset']) { assert.strictEqual(R.match(p), null, p); assert.strictEqual(APP.parse(p), null, p); }
+  // Showcase DETAIL is live since batch 8 in the founder's shape, /showcase/{id} — and ONLY
+  // that shape: a slugged form is not an address.
+  assert.deepStrictEqual(R.ROUTES.filter((x) => /^\/showcase\/:/.test(x.pattern)).map((x) => x.pattern), ['/showcase/:id']);
+  for (const p of ['/showcase/3-sunset', '/showcase/x', '/showcase/3/x']) { assert.strictEqual(R.match(p), null, p); assert.strictEqual(APP.parse(p), null, p); }
 });
 
 test('batch 7: typed public entities are short, live, public, and parented by their browse surface', () => {
@@ -660,4 +680,104 @@ test('batch 7: a business stays at its username; cart stays a modal; no checkout
 test('batch 7: no Engine-specific parent memories; Back stays the batch-6 model', () => {
   assert.ok(!/_engineFrom|_listingFrom|_serviceFrom|_jobFrom|_eventFrom|_courseFrom|_nlFrom|_commFrom/.test(html), 'a private browse-parent memory was introduced');
   assert.ok(!/history\.state[^;\n]*(slug|engine|entity)/i.test(html), 'routing reads entity state out of history.state');
+});
+
+/* ── Route batch 8 — Beam conversation URLs and the canonical world roots ─────────────── */
+const server = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+
+test('batch 8: the three world roots are /beam, /engine, /account and their old URLs are aliases', () => {
+  const want = { messages: ['/beam', ['/messages']], search: ['/engine', ['/search']], me: ['/account', ['/me', '/profile']] };
+  for (const [n, [pat, al]] of Object.entries(want)) {
+    const r = R.get(n);
+    assert.strictEqual(r.pattern, pat, n); assert.deepStrictEqual(r.aliases, al, n); assert.strictEqual(r.next, null, n);
+    assert.strictEqual(R.build(n), pat);
+    for (const a of al) assert.deepStrictEqual(R.match(a), { name: n, params: {}, alias: true }, a);
+  }
+  assert.ok(/const WORLD_PATH = \{ home: '\/', chat: '\/beam', search: '\/engine', ai: '\/ai', profile: '\/account' \}/.test(html), 'WORLD_PATH');
+  // Only ONE world → path table exists (the brief: do not create another WORLD_PATH table).
+  assert.strictEqual((html.match(/= \{ home: '\//g) || []).length, 1, 'a second world path table appeared');
+  // The legacy boot table no longer carries the roots, which are real routes now.
+  assert.deepStrictEqual(APP.legacyWorld, { '/home': 'home', '/ai': 'ai' });
+});
+
+test('batch 8: Beam conversation routes are live, private, and parented by the inbox', () => {
+  const rows = { 'beam-dm': ['/beam/u/:username', 'messages'], 'beam-thread': ['/beam/u/:username/:thread', 'messages'],
+    'beam-group': ['/beam/g/:id', 'messages'], 'beam-group-info': ['/beam/g/:id/info', 'beam-group'] };
+  for (const [n, [pat, parent]] of Object.entries(rows)) {
+    const r = R.get(n);
+    assert.strictEqual(r.status, 'live', n); assert.strictEqual(r.pattern, pat, n); assert.strictEqual(r.parent, parent, n);
+    assert.strictEqual(r.world, 'beam'); assert.strictEqual(r.auth, 'account'); assert.strictEqual(r.privacy, 'private'); assert.strictEqual(r.seo, 'private');
+  }
+  assert.strictEqual(R.build('beam-dm', { username: '@John' }), '/beam/u/john');
+  assert.strictEqual(R.build('beam-thread', { username: 'john', thread: 7 }), '/beam/u/john/7');
+  assert.strictEqual(R.build('beam-group', { id: 5 }), '/beam/g/5');
+  assert.strictEqual(R.build('beam-group-info', { id: 5 }), '/beam/g/5/info');
+  assert.deepStrictEqual(APP.parse('/beam/u/John'), { type: 'beamdm', username: 'john' });
+  assert.deepStrictEqual(APP.parse('/beam/u/@john/7'), { type: 'beamdm', username: 'john', thread: 7 });
+  assert.deepStrictEqual(APP.parse('/beam/g/5'), { type: 'beamgroup', id: 5 });
+  assert.deepStrictEqual(APP.parse('/beam/g/5/INFO'), { type: 'beamgroup', id: 5, info: true });
+  // the contact card stays planned (there is no Beam contact page to address)
+  assert.strictEqual(R.get('beam-contact').status, 'planned');
+  assert.strictEqual(R.match('/beam/u/john/contact'), null);
+});
+
+test('batch 8: malformed /beam paths say "unknown" and never become a profile or another page', () => {
+  const cases = ['/beam/x', '/beam/u', '/beam/u/', '/beam/u/john/x', '/beam/u/john/7/x', '/beam/u/jo hn', '/beam/u/' + 'a'.repeat(41),
+    '/beam/g', '/beam/g/x', '/beam/g/5/x', '/beam/g/5/info/x', '/beam/g/-5', '/beam/u/john/contact', '/beam/messages'];
+  for (const p of cases) {
+    const m = R.match(p), d = APP.parse(p);
+    assert.strictEqual(m, null, p + ' matched ' + (m && m.name));
+    assert.deepStrictEqual(d, { type: 'beam', unknown: true }, p + ' parsed as ' + JSON.stringify(d));
+  }
+});
+
+test('batch 8: a group\'s PUBLIC /group/{slug} is unchanged and distinct from its private conversation', () => {
+  const g = R.get('group');
+  assert.strictEqual(g.pattern, '/group/:slug'); assert.strictEqual(g.privacy, 'public'); assert.strictEqual(g.tail, true);
+  assert.strictEqual(R.match('/group/acme').name, 'group');
+  assert.notStrictEqual(R.get('beam-group').pattern, g.pattern);
+  // The app no longer rewrites a group's address to /group/<slug> as it renders; a public
+  // arrival keeps the public address (publicPath), an in-app open owns /beam/g/<id>.
+  assert.ok(!/acSetPath\(group\.username \? '\/group\/'/.test(html), 'the group render still rewrites the address');
+  assert.ok(/acOpenGroupByUsername\(r\.username, \{ publicPath: acRoutePath\('group'/.test(html), 'a public arrival must keep its address');
+});
+
+test('batch 8: Showcase detail is /showcase/{id}, no slug, parent /engine/showcase', () => {
+  const r = R.get('showcase-detail');
+  assert.strictEqual(r.status, 'live'); assert.strictEqual(r.pattern, '/showcase/:id'); assert.strictEqual(r.parent, 'showcase');
+  assert.strictEqual(R.build(r.parent), '/engine/showcase');
+  assert.strictEqual(R.build('showcase-detail', { id: 9 }), '/showcase/9');
+  assert.deepStrictEqual(APP.parse('/showcase/9'), { type: 'showcase', id: 9 });
+  assert.deepStrictEqual(R.match('/showcase'), { name: 'showcase', params: {}, alias: true }, 'the browse alias is untouched');
+});
+
+test('batch 8: /engine/search stays planned; search has no committed-results URL', () => {
+  assert.strictEqual(R.get('engine-search').status, 'planned');
+  assert.strictEqual(R.match('/engine/search'), null);
+  assert.deepStrictEqual(APP.parse('/engine/search'), { type: 'engine', unknown: true });
+  assert.ok(!/acSetPath\([^)]*[?&]q=/.test(html), 'a search query is being written into the address');
+});
+
+test('batch 8: no conversation parent memory; Back stays the batch-6 model', () => {
+  assert.ok(!/_beamFrom|_chatFrom|_messageFrom|_convFrom|_threadFrom/.test(html), 'a private Beam parent memory was introduced');
+  assert.ok(!/history\.state[^;\n]*(peer|thread|group|beam)/i.test(html), 'routing reads a conversation out of history.state');
+  // the group-info arrow is the unified App Back
+  assert.ok(/class="msg-back" onclick="appGoBack\(\)" aria-label="Back">/.test(html));
+});
+
+test('batch 8: notifications open conversations through routeFor at their canonical address', () => {
+  assert.ok(/'message', 'call', 'video_call', 'chat_request', 'chat_allowed', 'offer', 'crm_followup'\]\.includes\(t\)\) return DM\(\)/.test(html));
+  assert.ok(/R\('beam-dm', \{ username: a\.username \}/.test(html));
+  assert.ok(/R\('beam-group', \{ id: Number\(n\.groupId\) \}/.test(html));
+});
+
+test('batch 8: the @username resolver answers an unknown and a deactivated handle identically', () => {
+  const i = server.indexOf("app.get('/api/atchat/peer/:username'");
+  assert.ok(i > -1, 'resolver missing');
+  const body = server.slice(i, server.indexOf('\n});', i));
+  assert.ok(/auth\.requireAuth/.test(body), 'resolver must require an account');
+  assert.ok(/NOT COALESCE\(u\.deactivated, false\) OR EXISTS \(SELECT 1 FROM at_messages/.test(body), 'a deactivated account resolves only for someone with shared history');
+  const nf = body.match(/status\(404\)\.json\(\{ error: '([^']+)' \}\)/g) || [];
+  assert.ok(nf.length >= 2 && new Set(nf).size === 1, 'every not-found answer must be the same: ' + nf.join(' | '));
+  assert.ok(!/SELECT[^`']*(name|avatar|bio|email)/i.test(body.replace(/username/g, '')), 'the resolver returns more than id + username');
 });
