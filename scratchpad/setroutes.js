@@ -402,10 +402,10 @@ async function handoffs(browser, F, vp, tag) {
   const me = await snap(p);
   await p.evaluate(() => openSettings()); await settle(p);
   const s = await snap(p);
-  say(nodeIs(s, 'hub') && s.len === me.len + 1 && s.st.prev === me.st.idx, tag + ' from Account: a real /settings entry on top of /me', [s.path, me.path, s.len]);
+  say(nodeIs(s, 'hub') && s.len === me.len + 1 && s.st.prev === me.st.idx, tag + ' from Account: a real /settings entry on top of /account', [s.path, me.path, s.len]);
   await back(p);
   const sb = await snap(p);
-  say(sb.path === '/me' && !sb.setOpen, tag + ' ...Back returns to the Account page', [sb.path, sb.setOpen]);
+  say(sb.path === '/account' && !sb.setOpen, tag + ' ...Back returns to the Account page', [sb.path, sb.setOpen]);
 
   await p.evaluate(() => acNavNotifs()); await settle(p, 1400);
   const n = await snap(p);

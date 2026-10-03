@@ -39,7 +39,7 @@ const say = (ok, what, extra) => { ok ? pass++ : fail++; console.log((ok ? '  ok
 
 /* --break: two pre-batch-5 defects, each by its exact current source. */
 const OLD = {
-  section: [[`      if (_appTab === 'profile') { const sec = acMeShownSection(); if (sec) { acSetPath(acAccountSectionPath(sec) || '/me', _push); return; } }\n`, '']],
+  section: [[`      if (_appTab === 'profile') { const sec = acMeShownSection(); if (sec) { acSetPath(acAccountSectionPath(sec) || WORLD_PATH.profile, _push); return; } }\n`, '']],
   flat: [[`  return acRoutePath(key, null, def.acct ? '/account/' + def.acct : '/' + key);`, `  return '/' + key;`]],
 };
 
@@ -145,9 +145,9 @@ async function rootChecks(p, errs, tag) {
   console.log(`\n${tag} A. the Account root`);
   await go(p, '/me');
   let s = await snap(p);
-  say(s.path === '/me' && s.meVisible && s.sec === null && s.tab === 'profile' && s.navLit, `${tag} A1. /me direct: the Account hub, Account lit`, s.path);
+  say(s.path === '/account' && s.meVisible && s.sec === null && s.tab === 'profile' && s.navLit, `${tag} A1. /me (the old root, an alias since batch 8) direct: lands on /account, the Account hub, Account lit`, s.path);
   await reload(p); s = await snap(p);
-  say(s.path === '/me' && s.meVisible && s.sec === null, `${tag} A2. /me refresh keeps /me`, s.path);
+  say(s.path === '/account' && s.meVisible && s.sec === null, `${tag} A2. refresh keeps /account`, s.path);
   /* Boot restores the LAST world used, which is Account here, so land on Home in-app first:
      the question is what entering Account from another world does. */
   await go(p, '/');
@@ -156,12 +156,12 @@ async function rootChecks(p, errs, tag) {
   await p.evaluate(() => appTab('profile')); await settle(p);
   s = await snap(p);
   const ev = navEvents(await evSince(p, n0));
-  say(s.path === '/me' && s.meVisible && ev.length === 1, `${tag} A3. Account from another world is /me, one NavEvent`, { path: s.path, ev: ev.map((e) => e.kind) });
+  say(s.path === '/account' && s.meVisible && ev.length === 1, `${tag} A3. Account from another world is /account, one NavEvent`, { path: s.path, ev: ev.map((e) => e.kind) });
   await back(p); s = await snap(p);
-  say(s.path === '/' && !s.meVisible, `${tag} A4. Back leaves /me for the world it came from`, s.path);
+  say(s.path === '/' && !s.meVisible, `${tag} A4. Back leaves /account for the world it came from`, s.path);
   await fwd(p); s = await snap(p);
-  say(s.path === '/me' && s.meVisible && s.sec === null, `${tag} A5. Forward returns into /me`, s.path);
-  say(R.get('me').pattern === '/me' && R.get('me').next === '/account', `${tag} A6. /me is still the current Account root (/account is its batch-8 future)`);
+  say(s.path === '/account' && s.meVisible && s.sec === null, `${tag} A5. Forward returns into /account`, s.path);
+  say(R.get('me').pattern === '/account' && R.get('me').aliases.includes('/me'), `${tag} A6. /account is the Account root (route batch 8); /me is its alias`);
   say(errs.length === 0, `${tag} A7. no JS errors`, errs.slice(0, 2));
 }
 
@@ -180,7 +180,7 @@ async function sectionChecks(p, errs, tag) {
     await p.evaluate(() => appGoBack()); await settle(p);
     s = await snap(p);
     let ev = navEvents(await evSince(p, n));
-    say(s.path === '/me' && s.sec === null && s.idx === idx && ev.length === 1 && ev[0].kind === 'replace',
+    say(s.path === '/account' && s.sec === null && s.idx === idx && ev.length === 1 && ev[0].kind === 'replace',
       `${tag} ${S.key}: Account Back on a direct entry -> /me by replace`, { path: s.path, idx: [idx, s.idx], ev: ev.map((e) => e.kind) });
     // In-app: /me -> section is one push, one NavEvent.
     idx = s.idx; n = s.events;
@@ -197,7 +197,7 @@ async function sectionChecks(p, errs, tag) {
     n = s.events;
     await back(p); s = await snap(p);
     ev = navEvents(await evSince(p, n));
-    say(s.path === '/me' && s.sec === null && ev.length === 1 && ev[0].direction === 'back', `${tag} ${S.key}: browser Back -> /me`, { path: s.path, ev: ev.map((e) => e.kind + ':' + e.direction) });
+    say(s.path === '/account' && s.sec === null && ev.length === 1 && ev[0].direction === 'back', `${tag} ${S.key}: browser Back -> /me`, { path: s.path, ev: ev.map((e) => e.kind + ':' + e.direction) });
     n = s.events;
     await fwd(p); s = await snap(p);
     ev = navEvents(await evSince(p, n));
@@ -277,7 +277,7 @@ async function aliasChecks(p, errs, tag) {
   await reload(p); s = await snap(p);
   say(s.path === '/account/wallet', `${tag} refresh after canonicalising stays canonical`, s.path);
   await back(p); s = await snap(p);
-  say(s.path === '/me', `${tag} Back from the canonicalised alias returns to the entry before it`, s.path);
+  say(s.path === '/account', `${tag} Back from the canonicalised alias returns to the entry before it`, s.path);
   say(aliases.every((t) => R.match(t.alias).name !== 'profile'), `${tag} no flat alias is ever read as a username`);
   say(errs.length === 0, `${tag} aliases: no JS errors`, errs.slice(0, 2));
 }

@@ -97,7 +97,12 @@ const atKeys = [...new Set([...table.matchAll(/'@([a-z-]+)'/g)].map(m => m[1]))]
 const badAt = atKeys.filter(k => !appKeys.has(k));
 ok(atKeys.length > 5 && badAt.length === 0, `every routed destination ('@key', ${atKeys.length}) is a real route`, badAt.join(' '));
 const rKeys = [...new Set([...row.matchAll(/\bR\('([a-z-]+)'/g)].map(m => m[1]))];
-const ENTITY = ['post', 'profile', 'listing', 'job', 'event', 'search'];
+/* The destinations that are not APP_ROUTES keys are built by acNotifPath itself (a post, a
+   profile, a typed entity, a Beam conversation since route batch 8). Read that list out of the
+   builder rather than keeping a copy here, so a route routeFor returns passes ONLY if the
+   builder really handles it. */
+const _np = client.slice(client.indexOf('function acNotifPath('), client.indexOf('function acNavGo('));
+const ENTITY = [...new Set([..._np.matchAll(/d\.route === '([a-z-]+)'/g)].map(m => m[1]))];
 const badR = rKeys.filter(k => !appKeys.has(k) && !ENTITY.includes(k));
 ok(badR.length === 0, `every route routeFor returns can be built (${rKeys.length})`, badR.join(' '));
 
