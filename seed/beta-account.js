@@ -182,6 +182,17 @@ async function findEmailOwners(db, email, exceptId = null) {
    the caller says explicitly that this is the legitimate owner claiming it.
    The reservation row is deliberately LEFT IN PLACE: a name somebody already
    holds is unaffected by it, so the name stays locked against everyone else. */
+async function heldFor(db, username) {
+  try {
+    const r = await db.query(
+      `SELECT 1 FROM username_history WHERE old_lower = lower($1) AND changed_at > now() - interval '30 days' LIMIT 1`,
+      [String(username || '')]);
+    return r.rowCount > 0;
+  } catch (e) {
+    if (e && e.code === '42P01') return false;   // table not bootstrapped yet: nothing has been released
+    throw e;
+  }
+}
 async function reservationFor(db, username) {
   /* The locked TABLE only holds the words the router owns today. The route registry's
      wider new-username set (every approved future route root, the server's own roots,
@@ -225,6 +236,14 @@ async function createBetaAccount(db, { identity, passwordHash, tag = TAG, claimR
     throw new Error(
       `${id.email} already belongs to @${existingEmail.username || existingEmail.id}. ` +
       'Refusing rather than touching that account.');
+  }
+  /* Given up by another account less than 30 days ago (username_history, Route Audit
+     batch 9): held against everyone else, and --claim-reserved does not override it —
+     that flag is for the company's OWN locked words, not for somebody else's old links. */
+  if (await heldFor(db, id.username)) {
+    throw new Error(
+      `"${id.username}" was given up by another account less than 30 days ago and is HELD so ` +
+      'links to it cannot be taken over. Pick another username or wait for the hold to end.');
   }
   if (await reservationFor(db, id.username) && !claimReserved) {
     throw new Error(

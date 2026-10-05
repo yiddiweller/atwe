@@ -781,3 +781,56 @@ test('batch 8: the @username resolver answers an unknown and a deactivated handl
   assert.ok(nf.length >= 2 && new Set(nf).size === 1, 'every not-found answer must be the same: ' + nf.join(' | '));
   assert.ok(!/SELECT[^`']*(name|avatar|bio|email)/i.test(body.replace(/username/g, '')), 'the resolver returns more than id + username');
 });
+
+/* ═══ Route batch 9: the server's redirect table and the safe sign-in destination ═══ */
+
+test('batch 9: legacyRedirect is DERIVED from every literal alias and lands on the same route, unaliased', () => {
+  let n = 0;
+  R.liveRoutes().forEach((route) => route.aliases.forEach((a) => {
+    if (a.includes(':') || a === '/go') return;
+    const to = R.legacyRedirect(a);
+    assert.ok(to, a + ' has a redirect');
+    assert.strictEqual(to, R.build(route.name, {}), a);
+    const m = R.match(to);
+    assert.ok(m && m.name === route.name && !m.alias, a + ' → ' + to + ' is the canonical of the same route');
+    assert.strictEqual(R.legacyRedirect(to), null, to + ' is a fixed point');
+    n++;
+  }));
+  assert.ok(n >= 40, 'the table covers every literal alias: ' + n);
+});
+
+test('batch 9: the approved renames, and the ones that must NOT be server redirects', () => {
+  const want = { '/messages': '/beam', '/search': '/engine', '/me': '/account', '/profile': '/account',
+    '/devices': '/settings/security/devices', '/wallet': '/account/wallet', '/marketplace': '/engine/marketplace',
+    '/MESSAGES/': '/beam', '/home': '/', '/feed': '/' };
+  Object.keys(want).forEach((k) => assert.strictEqual(R.legacyRedirect(k), want[k], k));
+  // /search is the old Engine ROOT (batches 7–8 superseded the audit's /search → /engine/search).
+  assert.strictEqual(R.get('engine-search').status, 'planned');
+  ['/go', '/post/12', '/company/bob', '/listing/12', '/listing/12-old', '/beam', '/engine', '/account', '/bob', '/nope/x']
+    .forEach((p) => assert.strictEqual(R.legacyRedirect(p), null, p + ' is not a pure path rename'));
+});
+
+test('batch 9: safeNext keeps Atwe-local live routes, canonicalised, and refuses every open-redirect shape', () => {
+  const ok = {
+    '/account/wallet': '/account/wallet', '/wallet?tab=2': '/account/wallet?tab=2', '/messages': '/beam',
+    '/beam/u/bob': '/beam/u/bob', '/listing/12-mug#frag': '/listing/12-mug', '/settings/security/devices': '/settings/security/devices',
+    '/account/wallet?token=SECRET&x=1': '/account/wallet?x=1', '/me?next=//evil.com': '/account', '/engine/marketplace?q=a%20b': '/engine/marketplace?q=a+b',
+  };
+  Object.keys(ok).forEach((k) => assert.strictEqual(R.safeNext(k), ok[k], k));
+  const bad = ['//evil.com', '//evil.com/x', '/\\evil.com', '\\\\evil.com', '/%2F%2Fevil.com', '/%2fevil.com', '/%5Cevil.com',
+    'https://evil.com', 'http://atwe.com/x', 'javascript:alert(1)', 'JaVaScRiPt:alert(1)', '/javascript:alert(1)',
+    'data:text/html,x', '  //evil.com', '/\t/evil.com', '/%09/evil.com', '/%0d%0aSet-Cookie:x', '/beam\u0000', '',
+    'evil.com', '../account', '/login', '/signup?next=/x', '/reset-password?token=t', '/%E0%A4%A', null, 42, {}, '/' + 'a'.repeat(700),
+    '/official', '/settings/nope'];
+  bad.forEach((b) => assert.strictEqual(R.safeNext(b), null, JSON.stringify(b) + ' must be refused'));
+});
+
+test('batch 9: the app uses safeNext for the sign-in destination and has no sanitiser of its own', () => {
+  assert.ok(/function acSafeNext\(raw\)[^\n]*ATWE_ROUTES\.safeNext\(raw\)/.test(html), 'acSafeNext delegates to the registry');
+  const set = html.slice(html.indexOf('function acAuthNextSet('), html.indexOf('function consumePendingRoute('));
+  assert.ok(/acSafeNext\(raw\)/.test(set) && /acSafeNext\(v\.p\)/.test(set), 'both the write and the read go through it');
+  assert.ok(/localStorage\.removeItem\(AUTH_NEXT_KEY\)/.test(set), 'a destination is read ONCE');
+  const cpr = html.slice(html.indexOf('function consumePendingRoute('), html.indexOf('function consumePendingRoute(') + 1500);
+  assert.ok(/_pendingRoute = parseDeepLink\(\)/.test(cpr), 'it feeds the same _pendingRoute → openDeepLink path (no second router)');
+  assert.ok(!/location\.(href|assign|replace)\s*[=(]\s*nx/.test(cpr), 'it never navigates the window to the stored value');
+});

@@ -4121,14 +4121,16 @@ and flips to a green "Back online" for ~2s on reconnect, then fades. Non-blockin
 current state on load. **SPA deep links / 404:** `server.js`'s `app.get('*')`
 catch-all serves the app shell for any non-API, non-asset path so a shared/unknown
 deep link lands inside the app (the client router opens the right surface or shows
-its own not-found state) instead of a raw "Cannot GET".
+its own not-found state) instead of a raw "Cannot GET". **Since route batch 9 the
+shell carries the right HTTP status** (301/404/410/503, noindex) — see "The server
+understands the routes".
 
 > **Rich link previews (Open Graph / Twitter cards).** A shared deep link
 > (`/<username>` profile, `/group/<x>`, `/circle/<x>`) unfurls with the entity's
 > name/description/photo on WhatsApp, iMessage, X, Slack, etc. Crawlers don't run
 > JS, so the catch-all detects a **known link-preview bot** (`isLinkCrawler`,
 > `_OG_BOTS` UA regex) and serves the app shell with the OG/Twitter meta swapped to
-> the entity's details (`ogForPath` looks up the profile/group/circle;
+> the entity's details (`routeResponse` — `ogForPath` before batch 9 — looks it up;
 > `renderShellWithOg` regex-replaces the `<title>` + `og:*`/`twitter:*` `content=`
 > in the cached `index.html`). **Humans get the unchanged static shell on the fast
 > path** (no DB hit — their SPA renders the real page anyway; the file itself keeps
@@ -4136,7 +4138,8 @@ its own not-found state) instead of a raw "Cannot GET".
 > avatars are stored as data URLs, which crawlers can't fetch — those + missing
 > photos fall back to the branded `/icon-384.png`); a profile with an http banner
 > uses `summary_large_image`, otherwise `summary`. All values are HTML-escaped
-> (`ogEscape`). To add a new previewable entity, extend `ogForPath`.
+> (`ogEscape`). To add a new previewable entity, extend `routeResponse` (and
+> `_ENTITY_SQL` for a typed entity).
 
 ## AtChat — messaging & social
 
@@ -8415,12 +8418,13 @@ one page: `/messages`→`/beam`, `/search`→`/engine`, `/me` and `/profile`→`
 accepted so mail already sitting in an inbox keeps working, and the token is
 stripped from the address bar after use.
 
-**Link previews follow the same table.** `ogForPath` in `server.js` handles
+**Link previews follow the same table.** `routeResponse` in `server.js` (route batch 9;
+it replaced `ogForPath`) matches the path with the REGISTRY itself and handles
 `/username`, `/username/post/:id` (previews the POST — its text and photo, not just
-the author), `/username/<section>`, `/company/username` (canonical URL points at
-`/username`), `/group/:slug` and `/circle/:slug`. It uses `SYSTEM_ROUTES` — it used
-to keep a *third* private reserved list that could disagree with the router and the
-signup gate.
+the author — and only a PUBLIC post), `/username/<section>`, `/company/username`
+(canonical URL points at `/username`), `/group/:slug`, `/circle/:slug`, every typed
+entity and the public browse pages. Because it asks `match()`, a reserved word can
+never be read as a profile — the same answer the router and the signup gate give.
 
 **The router itself:** `parseDeepLink()` reads `location.pathname` into a route
 object; `openDeepLink()` turns that into the surface, auth-gating anything marked
@@ -8663,7 +8667,7 @@ write `/account` as the root, redirect `/me`, or touch native links before batch
 |---|---|
 | `/account/<key>` | eleven sections: profile · money · selling · customers · marketing · jobs · library · planning · creating · ai · help — rendered INSIDE the Account page |
 | `/account/<tool…>` | 34 Account tools, each a routed overlay (Wallet, Orders, Manage store …) |
-| `/wallet`, `/store`, `/orders` … | the 25 flat addresses issued before batch 5 — **permanent aliases**, canonicalised to `/account/...` by REPLACE (the server 301 is batch 9) |
+| `/wallet`, `/store`, `/orders` … | the 25 flat addresses issued before batch 5 — **permanent aliases**, canonicalised to `/account/...` by REPLACE in the app, and 301'd by the server since batch 9 |
 
 - **One description, in the registry.** `public/atwe-routes.js` `ACCOUNT_SECTIONS` /
   `ACCOUNT_TOOLS` generate every route (pattern, view, parent section, title, flat alias).
@@ -8809,7 +8813,7 @@ of 60, so counting NavEvents by its length stops working — keep an unbounded l
 
 **Engine's browse destinations are canonical under `/engine/<key>`** — marketplace, services,
 jobs, events, businesses, courses, newsletters, communities, showcase. Each flat `/<key>` it was
-issued at is a **permanent alias**, canonicalised by REPLACE (the server 301 is batch 9). In the
+issued at is a **permanent alias**, canonicalised by REPLACE in the app and 301'd by the server (batch 9). In the
 app, `APP_ROUTES` marks them `engine: true` and `acRouteKeyPath` builds the canonical through the
 registry. **The Engine ROOT is still `/search`** (`next: '/engine'`): batch 8 owns that flip (done: `/engine` since batch 8). An
 unknown `/engine/<x>` lands on the Engine root with "That page doesn't exist" and can never
@@ -8885,7 +8889,7 @@ titles chosen to stress the slug rule; 390 + 1440 full matrix + 820 smoke) and 9
 **The three world roots are real addresses now: Beam `/beam`, Engine `/engine`, Account
 `/account`.** The old `/messages`, `/search`, `/me` (and the older `/profile`) are **permanent
 aliases**: they open the same world and the address canonicalises by REPLACE, adding no entry
-(the server 301 is batch 9). The route NAMES did not move — `messages`, `search`, `me` — so every
+(and 301'd by the server since batch 9). The route NAMES did not move — `messages`, `search`, `me` — so every
 parent in the registry still climbs to them, and every Account parent chain ends at `/account`,
 every Engine child at `/engine`. `WORLD_PATH` is still the ONE world → path table
 (`{ home: '/', chat: '/beam', search: '/engine', ai: '/ai', profile: '/account' }`), and
@@ -8980,6 +8984,106 @@ Self-tests: `--break=messages`, `--break=me`, `--break=dmreplace`, `--break=grou
 `--break=leak` (a server that answered a foreign thread — the probe's own detector),
 `--break=slug`. `route5`, `route6`, `route7`, `histv2`, `setdeep` and `setroutes` were updated
 from the old root addresses.
+
+### The server understands the routes (Route Audit batch 9)
+
+Until batch 9 every app path answered **200 with the same shell**: a deleted listing, an
+unknown username and a typo all looked like real pages to a search engine, and an old address
+was only ever corrected by the app AFTER it loaded. `routeResponse(req)` in `server.js` (the
+catch-all) now gives each address the HTTP answer it deserves. **It is reached only by first
+visits, shared links and crawlers** — an installed app's service worker fetches the shell from
+`/__shell/<t>` and never hits it.
+
+| answer | when |
+|---|---|
+| **301** | a pure legacy rename; a renamed username; a post under its wrong/old author or the flat `/post/:id`; a typed entity with a stale or missing slug. **The query string is kept.** |
+| **200** | a live page. A crawler also gets its OG/Twitter card and canonical. |
+| **404** + noindex | an unknown route shape; an **unknown, deactivated or suspended username — byte-identical**; an entity id never issued; a malformed id |
+| **410** + noindex | a public entity that existed and is gone or no longer public (deleted, withdrawn, unpublished, hidden owner). **A post that is not publicly visible (circle-only, subscriber-only, pay-per-view, scheduled) answers exactly as a deleted one**, with no redirect that would name its author. |
+| **503** + noindex + `Retry-After: 30` | the database could not answer — **never a false 404** |
+| **200** + noindex, generic card | every PRIVATE route (Beam, Account, Settings, Notifications, AI, cart, sign-in pages, `/engine` search). **The server never looks them up**, so a conversation that exists, is someone else's, or does not exist answer identically. |
+
+- **THE 301 TABLE IS DERIVED, NOT WRITTEN.** `ATWE_ROUTES.legacyRedirect(path)` returns the
+  canonical of any live route's literal alias (`/messages`→`/beam`, `/search`→`/engine` — the
+  old Engine root; **`/engine/search` stays planned**, the audit's `/search → /engine/search`
+  was superseded by batches 7–8 — `/me` and `/profile`→`/account`, `/devices`, every flat
+  Account/Engine word, `/home`/`/feed`→`/`). Add an alias to the registry and the server 301s it
+  with no other edit. Deliberately excluded: `/post/:id` (needs the author, resolved by the
+  server itself, public posts only), `/company/:username` (the audit keeps it as a working alias;
+  its card declares `/username` canonical), and `/go` (a server shell path).
+- **"Existed" is asked of the table's SEQUENCE**, `pg_sequence_last_value(...)`, never `MAX(id)`:
+  ids are SERIAL and never reused, so an id at or below the highest ever handed out and missing
+  is gone (410), anything above it never existed (404). `MAX(id)` made the newest row, once
+  deleted, a 404 — the first run of `route-status.test.js` caught exactly that.
+- **Cost:** a rename, a private route or a browse page touches no database. A public entity or
+  a profile is ONE indexed lookup, plus one more only on a miss. No per-path cache (a cached 200
+  would outlive a rename).
+- **The crawler path is the only one that builds HTML.** A person gets the same pre-compressed
+  shell as ever, with the right status. Every noindex answer also carries an `X-Robots-Tag:
+  noindex` HEADER, so a crawler we do not recognise is still told. A noindex document drops its
+  canonical rather than pointing it somewhere false.
+- **No database configured** keeps the old behaviour (200 shell): degrade, never break.
+
+**USERNAME HISTORY — `username_history(old_lower, user_id, changed_at)`, written by a TRIGGER.**
+`users_username_history_upd` (AFTER INSERT OR UPDATE OF username) and `_del` (AFTER DELETE)
+record a released handle in the same statement that releases it — atomic by construction, and
+no write door can forget it: profile save, clearing a username, staff assignment, a paid claim,
+self-delete, admin delete, bot / system-account removal, demo teardown, a tool run by hand.
+A (re)claimed handle has its history **retired** in the same trigger. `user_id` is **SET NULL,
+never CASCADE**: a deleted account's handle is recorded with no owner, and its earlier handles
+keep their rows. **Nothing is backfilled.**
+
+- The old handle **301s to the account's CURRENT handle while nobody holds it** (sections too:
+  `/old/media` → `/new/media`), and `/api/social/profile` + `/api/public/profile` add
+  `moved: <current>` to their 404 so an old link opened INSIDE the app (no server round trip)
+  follows it — `acLoadProfile` / `acPeekProfile` replace the address and load the current one.
+  A deactivated or suspended target, or a deleted account, answers as an unknown name.
+- **Held 30 days (`USERNAME_HOLD_DAYS`) against everyone else**; the account that released it
+  may take it back at any time. **`usernameReserved(name, forUserId)` now asks both the lock
+  list and the hold**, so every door that already called it got the hold for free (signup ×2,
+  the wizard's verify, Google/Apple completion, a profile change — which passes its own id —
+  bots, system accounts, `/api/auth/exists`, generated names). The two doors that bypass it ask
+  directly: **staff assignment** (`usernameHeld(username, target.id)`; staff may hand out a
+  locked premium name, never someone else's held one) and **the paid claim** (inside its
+  transaction). The beta seeding tool refuses a held name too, and `--claim-reserved` does not
+  override it.
+- A history READ failure keeps the hold **closed** (a name we cannot prove free is not free).
+- **Staff assignment sent BEGIN/COMMIT through the POOL** — three possibly different
+  connections, so it was never a transaction. It is one client now.
+- After the hold another account may take it; **the new owner wins** and the old redirect is
+  gone (the trigger retired the row).
+
+**AUTH RETURN.** A protected address used to live only in memory (`_pendingRoute`), so any full
+page load between the gate and a session — an OAuth provider redirecting back to `/`, a refresh
+at the gate, a code opened in the same tab — dropped the visitor on Home. Now:
+
+- `acAuthNextSet(raw)` writes it down (`localStorage.atwe_auth_next`, 30 minutes, read ONCE),
+  from `openLogin()` and from `?next=` on any page; `acAuthNextTake()` re-validates on the way out.
+- **Both go through ONE sanitiser, `ATWE_ROUTES.safeNext()`** (the app has none of its own —
+  a test fails if one appears): exactly one leading `/`, no `//host`, no backslash, no control
+  character or whitespace raw OR percent-decoded in the path, resolved against a dummy origin
+  and refused unless unchanged, a LIVE Atwe route, never a sign-in page; aliases canonicalised;
+  `next`/`token`/`verify`/`reset`/`imp` stripped from the query; the hash dropped.
+- **It is APPLIED at the top of `handleUrlParams`, before boot chooses a world**, when this load
+  has a session and arrived neutral (`/`, `/login`, `/signup`). That is the load-bearing part:
+  applied later (in `consumePendingRoute`), boot had already restored the last world and its
+  path sync overwrote the destination — the first route9 run caught it. An address opened now
+  always wins over a remembered one. In-page sign-in still resumes through `_pendingRoute`.
+- **The path sync no longer rewrites a signed-out visitor's address under the sign-in gate.**
+  It fell through to the default world's path, so a protected link read `/ai` under the gate
+  and a refresh there reloaded `/ai` — pre-existing, and exactly the "lost destination".
+
+Guarded by `test/route-status.test.js` (14), `test/username-history.test.js` (12), four
+batch-9 tests in `test/route-registry.test.js`, and `scratchpad/route9.js` (83: the server's
+answers incl. a second server on a dead database, privacy pairs, SEO cards, the browser landing
+of every redirect, an old handle followed in-app, auth return by email, a FULL redirect,
+Google, Apple and `/login?next=`, seven malicious `next` values, a stale note, a fresh address
+winning). Self-tests: `--break=next`, `--break=open`, `--break=moved`, `--break=status`; the
+npm suites were mutation-tested (hold off, DB failure as 404, private posts visible, a
+deactivated user indexable) and each failed by name. **Beta promotion needs the synchronized
+build bump** (`ATWE_BUILD`, `sw.js` `CACHE`, `atwe-routes.js?v=`): the registry gained
+`legacyRedirect`/`safeNext`, and an old cached registry simply disables the auth-return note
+(it degrades, it does not break). **The production collision gate is still mandatory.**
 
 ## Search & typeahead
 

@@ -6094,19 +6094,55 @@ async function generateUsername(name) {
     const cand = base + Math.floor(1000 + Math.random() * 90000);
     if (newUsernameError(cand)) continue;
     const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [cand]);
-    if (!taken.rowCount) return cand;
+    if (!taken.rowCount && !(await usernameReserved(cand))) return cand;   // never a locked or HELD name
   }
   return base + Date.now().toString().slice(-7);
 }
 
-// Is a username admin-locked (reserved)? Locked names can't be registered or
-// switched-to by anyone (the current holder, if any, keeps theirs).
-async function usernameReserved(username) {
+// Is a username unavailable to claim? Two independent reasons, one answer, so every
+// new-name door asks both by asking once:
+//   · admin-LOCKED (reserved_usernames) — nobody may register or switch to it (the
+//     current holder, if any, keeps theirs);
+//   · HELD (username_history, Route Audit batch 9) — an account gave it up less than
+//     USERNAME_HOLD_DAYS ago, so nobody ELSE may take it yet. `forUserId` is the account
+//     asking: an account may always take back a handle it released itself. A deleted
+//     account's handle (user_id NULL) is held against everyone.
+const USERNAME_HOLD_DAYS = 30;
+async function usernameHeld(username, forUserId) {
+  if (!username) return false;
+  const r = await db.query(
+    `SELECT 1 FROM username_history
+      WHERE old_lower = lower($1) AND changed_at > now() - ($2 || ' days')::interval
+        AND (user_id IS NULL OR user_id IS DISTINCT FROM $3::int) LIMIT 1`,
+    [String(username).trim().replace(/^@/, ''), String(USERNAME_HOLD_DAYS), Number.isInteger(forUserId) ? forUserId : null]);
+  return r.rowCount > 0;
+}
+async function usernameReserved(username, forUserId) {
   if (!username) return false;
   try {
     const r = await db.query('SELECT 1 FROM reserved_usernames WHERE username = lower($1)', [username]);
-    return r.rowCount > 0;
+    if (r.rowCount > 0) return true;
   } catch { return false; }
+  /* A failure to READ the history must not open the hold: a name we cannot prove free is
+     not free. (The lock-list read above keeps its historic fail-open behaviour.) */
+  try { return await usernameHeld(username, forUserId); } catch { return true; }
+}
+/* Where a released handle points now: the CURRENT username of the account that last gave
+   it up, provided nobody holds the name today and that account is publicly visible. null
+   otherwise — an unknown name, one now held by somebody else (the new owner wins), a
+   deleted account's handle, or a deactivated / suspended target all answer exactly as an
+   unknown username does. Throws on a database error so a caller can say 503, not 404. */
+async function usernameMovedTo(handle) {
+  const h = String(handle || '').trim().replace(/^@/, '');
+  if (!h || !/^[a-z0-9._-]{1,40}$/i.test(h)) return null;
+  const r = (await db.query(
+    `SELECT u.username FROM username_history uh JOIN users u ON u.id = uh.user_id
+      WHERE uh.old_lower = lower($1)
+        AND NOT EXISTS (SELECT 1 FROM users x WHERE lower(x.username) = lower($1))
+        AND u.username IS NOT NULL AND u.deactivated IS NOT TRUE
+        AND COALESCE(u.status, 'active') = 'active'
+      ORDER BY uh.changed_at DESC LIMIT 1`, [h])).rows[0];
+  return r && r.username && r.username.toLowerCase() !== h.toLowerCase() ? r.username : null;
 }
 // Insert many reserved usernames in one multi-row statement (ON CONFLICT DO
 // NOTHING). Returns the number of NEWLY-locked names (rowCount of inserted rows).
@@ -7083,7 +7119,9 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   }
   // Block switching to an admin-locked username (but let the holder keep one
   // that was locked after they already had it).
-  if (username && await usernameReserved(username)) {
+  // (Also refuses a handle another account gave up less than 30 days ago; this account
+  // may always take back one it released itself.)
+  if (username && await usernameReserved(username, req.user.id)) {
     const mine = await db.query('SELECT 1 FROM users WHERE id = $1 AND lower(username) = lower($2)', [req.user.id, username]);
     if (!mine.rowCount) return res.status(409).json({ error: 'That username isn’t available.' });
   }
@@ -20060,7 +20098,9 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
     const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, about_facts, id_verified_at, id_verify_method, account_type, business_verify_status, business_verify_tier, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, plan, created_at, name_history, deactivated, paused, pause_message, connections_visible, business_hours, special_hours, hours_note, shop_paused, shop_pause_message, store_banner, hiring, pronouns, inquiry_enabled, inquiry_intro, inquiry_questions, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
-    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    // A renamed handle answers like any unknown one, plus WHERE it went (the same public
+    // fact the server's 301 states), so an old link opened inside the app can follow it.
+    if (!u.rows[0]) { const moved = await usernameMovedTo(handle).catch(() => null); return res.status(404).json(Object.assign({ error: 'User not found.' }, moved ? { moved } : {})); }
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
     if (t.deactivated && t.id !== req.user.id) return res.status(404).json({ error: 'User not found.' });
@@ -20269,7 +20309,8 @@ app.get('/api/public/profile/:username', async (req, res) => {
               profile_cta, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label
        FROM users WHERE lower(username) = lower($1)`, [handle]);
     const t = u.rows[0];
-    if (!t || t.deactivated) return res.status(404).json({ error: 'User not found.' });
+    if (!t) { const moved = await usernameMovedTo(handle).catch(() => null); return res.status(404).json(Object.assign({ error: 'User not found.' }, moved ? { moved } : {})); }
+    if (t.deactivated) return res.status(404).json({ error: 'User not found.' });
     const [counts, posts] = await Promise.all([
       db.query(`SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
                        (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
@@ -44347,15 +44388,29 @@ app.post('/api/admin/username-locks/:username/assign', auth.requirePerm('handles
     if (Number.isInteger(toId)) target = (await db.query('SELECT id, username FROM users WHERE id = $1', [toId])).rows[0];
     else if (toRaw) target = (await db.query('SELECT id, username FROM users WHERE lower(username) = lower($1)', [toRaw])).rows[0];
     if (!target) return res.status(404).json({ error: 'No account found to assign it to.' });
-    // Move the handle onto the target account and drop the reservation atomically.
-    await db.query('BEGIN');
-    await db.query('UPDATE users SET username = $1 WHERE id = $2', [username, target.id]);
-    await db.query('DELETE FROM reserved_usernames WHERE username = $1', [username]);
-    await db.query('COMMIT');
+    /* A handle another account gave up less than 30 days ago is HELD (username_history):
+       staff may hand out a locked premium name, but never one somebody else's old links
+       still point at — that is exactly the hijack the hold exists to stop. */
+    if (await usernameHeld(username, target.id)) return res.status(409).json({ error: 'That name was given up by another account less than 30 days ago. It is held until then.' });
+    /* Move the handle onto the target account and drop the reservation atomically. This
+       used to send BEGIN/COMMIT through the POOL, i.e. possibly three different
+       connections, so it was never a transaction at all; it is one client now. The old
+       handle is recorded in username_history by the users trigger, inside this same
+       transaction. */
+    const client = await db.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE users SET username = $1 WHERE id = $2', [username, target.id]);
+      await client.query('DELETE FROM reserved_usernames WHERE username = $1', [username]);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      if (e && e.code === '23505') return res.status(409).json({ error: 'That name is already held by an account. Unlock it or pick another.' });
+      throw e;
+    } finally { client.release(); }
     adminAudit(req, 'handle.assign', 'user', target.id, { username, previousUsername: target.username });
     res.json({ ok: true, username, assignedTo: { id: target.id, previousUsername: target.username } });
   } catch (err) {
-    await db.query('ROLLBACK').catch(() => {});
     console.error(err);
     res.status(500).json({ error: 'Could not assign that username.' });
   }
@@ -44426,6 +44481,11 @@ async function claimHandleFromBalance(buyerId, username, expectedPrice) {
     if (expectedPrice != null && expectedPrice !== price) { await client.query('ROLLBACK'); return { priceChanged: true, priceCents: price }; }
     const held = await client.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [username]);
     if (held.rowCount) { await client.query('ROLLBACK'); return { taken: true }; }
+    // Given up by another account less than 30 days ago (username_history): still held.
+    const hold = await client.query(
+      `SELECT 1 FROM username_history WHERE old_lower = lower($1) AND changed_at > now() - ($2 || ' days')::interval
+          AND (user_id IS NULL OR user_id <> $3) LIMIT 1`, [username, String(USERNAME_HOLD_DAYS), buyerId]);
+    if (hold.rowCount) { await client.query('ROLLBACK'); return { taken: true }; }
     if (b.balance_cents < price) { await client.query('ROLLBACK'); return { insufficient: true, priceCents: price }; }
     await walletCredit(client, buyerId, -price, 'handle', null, 'Claimed @' + username);
     await client.query('UPDATE users SET username = $1 WHERE id = $2', [username, buyerId]);
@@ -44452,6 +44512,7 @@ app.get('/api/handles/:username', auth.requireAuth, async (req, res) => {
     const held = await db.query('SELECT 1 FROM users WHERE lower(username) = $1', [username]);
     if (held.rowCount) return res.json({ username, claimable: false, reason: 'taken' });
     if (newUsernameError(username)) return res.json({ username, claimable: false, reason: 'reserved' }); // a system word is never for sale
+    if (await usernameHeld(username, req.user.id)) return res.json({ username, claimable: false, reason: 'held' }); // given up < 30 days ago
     const r = (await db.query('SELECT price_cents FROM reserved_usernames WHERE username = $1', [username])).rows[0];
     if (!r) return res.json({ username, claimable: false, reason: 'available' }); // not reserved → normal signup/change path
     if (r.price_cents == null) return res.json({ username, claimable: false, reason: 'reserved' }); // reserved, not for sale
@@ -46122,9 +46183,10 @@ function _setMeta(html, attr, key, value) {
   // (e.g. a headline like "Save $2") aren't interpreted as $1/$2/$& patterns.
   return html.replace(new RegExp(`(<meta\\s+${attr}="${esc}"\\s+content=")[^"]*(")`, 'i'), (m, p1, p2) => p1 + v + p2);
 }
-function renderShellWithOg(og) {
+function renderShellWithOg(og, opts) {
   let h = appShellHtml();
   if (!h) return h;
+  opts = opts || {};
   if (og.title) { const tv = ogEscape(og.title); h = h.replace(/<title>[\s\S]*?<\/title>/, () => `<title>${tv}</title>`); }
   h = _setMeta(h, 'property', 'og:title', og.title);
   h = _setMeta(h, 'property', 'og:description', og.description);
@@ -46136,6 +46198,14 @@ function renderShellWithOg(og) {
   h = _setMeta(h, 'name', 'twitter:description', og.description);
   h = _setMeta(h, 'name', 'twitter:image', og.image);
   h = _setMeta(h, 'name', 'twitter:card', og.largeImage ? 'summary_large_image' : 'summary');
+  if (opts.noindex) {
+    /* A page that must not be indexed declares no canonical of its own (pointing a
+       not-found or a private page at some other URL would be a false statement) and says
+       noindex in the document, for crawlers that read the page rather than the header. */
+    h = h.replace(/<link[^>]+rel="canonical"[^>]*>\s*/i, '');
+    h = h.replace(/<head>/i, '<head>\n<meta name="robots" content="noindex"/>');
+    return h;
+  }
   // One page, one canonical address. /company/john and /john are the same
   // business; /john/media is the same profile — each says so here, so search
   // engines index the real URL instead of treating the alias as a duplicate.
@@ -46147,83 +46217,219 @@ function renderShellWithOg(og) {
   }
   return h;
 }
-// Resolve a request path to entity OG data, or null (unknown path / not found).
-// Only http(s) images are usable — most avatars are stored as data URLs, which
-// crawlers can't fetch, so those fall back to the branded default card image.
-async function ogForPath(req) {
-  const origin = `${req.protocol}://${req.get('host')}`;
+
+/* ═══ THE SERVER'S VIEW OF AN ATWE ADDRESS (Route Audit batch 9) ═══════════════════
+   Until batch 9 every app path answered 200 with the same shell, so a deleted listing, an
+   unknown username and a typo all looked to a search engine like real pages, and a link
+   to an old address was only ever corrected by the app AFTER it loaded. routeResponse()
+   decides, for one request, the HTTP answer the address deserves:
+
+     301  a pure legacy rename (from the registry's alias table, no database), a renamed
+          username (username_history), a post found under its wrong or old author, a
+          typed entity with a stale or missing slug. The query string is kept.
+     200  a live page. A crawler also gets its OG/Twitter card and canonical address.
+     404  an unknown route shape; an unknown, deactivated or suspended username (all
+          three answer IDENTICALLY — a hidden account is never confirmed); an entity id
+          that was never issued.
+     410  a public entity that existed and is gone or no longer public — deleted,
+          withdrawn, unpublished, hidden by its owner, or its owner hidden. A missing row
+          whose id is at or below the highest id the table's sequence ever handed out
+          counts as "existed": ids are SERIAL and never reused. A post that is not publicly visible (circle-only,
+          subscriber-only, pay-per-view, scheduled) answers exactly like a deleted one, so
+          the status never tells a stranger that a private post is there.
+     503  the database could not answer. NEVER a 404: a failure to look is not proof of
+          absence. Retry-After is set and the shell's own retry state takes over.
+
+   PRIVATE routes (Beam conversations, Account, Settings, Notifications, the AI page) are
+   never looked up at all: they answer 200 with the shell (whose sign-in gate keeps the
+   destination) and noindex, so the answer is the same whether the conversation exists,
+   belongs to someone else, or not — the server cannot leak what it never reads.
+
+   Cost: an address the registry decides alone (renames, private, browse pages) touches
+   no database. A public entity or a profile is ONE indexed lookup (a second, max(id) or
+   username_history, only on a miss). An installed app never gets here at all — its
+   service worker fetches the shell from /__shell/<t> — so this runs for first visits,
+   shared links and crawlers. */
+const _GONE_TABLE = { listing: 'products', service: 'services', job: 'jobs', event: 'events', course: 'courses',
+  newsletter: 'newsletters', community: 'communities', showcase: 'showcases', post: 'posts', issue: 'newsletter_issues' };
+const _OWNER_OK = (a) => `${a}.deactivated IS NOT TRUE AND COALESCE(${a}.status, 'active') = 'active'`;
+/* One indexed lookup per public entity family: what the card says and whether a stranger
+   may see it. `visible` mirrors what the public read routes show. */
+const _ENTITY_SQL = {
+  listing: `SELECT p.id, p.name AS title, p.description AS descr, COALESCE(p.images[1], p.image) AS img,
+                   (p.active AND ${_OWNER_OK('u')}) AS visible, false AS noindex
+              FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1`,
+  service: `SELECT s.id, s.title, s.description AS descr, s.image AS img,
+                   (s.active AND ${_OWNER_OK('u')}) AS visible, false AS noindex
+              FROM services s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
+  job:     `SELECT j.id, j.title, j.description AS descr, NULL AS img, ${_OWNER_OK('u')} AS visible,
+                   (j.closes_at IS NOT NULL AND j.closes_at < now()) AS noindex
+              FROM jobs j JOIN users u ON u.id = j.posted_by WHERE j.id = $1`,
+  event:   `SELECT e.id, e.title, e.description AS descr, e.cover AS img, ${_OWNER_OK('u')} AS visible,
+                   (e.cancelled IS TRUE OR COALESCE(e.ends_at, e.starts_at) < now()) AS noindex
+              FROM events e JOIN users u ON u.id = e.host_id WHERE e.id = $1`,
+  course:  `SELECT c.id, c.title, c.description AS descr, c.cover AS img,
+                   (c.published IS TRUE AND ${_OWNER_OK('u')}) AS visible, false AS noindex
+              FROM courses c JOIN users u ON u.id = c.creator_id WHERE c.id = $1`,
+  newsletter: `SELECT n.id, n.title, n.description AS descr, n.cover AS img, ${_OWNER_OK('u')} AS visible, false AS noindex
+              FROM newsletters n JOIN users u ON u.id = n.owner_id WHERE n.id = $1`,
+  community: `SELECT c.id, c.name AS title, c.description AS descr, c.avatar AS img, true AS visible, false AS noindex
+              FROM communities c WHERE c.id = $1`,
+  showcase: `SELECT s.id, s.title, s.description AS descr, s.images[1] AS img, ${_OWNER_OK('u')} AS visible, false AS noindex
+              FROM showcases s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
+};
+const _ROUTE_ENTITY = { listing: 'listing', service: 'service', job: 'job', event: 'event', course: 'course',
+  newsletter: 'newsletter', community: 'community', 'showcase-detail': 'showcase' };
+/* The public browse pages a crawler may index, and what their card says. */
+const _BROWSE_CARD = {
+  marketplace: ['Marketplace', 'Buy and sell anything, from people and businesses on Atwe.'],
+  services: ['Services', 'Find a local pro for anything, on Atwe.'],
+  businesses: ['Businesses', 'Discover businesses on Atwe.'],
+  events: ['Events', 'Professional events and meetups on Atwe.'],
+  courses: ['Courses', 'Learn from people and businesses on Atwe.'],
+  newsletters: ['Newsletters', 'Newsletters written on Atwe.'],
+  communities: ['Communities', 'Communities on Atwe.'],
+  showcase: ['Showcase', 'Work people and businesses are proud of, on Atwe.'],
+  help: ['Help', 'Answers to common questions about Atwe.'],
+};
+/* Was this id ever handed out? Asked of the table's own SEQUENCE, not MAX(id): ids are
+   SERIAL and never reused, so the highest one ever issued is the line between "existed and
+   is gone" (410) and "never existed" (404). MAX(id) would call the newest row, once
+   deleted, a 404. */
+async function _maxIdAtLeast(kind, id) {
+  const t = _GONE_TABLE[kind];
+  const r = (await db.query(`SELECT COALESCE(pg_sequence_last_value(pg_get_serial_sequence($1, 'id')), 0) AS m`, [t])).rows[0];
+  return id <= Number(r.m);
+}
+function _searchOf(req) { const u = req.originalUrl || ''; const i = u.indexOf('?'); return i >= 0 ? u.slice(i) : ''; }
+async function routeResponse(req) {
+  const origin = `${req.protocol}://${String(req.get('host') || '').toLowerCase()}`;
   const defImg = origin + '/icon-384.png';
   const httpImg = (v) => (typeof v === 'string' && /^https?:\/\//i.test(v)) ? v : null;
-  let segs;
-  try { segs = decodeURIComponent(req.path).split('/').filter(Boolean); } catch { return null; }
-  // One reserved list for the whole platform (routes.js) — this used to keep a
-  // third private copy of its own, which could silently disagree with the router
-  // and the signup gate.
-  const RESERVED = SYSTEM_ROUTES;
-  try {
-    if ((segs[0] === 'group' || segs[0] === 'circle') && segs[1] && /^@?[a-z0-9._-]{1,40}$/i.test(segs[1])) {
-      const uname = segs[1].replace(/^@/, '');
-      if (segs[0] === 'group') {
-        const g = (await db.query('SELECT name, username, avatar FROM at_groups WHERE lower(username) = lower($1) LIMIT 1', [uname])).rows[0];
-        if (!g) return null;
-        return { title: `${g.name} · Atwe`, description: `Join “${g.name}” on Atwe. Messaging built for business.`, image: httpImg(g.avatar) || defImg, url: `${origin}/group/${g.username}`, type: 'website' };
-      }
-      const c = (await db.query('SELECT name, username, bio, avatar FROM circles WHERE lower(username) = lower($1) LIMIT 1', [uname])).rows[0];
-      if (!c) return null;
-      return { title: `${c.name} · Atwe`, description: (c.bio && c.bio.trim()) || `The ${c.name} industry circle on Atwe.`, image: httpImg(c.avatar) || defImg, url: `${origin}/circle/${c.username}`, type: 'website' };
+  const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n || 180);
+  const qs = _searchOf(req);
+  const moved = (to) => ({ status: 301, location: to + qs });
+  const NOT_FOUND = { status: 404, noindex: true, og: { title: 'Page not found · Atwe', description: 'This page doesn’t exist on Atwe.', image: defImg, url: origin + '/' } };
+  const GONE = { status: 410, noindex: true, og: { title: 'No longer available · Atwe', description: 'This is no longer available on Atwe.', image: defImg, url: origin + '/' } };
+  const PRIVATE = { status: 200, noindex: true, og: null };   // the shell's own default card: nothing private in it
+
+  // 1. A pure legacy rename: decided by the registry alone, no database.
+  const legacy = ROUTE_REGISTRY.legacyRedirect(req.path);
+  if (legacy && legacy !== req.path) return moved(legacy);
+
+  const m = ROUTE_REGISTRY.match(req.path);
+  if (!m) return NOT_FOUND;
+  const route = ROUTE_REGISTRY.get(m.name);
+  const segs = ROUTE_REGISTRY.splitPath(req.path);
+
+  // 2. Everything that is not a public entity: the registry's own SEO class decides.
+  const needsDb = m.name === 'post' || m.name === 'profile' || m.name === 'profile-section' || m.name === 'group'
+    || m.name === 'circle' || m.name === 'newsletter-issue' || !!_ROUTE_ENTITY[m.name];
+  if (!needsDb) {
+    if (route.seo === 'index' && _BROWSE_CARD[m.name]) {
+      const [t, d] = _BROWSE_CARD[m.name];
+      return { status: 200, og: { title: `${t} · Atwe`, description: d, image: defImg, url: origin + ROUTE_REGISTRY.build(m.name, {}), type: 'website' } };
     }
-    // /company/<username> is an alias for a business account — preview it as the
-    // profile, and point the canonical URL at the real address.
-    if (segs[0] === 'company' && segs[1] && /^@?[a-z0-9._-]{1,40}$/i.test(segs[1])) segs = [segs[1]];
-    // /<username>/post/<id> — the canonical post address. Preview the POST, so a
-    // shared link unfurls with what was actually written, not just who wrote it.
-    if (segs.length === 3 && segs[1] === 'post' && /^\d+$/.test(segs[2])) {
-      const pr = (await db.query(
-        `SELECT p.body, p.image, u.name, u.username, u.avatar
-           FROM posts p JOIN users u ON u.id = p.user_id
-          WHERE p.id = $1 AND lower(u.username) = lower($2) AND u.deactivated IS NOT TRUE LIMIT 1`,
-        [parseInt(segs[2], 10), segs[0].replace(/^@/, '')])).rows[0];
-      if (!pr) return null;
-      const body = (pr.body || '').replace(/\s+/g, ' ').trim();
-      return {
-        title: `${pr.name} (@${pr.username}) on Atwe`,
-        description: body ? body.slice(0, 180) : `A post from ${pr.name} on Atwe.`,
-        image: httpImg(pr.image) || httpImg(pr.avatar) || defImg,
-        url: `${origin}/${pr.username}/post/${segs[2]}`,
-        type: 'article',
-      };
+    return PRIVATE;   // auth-only, private, search and sign-in pages: 200 + noindex
+  }
+  if (!db.isConfigured()) return { status: 200, og: null };   // no database: the old behaviour
+
+  // 3. Profiles (and a profile's public sections, and the /company alias).
+  if (m.name === 'profile' || m.name === 'profile-section') {
+    const handle = m.params.username;
+    const u = (await db.query(
+      `SELECT name, username, headline, bio, avatar, banner, deactivated, status FROM users WHERE lower(username) = lower($1) LIMIT 1`,
+      [handle])).rows[0];
+    if (!u) {
+      const to = await usernameMovedTo(handle);
+      if (!to) return NOT_FOUND;
+      const rest = m.name === 'profile-section' ? '/' + m.params.section : '';
+      return moved('/' + to + rest);
     }
-    // /<username>/<public-section> previews as the profile itself.
-    if (segs.length === 2 && ['posts', 'replies', 'media', 'likes', 'about', 'connections'].includes(segs[1])) segs = [segs[0]];
-    if (segs.length === 1 && /^@?[a-z0-9._-]{1,40}$/i.test(segs[0])) {
-      const uname = segs[0].replace(/^@/, '');
-      if (RESERVED.includes(uname.toLowerCase())) return null;
-      const u = (await db.query(
-        'SELECT name, username, headline, bio, avatar, banner, account_type FROM users WHERE lower(username) = lower($1) AND deactivated IS NOT TRUE LIMIT 1',
-        [uname]
-      )).rows[0];
-      if (!u) return null;
-      const desc = (u.headline && u.headline.trim())
-        || (u.bio && u.bio.trim().replace(/\s+/g, ' ').slice(0, 180))
-        || `${u.name} is on Atwe. The network built for business.`;
-      const banner = httpImg(u.banner), avatar = httpImg(u.avatar);
-      return {
-        title: `${u.name} (@${u.username}) · Atwe`,
-        description: desc,
-        image: banner || avatar || defImg,
-        largeImage: !!banner,
-        url: `${origin}/${u.username}`,
-        type: 'profile',
-      };
+    if (u.deactivated || (u.status && u.status !== 'active')) return NOT_FOUND;   // same answer as unknown
+    const desc = clip(u.headline) || clip(u.bio) || `${u.name} is on Atwe. The network built for business.`;
+    const banner = httpImg(u.banner), avatar = httpImg(u.avatar);
+    return { status: 200, noindex: m.name === 'profile-section' && m.params.section === 'likes',
+      og: { title: `${u.name} (@${u.username}) · Atwe`, description: desc, image: banner || avatar || defImg,
+            largeImage: !!banner, url: `${origin}/${u.username.toLowerCase()}`, type: 'profile' } };
+  }
+
+  // 4. Posts: /<author>/post/<id>, and the legacy /post/<id>.
+  if (m.name === 'post') {
+    const id = parseInt(m.params.id, 10);
+    if (!Number.isInteger(id) || id > 2147483647) return NOT_FOUND;
+    const p = (await db.query(
+      `SELECT p.id, p.body, p.image, u.name, u.username, u.avatar,
+              (p.to_main IS NOT FALSE AND p.subscribers_only IS NOT TRUE AND COALESCE(p.ppv_cents, 0) = 0
+               AND p.created_at <= now() AND (p.scheduled_at IS NULL OR p.scheduled_at <= now()) AND u.username IS NOT NULL AND ${_OWNER_OK('u')}) AS visible
+         FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = $1`, [id])).rows[0];
+    if (!p) return (await _maxIdAtLeast('post', id)) ? GONE : NOT_FOUND;
+    if (!p.visible) return GONE;
+    const canon = `/${p.username.toLowerCase()}/post/${id}`;
+    const isLegacy = m.alias;
+    const tail = isLegacy ? '' : (segs.length > 3 ? '/' + segs.slice(3).map(encodeURIComponent).join('/') : '');
+    if (isLegacy || String(m.params.username).toLowerCase() !== p.username.toLowerCase()) return moved(canon + tail);
+    const body = clip(p.body);
+    return { status: 200, og: { title: `${p.name} (@${p.username}) on Atwe`, description: body || `A post from ${p.name} on Atwe.`,
+      image: httpImg(p.image) || httpImg(p.avatar) || defImg, url: origin + canon, type: 'article' } };
+  }
+
+  // 5. Public group pages and industry circles (curated slugs; no ids, so no 410).
+  if (m.name === 'group' || m.name === 'circle') {
+    const slug = String(m.params.slug || '').replace(/^@/, '');
+    if (!/^[a-z0-9._-]{1,40}$/i.test(slug)) return NOT_FOUND;
+    if (m.name === 'group') {
+      const g = (await db.query('SELECT name, username, avatar, description FROM at_groups WHERE lower(username) = lower($1) LIMIT 1', [slug])).rows[0];
+      if (!g) return NOT_FOUND;
+      return { status: 200, og: { title: `${g.name} · Atwe`, description: clip(g.description) || `Join “${g.name}” on Atwe. Messaging built for business.`,
+        image: httpImg(g.avatar) || defImg, url: `${origin}/group/${g.username.toLowerCase()}`, type: 'website' } };
     }
-  } catch (_) { /* any lookup problem → default shell */ }
-  return null;
+    const c = (await db.query('SELECT name, username, bio, avatar FROM circles WHERE lower(username) = lower($1) LIMIT 1', [slug])).rows[0];
+    if (!c) return NOT_FOUND;
+    return { status: 200, og: { title: `${c.name} · Atwe`, description: clip(c.bio) || `The ${c.name} industry circle on Atwe.`,
+      image: httpImg(c.avatar) || defImg, url: `${origin}/circle/${c.username.toLowerCase()}`, type: 'website' } };
+  }
+
+  // 6. A newsletter issue. The BODY of a paid newsletter's issue is never put in a card.
+  if (m.name === 'newsletter-issue') {
+    const nid = parseInt(m.params.id, 10), iid = parseInt(m.params.issue, 10);
+    if (!Number.isInteger(iid) || iid > 2147483647) return NOT_FOUND;
+    const r = (await db.query(
+      `SELECT i.id, i.title, i.body, i.newsletter_id, n.title AS nl_title, n.description AS nl_descr, n.cover,
+              COALESCE(n.price_cents, 0) > 0 OR COALESCE(i.min_tier_level, 0) > 0 AS paid, ${_OWNER_OK('u')} AS visible
+         FROM newsletter_issues i JOIN newsletters n ON n.id = i.newsletter_id JOIN users u ON u.id = n.owner_id
+        WHERE i.id = $1`, [iid])).rows[0];
+    if (!r) return (await _maxIdAtLeast('issue', iid)) ? GONE : NOT_FOUND;
+    if (!r.visible) return GONE;
+    const canon = `/newsletter/${r.newsletter_id}/issue/${r.id}`;
+    if (r.newsletter_id !== nid || req.path !== canon) return moved(canon);
+    return { status: 200, noindex: !!r.paid, og: { title: `${r.title} · ${r.nl_title} · Atwe`,
+      description: (r.paid ? clip(r.nl_descr) : clip(r.body)) || `An issue of ${r.nl_title} on Atwe.`,
+      image: httpImg(r.cover) || defImg, url: origin + canon, type: 'article' } };
+  }
+
+  // 7. Typed public entities: /listing|service|job|event|course|newsletter/{id}-{slug},
+  //    /communities/{id}, /showcase/{id}.
+  const kind = _ROUTE_ENTITY[m.name];
+  const ref = m.params.idslug !== undefined ? ROUTE_REGISTRY.parseIdSlug(m.params.idslug) : { id: parseInt(m.params.id, 10) };
+  const id = ref && ref.id;
+  if (!Number.isInteger(id) || id > 2147483647) return NOT_FOUND;
+  const e = (await db.query(_ENTITY_SQL[kind], [id])).rows[0];
+  if (!e) return (await _maxIdAtLeast(kind, id)) ? GONE : NOT_FOUND;
+  if (!e.visible) return GONE;
+  const canon = m.params.idslug !== undefined ? ROUTE_REGISTRY.build(m.name, { idslug: ROUTE_REGISTRY.idSlug(id, e.title) })
+    : ROUTE_REGISTRY.build(m.name, { id: String(id) });
+  if (req.path !== canon) return moved(canon);
+  return { status: 200, noindex: !!e.noindex, og: { title: `${clip(e.title, 120)} · Atwe`,
+    description: clip(e.descr) || `${clip(e.title, 120)} on Atwe.`, image: httpImg(e.img) || defImg,
+    largeImage: !!httpImg(e.img), url: origin + canon, type: kind === 'listing' ? 'product' : 'website' } };
 }
 
 // Smart-link redirect (/s/<code>): public — a share link works for anyone.
 // Only http(s)/in-app destinations exist (enforced at create), the click count
 // bumps fire-and-forget, and an off/unknown code falls through to the app shell
-// (its own not-found state) instead of a bare error page.
+// (its own not-found state, served as an HTTP 404 since route batch 9) instead of a
+// bare error page.
 app.get('/s/:code', rateLimit(120, 60000, 'smartlink-hit'), async (req, res, next) => {
   const code = String(req.params.code || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
   if (!code) return next();
@@ -46274,6 +46480,17 @@ app.get('/api/smart-links/:id/views', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the views.' }); }
 });
 
+/* A document that must not be indexed: noindex in the page itself (for crawlers that read
+   the document rather than the header) and no canonical of its own. The card is the
+   shell's own generic one, so nothing about the address leaks into it. */
+let _noindexShell = null;
+function noindexShellHtml() {
+  if (_noindexShell == null) {
+    const h = appShellHtml();
+    _noindexShell = h ? h.replace(/<link[^>]+rel="canonical"[^>]*>\s*/i, '').replace(/<head>/i, '<head>\n<meta name="robots" content="noindex"/>') : '';
+  }
+  return _noindexShell;
+}
 app.get('*', async (req, res, next) => {
   if (req.hostname === ADMIN_HOST) return next();
   if (req.path.startsWith('/api/')) return next();
@@ -46281,11 +46498,24 @@ app.get('*', async (req, res, next) => {
     return next(); // a missing real asset → let it 404 normally
   }
   res.set('Cache-Control', 'no-cache, must-revalidate'); // always revalidate the app shell
-  // Only pay the lookup/injection cost for known link-preview crawlers.
+  let r;
+  try { r = await routeResponse(req); }
+  catch (err) {
+    /* The database could not answer. That is NOT "not found": say 503 and let the shell's
+       own retry state take over, and never let a crawler drop a real page over it. */
+    console.error('[route] could not decide', req.path, '-', err && err.message);
+    r = { status: 503, noindex: true, retry: true, og: null };
+  }
+  if (r.status === 301) return res.redirect(301, r.location);
+  if (r.noindex) res.set('X-Robots-Tag', 'noindex');
+  if (r.retry) res.set('Retry-After', '30');
+  res.status(r.status || 200);
+  // Only pay the card-injection cost for known link-preview crawlers. A person gets the
+  // same pre-compressed shell as ever, with the right status code.
   if (isLinkCrawler(req.headers['user-agent'])) {
     try {
-      const og = await ogForPath(req);
-      if (og) { const html = renderShellWithOg(og); if (html) return res.type('html').send(html); }
+      const html = r.og ? renderShellWithOg(r.og, { noindex: !!r.noindex }) : (r.noindex ? noindexShellHtml() : null);
+      if (html) return res.type('html').send(html);
     } catch (_) { /* fall through to the plain shell */ }
   }
   sendShell(req, res);
