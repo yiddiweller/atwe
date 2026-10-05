@@ -24068,6 +24068,21 @@ function exitImpersonation() {
 }
 async function handleUrlParams() {
   const p = new URLSearchParams(location.search);
+  // /login?next=<path> (or any page carrying one): a destination for after sign-in.
+  if (p.get('next')) acAuthNextSet(p.get('next'));
+  /* Back from a FULL page load with a session (an OAuth provider redirecting to "/", the
+     sign-in page reloaded, an emailed code opened in this tab): a destination written down
+     before it is applied HERE, before boot chooses a world, so this load behaves exactly as
+     if the member had opened that address — same world landing, same deep link, no race.
+     Only from a neutral arrival ("/" or a sign-in page): an address opened now wins. If the
+     session turns out to be dead, the gate simply writes it down again. */
+  if (API.token()) {
+    const _here = location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+    if (_here === '/' || _here === '/login' || _here === '/signup') {
+      const _nx = acAuthNextTake();
+      if (_nx) acSetPath(_nx);
+    }
+  }
   let go = p.get('go');
   // Blueprint world aliases: /?go=beam → chat, /?go=engine → search (old ids still work).
   if (go === 'beam') go = 'chat';
@@ -24470,6 +24485,12 @@ function acSyncPath(opts) {
     _pathSyncWantPush = false;
     if (_lastShow) _lastShow.pend = false;   // the screen on show now belongs to the entry written below
     try {
+      /* Signed out with the sign-in gate up (route batch 9): the address is where the visitor
+         was going (or /login), and the gate is not a place. Deriving a path here fell through
+         to the default world's, so a protected link read /ai under the gate and a refresh
+         there reloaded /ai — the destination was gone before anyone had signed in. */
+      const _gate = document.getElementById('loginOverlay');
+      if (!isAccount() && !(S && S._peek) && _gate && !_gate.classList.contains('hidden')) return;
       // The top-most open panel that owns a route is what the person is looking at.
       const open = document.querySelectorAll('.overlay:not(.hidden):not(.closing)');
       for (let i = open.length - 1; i >= 0; i--) {
@@ -25114,10 +25135,47 @@ let _pendingPayLink = null;   // a ?paylink=<code> to open the pay sheet after a
 let _pendingPool = null;      // a ?pool=<id> to open after auth
 let _pendingWaitlist = null;  // a ?waitlist=<slug> to open after auth
 let _pendingCallLink = null;  // a ?call=<code> call link to open after auth
+/* ── AUTH RETURN: where sign-in sends someone afterwards (route batch 9) ──────────────
+   A signed-out visitor who opened a protected address used to keep it only in memory
+   (_pendingRoute), so any FULL page load between the gate and a signed-in session — an
+   OAuth provider redirecting back, a refresh, an email code opened in the same tab —
+   dropped them on Home. The destination is now also written down, in ONE place:
+     · acAuthNextSet(raw)  — only ever through the registry's safeNext(): an Atwe-local,
+       live, non-sign-in route, canonicalised, minus one-time secrets. Anything else
+       (another origin, //host, a scheme, a backslash, a control character, a sign-in page)
+       is refused, so this can never become an open redirect;
+     · acAuthNextTake()    — read ONCE, re-validated on the way out, 30 minutes at most.
+   It feeds the SAME _pendingRoute → openDeepLink path the in-page sign-in always used:
+   there is no second router. /login?next=<path> and /signup?next=<path> are accepted too. */
+const AUTH_NEXT_KEY = 'atwe_auth_next', AUTH_NEXT_TTL = 30 * 60 * 1000;
+function acSafeNext(raw) { try { return (window.ATWE_ROUTES && ATWE_ROUTES.safeNext) ? ATWE_ROUTES.safeNext(raw) : null; } catch (e) { return null; } }
+function acAuthNextSet(raw) {
+  const safe = acSafeNext(raw);
+  if (!safe || safe === '/') return null;
+  try { localStorage.setItem(AUTH_NEXT_KEY, JSON.stringify({ p: safe, t: Date.now() })); } catch (e) {}
+  return safe;
+}
+function acAuthNextTake() {
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem(AUTH_NEXT_KEY) || 'null'); localStorage.removeItem(AUTH_NEXT_KEY); } catch (e) {}
+  if (!v || typeof v.p !== 'string' || !(Date.now() - (v.t || 0) < AUTH_NEXT_TTL)) return null;
+  return acSafeNext(v.p);
+}
 function consumePendingRoute() {
   /* The arrival entry is built once whatever this schedules has run (the latest opener
      below fires at +220ms; a Settings deep link adds +60ms and a frame). */
   setTimeout(() => { try { AtweHistory.endBoot(); } catch (e) {} }, 500);
+  /* A destination written down before a full page load. It applies only when this load
+     did not arrive with a destination of its own (Home, or a sign-in page): an address
+     the member opened just now always wins over one remembered from before. */
+  if (isAccount()) {
+    const nx = acAuthNextTake();
+    const neutral = location.pathname === '/' || (_pendingRoute && _pendingRoute.type === 'auth');
+    if (nx && (!_pendingRoute || neutral)) {
+      if (nx !== location.pathname + location.search) acSetPath(nx);
+      _pendingRoute = parseDeepLink();
+    }
+  }
   try {
     const pc = JSON.parse(localStorage.getItem('atwe_coupon_pending') || 'null');
     if (pc && pc.code) { localStorage.removeItem('atwe_coupon_pending'); setTimeout(() => acOpenCouponLanding(pc), 200); }
@@ -25147,7 +25205,12 @@ async function acPeekProfile(username) {
   if (!un) { openLogin(); return; }
   let d;
   try { d = await API.req('GET', '/api/public/profile/' + encodeURIComponent(un)); }
-  catch (e) { openLogin(); return; } // unknown/deactivated/blocked → just show the gate
+  catch (e) {
+    // A renamed handle (route batch 9): follow it, as the server's 301 does.
+    const mv = e && e.status === 404 && e.body && typeof e.body.moved === 'string' ? e.body.moved : '';
+    if (mv && /^[a-z0-9._-]{1,40}$/i.test(mv) && mv.toLowerCase() !== un) { acSetPath('/' + mv.toLowerCase()); return acPeekProfile(mv); }
+    openLogin(); return;   // unknown/deactivated/blocked → just show the gate
+  }
   // Enter peek mode: guest chrome, one visible profile, a click-gate over the rest.
   _peekMode = true;
   API.setToken(null);
@@ -25745,6 +25808,8 @@ function switchToLogin() {
 }
 function openLogin() {
   try { gsiLoad().catch(() => {}); } catch (e) {}   // warm Google sign-in while they read the screen
+  // Remember where they were going, so it survives a full page load (route batch 9).
+  if (!isAccount() && location.pathname !== '/') acAuthNextSet(location.pathname + location.search);
   authLandingBack();
   document.getElementById('signupOverlay').classList.add('hidden');
   showOverlay('loginOverlay');
@@ -44990,6 +45055,13 @@ async function acLoadProfile(username, mine) {
   } catch (e) {
     // A 404/410/403 is definitive (deleted/deactivated/blocked) — show the
     // not-found state with a way out instead of a misleading network error.
+    /* A handle its owner has since changed (route batch 9): the server says where it went,
+       the same public fact its 301 states, and the address quietly follows it. */
+    const mv = e && e.status === 404 && e.body && typeof e.body.moved === 'string' ? e.body.moved : '';
+    if (mv && /^[a-z0-9._-]{1,40}$/i.test(mv) && mv.toLowerCase() !== String(username || '').toLowerCase().replace(/^@/, '')) {
+      acSetPath(acRoutePath('profile', { username: mv }, '/' + mv.toLowerCase()));
+      return acLoadProfile(mv, !!(S.user && S.user.username && mv.toLowerCase() === S.user.username.toLowerCase()));
+    }
     if (e && (e.status === 404 || e.status === 410 || e.status === 403)) acNotFound(body, 'This profile isn’t available', 'The account may have been deleted or deactivated, or the link is wrong.');
     else acErr(body, 'acLoadProfile(' + jsAttr(username) + ',' + (mine ? 'true' : 'false') + ')');
   }

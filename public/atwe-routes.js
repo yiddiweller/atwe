@@ -110,7 +110,7 @@
     ['privacy', 'muted-words', 'mutedWordsOverlay', 'Muted words'],
     ['privacy', 'last-seen', 'lastSeenHiddenOverlay', 'Hidden from'],
     /* /devices is the pre-batch-4 address; it stays an ALIAS so every link already issued
-       keeps working, and the app canonicalises it here. (The server-side 301 is batch 9.) */
+       keeps working: the server 301s it (route batch 9) and the app canonicalises it in place. */
     ['security', 'devices', 'devicesOverlay', 'Devices & sessions', { aliases: ['/devices'] }],
     ['security', '2fa', 'twoFaView', 'Two-factor authentication'],
     ['security', 'passkeys', 'passkeysView', 'Passkeys'],
@@ -134,7 +134,8 @@
      (marketing is the page's `growth`, help is its `app`) and that binding lives in the app.
      A TOOL is a routed overlay under /account; its logical parent is the section whose row
      opens it in the live Account page. `aliases` are the flat addresses issued before batch
-     5 — permanent, canonicalised by the client (the server 301 is batch 9). */
+     5 — permanent: the server 301s them (route batch 9, legacyRedirect) and the app
+     canonicalises them in place. */
   const ACCOUNT_SECTIONS = [
     ['profile', 'Profile'], ['money', 'Money'], ['selling', 'Selling'], ['customers', 'Customers'],
     ['marketing', 'Marketing'], ['jobs', 'Jobs & hiring'], ['library', 'Orders & saved'],
@@ -207,7 +208,7 @@
     /* The five worlds (+ the AI inside page). Route batch 8 switched the roots on: Beam is
        /beam, Engine /engine, Account /account. The addresses they replaced (/messages,
        /search, /me and the older /profile) are permanent ALIASES, canonicalised in the app
-       by replace (the server 301 is batch 9). The route NAMES did not move — every parent in
+       by replace, and the server 301s them (route batch 9). The route NAMES did not move — every parent in
        this file still says 'messages' / 'search' / 'me', and that is the point. */
     r('home',      '/',          { world: 'home', family: 'root', parent: null, aliases: ['/feed', '/home', '/go'], native: '/' }),
     r('messages',  '/beam',      { world: 'beam', family: 'root', parent: null, aliases: ['/messages'] }),
@@ -230,7 +231,7 @@
 
     /* Engine browse (route batch 7): canonical under /engine/<x>. The flat /<x> each one
        was issued at is a permanent ALIAS that the app canonicalises by replace (the server
-       301 is batch 9). The Engine ROOT is still /search: batch 8 owns that flip. */
+       301 is route batch 9, legacyRedirect). The Engine ROOT has been /engine since batch 8. */
     r('jobs',        '/engine/jobs',        { world: 'engine', aliases: ['/jobs'], parent: 'search' }),
     r('businesses',  '/engine/businesses',  Object.assign({ world: 'engine', view: 'bizDirectory', aliases: ['/businesses'], parent: 'search' }, pub)),
     r('services',    '/engine/services',    Object.assign({ world: 'engine', view: 'servicesView', aliases: ['/services'], parent: 'search' }, pub)),
@@ -514,6 +515,74 @@
     return null;
   }
 
+  /* ── THE LEGACY REDIRECT TABLE (route batch 9) ──
+     The canonical address a PURE path rename now lives at, or null when `pathname` is not
+     a legacy alias. It is DERIVED from every live route's `aliases`, so the server's 301
+     table and the app's own client-side canonicalisation can never disagree about where an
+     old address went. Data only: no database, no lookups.
+       · /messages → /beam, /search → /engine, /me and /profile → /account
+       · /devices → /settings/security/devices
+       · every flat Account / Engine word → its /account/... or /engine/... address
+       · /home, /feed → /
+     NOT here, deliberately:
+       · /post/:id — the canonical address needs the AUTHOR, which only the server can
+         look up (it 301s itself, and only for a public post);
+       · /company/:username — the audit KEEPS it as a working alias (its page declares
+         /username as canonical instead);
+       · /go — a server-owned shell path, never reached by the router;
+       · the typed entities' stale or missing slug — that needs the entity's CURRENT title.
+     The query string is the caller's to keep. */
+  const NO_REDIRECT_ALIAS = { post: true, profile: true };
+  function legacyRedirect(pathname) {
+    const m = match(pathname);
+    if (!m || !m.alias || NO_REDIRECT_ALIAS[m.name]) return null;
+    const segs = splitPath(pathname);
+    if (segs.length && segs[0].toLowerCase() === 'go') return null;
+    let to;
+    try { to = build(m.name, m.params); } catch (e) { return null; }
+    return to;
+  }
+
+  /* ── A SAFE post-sign-in destination (route batch 9) ──
+     The ONE answer to "where may sign-in send this person afterwards?". Returns an
+     Atwe-local path (+ its query) or null. It never returns anything a browser could
+     treat as another origin:
+       · must start with exactly one "/" — never "//host", never "/\host";
+       · no backslash, no control character, no whitespace, raw OR percent-decoded;
+       · resolved against a dummy origin and refused unless the origin is unchanged
+         (catches every scheme: javascript:, data:, https:, and their encodings);
+       · must be a LIVE Atwe route (match()), never a sign-in page (no loops);
+       · a legacy alias is canonicalised (legacyRedirect) on the way through.
+     The query is kept, minus one-time secrets (token / verify / reset) and `next` itself;
+     the hash is dropped. */
+  const NEXT_DROP_PARAMS = ['next', 'token', 'verify', 'reset', 'imp'];
+  const BAD_CHARS = /[\u0000- \u007f\\]/;
+  function safeNext(raw) {
+    if (typeof raw !== 'string') return null;
+    const v = raw.trim();
+    if (!v || v.length > 600) return null;
+    if (v.charAt(0) !== '/' || v.charAt(1) === '/' || BAD_CHARS.test(v)) return null;
+    // The PATH, percent-decoded, must be just as clean (a %2F%2F or %5C in it is refused).
+    // The query is re-parsed and re-serialised below, so an encoded space there is fine.
+    const rawPath = v.split(/[?#]/)[0];
+    let dec;
+    try { dec = decodeURIComponent(rawPath); } catch (e) { return null; }
+    if (dec.charAt(0) !== '/' || dec.charAt(1) === '/' || /[\u0000-\u001f\u007f\\]/.test(dec)) return null;
+    const BASE = 'https://atwe.invalid';
+    let u;
+    try { u = new URL(v, BASE); } catch (e) { return null; }
+    if (u.origin !== BASE) return null;
+    const m = match(u.pathname);
+    if (!m) return null;
+    const route = byName[m.name];
+    if (!route || route.world === 'auth') return null;
+    const path = legacyRedirect(u.pathname) || u.pathname;
+    const q = new URLSearchParams(u.search);
+    NEXT_DROP_PARAMS.forEach((k) => q.delete(k));
+    const qs = q.toString();
+    return path + (qs ? '?' + qs : '');
+  }
+
   /* Notification destination kinds → the route that should open. Data-level only:
      the in-app notification rows still use their own handlers. */
   const NOTIF_TARGETS = {
@@ -530,5 +599,6 @@
     NEAR_TERM, FILE_EXT_RE, NOTIF_TARGETS,
     get, match, build, splitPath, firstLiteral, liveRoutes, slugify, idSlug, parseIdSlug,
     parseReserved, routeRoots, allocationReserved, usernameShapeError,
+    legacyRedirect, safeNext,
   };
 });
