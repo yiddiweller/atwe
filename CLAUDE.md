@@ -9085,6 +9085,53 @@ build bump** (`ATWE_BUILD`, `sw.js` `CACHE`, `atwe-routes.js?v=`): the registry 
 `legacyRedirect`/`safeNext`, and an old cached registry simply disables the auth-return note
 (it degrades, it does not break). **The production collision gate is still mandatory.**
 
+### The phone app and atwe.com share one route table (Route Audit batch 10)
+
+**The native app no longer keeps its own list of addresses.** `atwe-mobile/src/lib/deeplinks.ts`
+used to hand-write ten shapes atwe.com does not own (`/user/x`, `/chat/x`, `/story/x`, a bare
+`/post/:id`, a `^[a-z0-9_]{2,30}$` handle rule that refused `a`, `john.doe` and `john-doe`), and the
+AASA claimed `/*`, so the iPhone grabbed every atwe.com link whether or not the app could show it.
+
+- **`NATIVE` in `public/atwe-routes.js` gives EVERY live route exactly one answer**: a native
+  target (an expo-router path; `:param` filled from the route's params, an `idslug` filled with its
+  numeric id), `{ resolve: 'peer', to: '/chat/:peer' }` (a DM URL carries a @username, the native
+  chat needs an id, so the app asks `GET /api/atchat/peer/:username` first, the same authorising
+  lookup the web uses), or **`BROWSER`**. A route with no entry fails `test/native-links.test.js`.
+- **The AASA is GENERATED** (`appLinkComponents()` → `node tools/native-links.js`): web-action
+  queries (`?paylink=`, `?token=`, `?ref=`…), server roots, every static-file extension and the
+  router's defensive words are excluded first; then each literal root's routes most-specific-first
+  with the rest of that root excluded; then `/*/post/*`, the profile sections (browser), and `/*`.
+  **The app decides by EVALUATING THOSE SAME COMPONENTS** (`appLinkAllows`), so the iPhone hands it
+  exactly what it claims. An address the AASA lets through that matches no route (`/listing/abc`)
+  opens Home with "That page doesn't exist" — never a silent nothing, never a loop back to Safari.
+- **`atwe-mobile/src/lib/atwe-routes.js` is a BYTE-FOR-BYTE copy** (Metro cannot import outside the
+  app folder). Edit `public/atwe-routes.js`, run `node tools/native-links.js`, commit all three; the
+  test fails on any drift. A `.d.ts` beside it types what the app uses.
+- **What opens natively**: home, Beam, Engine, Account (`/profile`), Notifications, AI, the Settings
+  hub + 7 pages, the nine Engine browses, cart, 8 Account sections, 19 Account tools (seller orders
+  open `/orders?tab=seller`), posts, the six typed entities, newsletter issues, communities,
+  showcase items, Beam DMs (via the server lookup) and Beam groups, profiles. **Browser**: Settings
+  premium/assistant and every leaf, help, collections, Account customers/creating/ai and 15 tools
+  the app has no screen for, public `/group/{slug}` and circles, extra DM threads, group info,
+  profile sections, every sign-in page (reset/verify carry one-time tokens).
+- **`app/+native-intent.tsx` rewrites every system URL BEFORE expo-router routes it.** expo-router
+  consumes incoming URLs itself and routes them by FILE PATH, so `atwe.com/john` landed on its
+  built-in "Unmatched Route" screen and the old handler then pushed the profile on top of it.
+  `systemPath()` returns the native path for a native route; a DM lookup, a browser route or a
+  "doesn't exist" notice is queued and finished by the root layout once signed in, and a link
+  that arrived while signed out is replayed in full after sign-in (the guard had bounced it).
+- **A renamed handle**: a universal link skips the server's 301, so the native profile follows
+  the 404's `moved` itself, by replace — the same thing `acLoadProfile` does on the web.
+- **`ios.associatedDomains: ["applinks:atwe.com"]` was MISSING from app.json**, so universal links
+  could never have worked at all. Added; it takes effect with the next EAS build (EAS syncs the
+  capability). Not `www` — it 301s everything including the AASA, which Apple will not follow.
+- **Android is parsed by the same function**, but its intent filter still claims every path on
+  atwe.com and `assetlinks.json` has no certificate fingerprint, so App Links are unverified (a
+  chooser). A browser route opened in the app is handed back with `Linking.openURL`. Tightening the
+  Android claim is release work, deliberately not done here.
+- **Serving it needs no build bump**: the server reads the AASA file per request, and the web never
+  reads `native`, so an old cached registry in a browser simply lacks data it does not use.
+
 ## Search & typeahead
 
 **Two separate things, one rule each.**
