@@ -1,20 +1,2699 @@
 {
   "applinks": {
-    "apps": [],
     "details": [
       {
-        "appID": "TH3FQ8FMKB.com.atwe.app",
-        "paths": [
-          "NOT /api/*",
-          "NOT /admin*",
-          "NOT /status*",
-          "NOT /security*",
-          "/post/*",
-          "/user/*",
-          "/listing/*",
-          "/group/*",
-          "/circle/*",
-          "/*"
+        "appIDs": [
+          "TH3FQ8FMKB.com.atwe.app"
+        ],
+        "components": [
+          {
+            "/": "*",
+            "?": {
+              "ad": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "aff": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "boost": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "call": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "cashout": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "checkout": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "coupon": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "creatorsub": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "go": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "imp": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "invoice": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "joingroup": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "next": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "nlsub": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "order": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "pack": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "pay": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "paylink": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "pool": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "promote": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "ref": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "reset": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "s": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "ticket": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "tip": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "token": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "topup": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "u": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "verify": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*",
+            "?": {
+              "waitlist": "*"
+            },
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/go",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/go/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/s",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/s/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/catalog",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/catalog/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/_diag",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/_diag/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/__shell",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/__shell/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/.well-known",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/.well-known/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/api",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/api/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/admin",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/admin/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.htm",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.html",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.xhtml",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.js",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.mjs",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.cjs",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.css",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.json",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.txt",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.xml",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.map",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.png",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.jpg",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.jpeg",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.gif",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.svg",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.webp",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.avif",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.ico",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.bmp",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.webmanifest",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.pdf",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.mp4",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.webm",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.mov",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.mp3",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.wav",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.ogg",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.m4a",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.woff",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.woff2",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.ttf",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.otf",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.eot",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.zip",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.gz",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.php",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.asp",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.aspx",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.jsp",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.cgi",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.env",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.ini",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.yml",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.yaml",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.md",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "*.csv",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/about",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/about/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/admin.html",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/admin.html/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/assets",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/assets/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/atwe",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/atwe/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/atwe-ai",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/atwe-ai/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/atweai",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/atweai/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/auth",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/auth/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/billing",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/billing/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/blog",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/blog/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/business",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/business/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/careers",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/careers/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/cdn",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/cdn/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/checkout",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/checkout/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/companies",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/companies/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/confirm",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/confirm/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/contact",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/contact/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/cookies",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/cookies/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/delete",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/delete/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/download",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/download/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/edit",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/edit/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/false",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/false/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/favicon.ico",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/favicon.ico/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/favicon.png",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/favicon.png/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/files",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/files/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/index.html",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/index.html/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/invite",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/invite/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/legal",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/legal/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/locked.html",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/locked.html/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/logout",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/logout/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/manifest.json",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/manifest.json/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/manifest.webmanifest",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/manifest.webmanifest/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/media",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/media/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/new",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/new/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/null",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/null/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/oauth",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/oauth/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/official",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/official/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/org",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/org/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/organization",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/organization/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/page",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/page/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/pages",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/pages/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/password",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/password/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/pay",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/pay/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/plans",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/plans/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/premium",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/premium/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/press",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/press/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/pricing",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/pricing/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/privacy",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/privacy/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/privacy-policy",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/privacy-policy/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/pro",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/pro/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/public",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/public/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/register",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/register/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/robots.txt",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/robots.txt/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/root",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/root/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/security",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/security/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/signin",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/signin/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/signout",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/signout/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/sitemap.xml",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/sitemap.xml/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/sso",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/sso/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/staff",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/staff/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/static",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/static/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/status",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/status/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/support",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/support/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/sw.js",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/sw.js/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/system",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/system/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/terms",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/terms/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/terms-of-service",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/terms-of-service/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/true",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/true/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/undefined",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/undefined/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/upgrade",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/upgrade/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/verify",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/verify/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/welcome",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/welcome/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/you",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/you/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/store/ads",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/store/analytics",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/store/bundles",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/store/coupons",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/store/listings",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/store/orders",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/addresses",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/affiliate",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/ai",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/appointments",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/bookings",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/calendar",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/card",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/creating",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/customers",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/dashboard",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/delivery",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/gift-cards",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/help",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/invoices",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/job-alerts",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/jobs",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/library",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/marketing",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/money",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/money-requests",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/network",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/orders",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/payment-links",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/phone",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/planning",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/pro",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/profile",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/quotes",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/referrals",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/resumes",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/rewards",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/saved",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/selling",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/store",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/subscriptions",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/team",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/till",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/verification",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/wallet",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account",
+            "caseSensitive": false
+          },
+          {
+            "/": "/account",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/account/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/addresses",
+            "caseSensitive": false
+          },
+          {
+            "/": "/addresses",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/addresses/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/ads",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/ads",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/ads/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/affiliate",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/affiliate",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/affiliate/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/ai",
+            "caseSensitive": false
+          },
+          {
+            "/": "/ai",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/ai/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/analytics",
+            "caseSensitive": false
+          },
+          {
+            "/": "/analytics",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/analytics/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/appointments",
+            "caseSensitive": false
+          },
+          {
+            "/": "/appointments",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/appointments/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/beam/g/*/info",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/beam/u/*/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/beam/g/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/beam/u/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/beam",
+            "caseSensitive": false
+          },
+          {
+            "/": "/beam",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/beam/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/bookings",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/bookings",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/bookings/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/businesses",
+            "caseSensitive": false
+          },
+          {
+            "/": "/businesses",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/businesses/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/calendar",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/calendar",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/calendar/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/cart",
+            "caseSensitive": false
+          },
+          {
+            "/": "/cart",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/cart/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/circle/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/circle/*/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/circle",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/circle/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/collections",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/collections",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/collections/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/communities/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/communities",
+            "caseSensitive": false
+          },
+          {
+            "/": "/communities",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/communities/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/company/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/company/*/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/company",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/company/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/course/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/course",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/course/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/courses",
+            "caseSensitive": false
+          },
+          {
+            "/": "/courses",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/courses/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/dashboard",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/dashboard",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/dashboard/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/devices",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/devices",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/devices/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/businesses",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/communities",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/courses",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/events",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/jobs",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/marketplace",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/newsletters",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/services",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/showcase",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine",
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/engine/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/event/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/event/*/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/event",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/event/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/events",
+            "caseSensitive": false
+          },
+          {
+            "/": "/events",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/events/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/feed",
+            "caseSensitive": false
+          },
+          {
+            "/": "/feed",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/feed/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/forgot-password",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/forgot-password",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/forgot-password/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/gift-cards",
+            "caseSensitive": false
+          },
+          {
+            "/": "/gift-cards",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/gift-cards/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/group/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/group/*/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/group",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/group/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/help",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/help",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/help/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/home",
+            "caseSensitive": false
+          },
+          {
+            "/": "/home",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/home/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/invoices",
+            "caseSensitive": false
+          },
+          {
+            "/": "/invoices",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/invoices/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/job/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/job/*/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/job",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/job/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/job-alerts",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/job-alerts",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/job-alerts/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/jobs",
+            "caseSensitive": false
+          },
+          {
+            "/": "/jobs",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/jobs/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/listing/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/listing/*/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/listing",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/listing/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/listings",
+            "caseSensitive": false
+          },
+          {
+            "/": "/listings",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/listings/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/login",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/login",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/login/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/marketplace",
+            "caseSensitive": false
+          },
+          {
+            "/": "/marketplace",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/marketplace/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/me",
+            "caseSensitive": false
+          },
+          {
+            "/": "/me",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/me/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/messages",
+            "caseSensitive": false
+          },
+          {
+            "/": "/messages",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/messages/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/money-requests",
+            "caseSensitive": false
+          },
+          {
+            "/": "/money-requests",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/money-requests/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/network",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/network",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/network/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/newsletter/*/issue/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/newsletter/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/newsletter",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/newsletter/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/newsletters",
+            "caseSensitive": false
+          },
+          {
+            "/": "/newsletters",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/newsletters/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/notifications",
+            "caseSensitive": false
+          },
+          {
+            "/": "/notifications",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/notifications/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/orders",
+            "caseSensitive": false
+          },
+          {
+            "/": "/orders",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/orders/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/payment-links",
+            "caseSensitive": false
+          },
+          {
+            "/": "/payment-links",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/payment-links/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/post/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/post/*/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/post",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/post/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/profile",
+            "caseSensitive": false
+          },
+          {
+            "/": "/profile",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/profile/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/quotes",
+            "caseSensitive": false
+          },
+          {
+            "/": "/quotes",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/quotes/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/referrals",
+            "caseSensitive": false
+          },
+          {
+            "/": "/referrals",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/referrals/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/reset-password",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/reset-password",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/reset-password/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/resumes",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/resumes",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/resumes/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/rewards",
+            "caseSensitive": false
+          },
+          {
+            "/": "/rewards",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/rewards/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/saved",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/saved",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/saved/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/search",
+            "caseSensitive": false
+          },
+          {
+            "/": "/search",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/search/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/service/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/service",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/service/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/services",
+            "caseSensitive": false
+          },
+          {
+            "/": "/services",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/services/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/about/whats-new",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/account/delete",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/data/history",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/display/currency",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/display/language",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/notifications/phone",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/premium/creator",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/privacy/blocked",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/privacy/contact",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/privacy/last-seen",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/privacy/muted",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/privacy/muted-words",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/security/2fa",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/security/devices",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/security/locks",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/security/passkeys",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/about",
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/account",
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/assistant",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/data",
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/display",
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/notifications",
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/premium",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/privacy",
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/security",
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings",
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/settings/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/showcase/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/showcase",
+            "caseSensitive": false
+          },
+          {
+            "/": "/showcase",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/showcase/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/signup",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/signup",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/signup/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/store",
+            "caseSensitive": false
+          },
+          {
+            "/": "/store",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/store/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/subscriptions",
+            "caseSensitive": false
+          },
+          {
+            "/": "/subscriptions",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/subscriptions/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/team",
+            "caseSensitive": false
+          },
+          {
+            "/": "/team",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/team/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/verify-email",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/verify-email",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/verify-email/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/wallet",
+            "caseSensitive": false
+          },
+          {
+            "/": "/wallet",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/wallet/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/post/*",
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/posts",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/posts/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/replies",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/replies/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/media",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/media/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/likes",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/likes/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/about",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/about/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/connections",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*/connections/*",
+            "exclude": true,
+            "caseSensitive": false
+          },
+          {
+            "/": "/*",
+            "caseSensitive": false
+          }
         ]
       }
     ]
