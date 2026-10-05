@@ -1,64 +1,93 @@
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
+import { Alert } from 'react-native';
+import { api, ApiError } from '@/api/client';
+import { nativeLink, type NativeLink } from './atwe-routes';
 
 /**
  * Opening an Atwe link from outside the app — a shared profile, a post someone
  * sent you, a notification you tapped — and landing on the right screen.
  *
- * Two shapes are handled, because both exist in the wild:
- *   atwe://user/sam            the app's own scheme
- *   https://atwe.com/sam       a link somebody shared from the web
+ * THE APP DOES NOT KEEP ITS OWN LIST OF ADDRESSES (route batch 10). `atwe-routes.js`
+ * beside this file is a generated copy of the web's route registry, and every
+ * decision is made there by `nativeLink()`:
+ *   · it understands the CANONICAL atwe.com addresses (and their permanent legacy
+ *     aliases), on any of our hosts, on the atwe:// scheme, or as a bare /path;
+ *   · it decides "app or browser" by evaluating the SAME components the AASA file is
+ *     generated from, so a link the iPhone hands to the app is one the app claims, and
+ *     one the app does not render is never captured — it opens in Safari;
+ *   · a route the app has a screen for maps to that screen; one it has no screen for
+ *     is declared, explicitly, as a browser route.
  *
- * Anything not recognised opens the app rather than doing nothing, which is
- * always better than a tap that appears to fail.
+ * The old native-only shapes (atwe://user/sam, /chat/12, a bare /post/:id treated as a
+ * profile, a 2–30 character handle rule) were never issued outside the app and are not
+ * atwe.com addresses, so they are gone: atwe://beam/u/sam means atwe.com/beam/u/sam.
  */
-const WEB_HOSTS = ['atwe.com', 'www.atwe.com', 'atwe.ai', 'www.atwe.ai'];
+export { nativeLink };
+export type { NativeLink };
 
+/* ── Links that reach the app as a SYSTEM URL (universal link, atwe://, Android) ──
+   expo-router consumes those itself and routes them by FILE PATH, so atwe.com/john would
+   first land on its "Unmatched Route" screen. app/+native-intent.tsx calls systemPath(),
+   which rewrites the address to the native screen before the router sees it. What the
+   router cannot do on its own (ask the server for a DM's peer id, hand a web-only address
+   to the browser, say "that page doesn't exist", replay a link that arrived while signed
+   out) is queued here and finished by the root layout once somebody is signed in. */
+let pending: string | null = null;
+const listeners = new Set<() => void>();
+
+export function systemPath(path: string, initial: boolean): string {
+  let l: NativeLink | null = null;
+  try { l = nativeLink(path); } catch { return path; }
+  if (!l) return path; // not an Atwe link (an Expo dev URL, say) — leave it to the router
+  pending = path;
+  listeners.forEach((fn) => fn());
+  if (l.kind === 'native' || l.kind === 'notfound') return l.path;
+  // Resolve or browser: nothing to route yet. A cold start opens Home underneath.
+  return initial ? '/' : '';
+}
+export function takePendingLink(): string | null { const p = pending; pending = null; return p; }
+export function onPendingLink(fn: () => void): () => void { listeners.add(fn); return () => { listeners.delete(fn); }; }
+
+/** Kept for callers that only need a native path (null = not a native screen). */
 export function routeForUrl(url: string): string | null {
-  let parsed: Linking.ParsedURL;
-  try { parsed = Linking.parse(url); } catch { return null; }
-  const scheme = (parsed.scheme || '').toLowerCase();
-  const host = (parsed.hostname || '').toLowerCase();
-  const isHttp = scheme === 'http' || scheme === 'https';
+  const l = nativeLink(url);
+  return l && (l.kind === 'native' || l.kind === 'notfound') ? l.path : null;
+}
 
-  /* An http(s) link from a host that isn't ours is not ours to route.
-     This used to fall through to "treat the hostname as the first path segment",
-     which is right for `atwe://user/sam` (Linking puts `user` in hostname) and
-     badly wrong for a web address: opening the app at `http://localhost/` parsed
-     `localhost` as a handle and redirected the HOME SCREEN to /user/localhost.
-     On a phone that path is normally dormant — a cold launch has no initial URL —
-     but it is live on any build served over http, and it would send a shortened
-     or wrapped link to a nonsense profile. */
-  if (isHttp && host && !WEB_HOSTS.includes(host)) return null;
-
-  const segs = [
-    // Only the app's OWN scheme puts a meaningful segment in `hostname`.
-    ...(!isHttp && host ? [host] : []),
-    ...String(parsed.path || '').split('/').filter(Boolean),
-  ];
-  if (!segs.length) return null;
-  const [a, b] = segs;
-
-  switch (a) {
-    case 'user': return b ? `/user/${encodeURIComponent(b)}` : null;
-    case 'post': return b ? `/post/${encodeURIComponent(b)}` : null;
-    case 'chat': return b ? `/chat/${encodeURIComponent(b)}` : null;
-    case 'listing': return b ? `/listing/${encodeURIComponent(b)}` : null;
-    case 'story': return b ? `/story/${encodeURIComponent(b)}` : null;
-    case 'wallet': return '/wallet';
-    case 'notifications': return '/notifications';
-    case 'settings': return '/settings';
-    case 'marketplace': return '/marketplace';
-    default:
-      // A bare /<username> is how the web shares a profile, so treat a single
-      // unrecognised segment as a handle rather than dropping it.
-      if (segs.length === 1 && /^[a-z0-9_]{2,30}$/i.test(a)) return `/user/${encodeURIComponent(a)}`;
-      return null;
+/**
+ * Follow a link. A browser route goes to the browser (the AASA excludes it, so iOS
+ * opens Safari rather than handing it back to the app). A Beam conversation is keyed
+ * by the person's numeric id, so the @username in the address is resolved by the
+ * server first — the same lookup the web uses, which refuses an unknown handle and a
+ * conversation you may not open with ONE identical "not found".
+ */
+export async function openLink(url: string, opts: { routed?: boolean } = {}): Promise<void> {
+  const l = nativeLink(url);
+  if (!l) return;
+  if (l.kind === 'browser') { await Linking.openURL(l.url).catch(() => {}); return; }
+  // `routed`: the router already took the app to l.path (systemPath rewrote it).
+  if (opts.routed && l.kind === 'native') return;
+  if (l.kind === 'notfound') {
+    if (!opts.routed) router.push('/' as never);
+    Alert.alert('Atwe', 'That page doesn’t exist.');
+    return;
   }
+  if (l.kind === 'resolve') {
+    try {
+      const who = await api.get<{ id: number }>(`/api/atchat/peer/${encodeURIComponent(l.value)}`);
+      router.push(l.to.replace(':peer', String(who.id)) as never);
+    } catch (e) {
+      router.push('/beam' as never);
+      // A 404 is the server's ONE answer for "no such person" and "not yours to open".
+      Alert.alert('Atwe', e instanceof ApiError && e.status === 404
+        ? 'That conversation doesn’t exist.'
+        : 'Couldn’t open that conversation. Check your connection and try again.');
+    }
+    return;
+  }
+  router.push(l.path as never);
 }
 
-/** Follow a link now (used when the app is already running). */
-export function openUrl(url: string) {
-  const to = routeForUrl(url);
-  if (to) router.push(to as never);
-}
+/** Follow a link now (a notification tap, or a link the app itself is handed). */
+export function openUrl(url: string) { void openLink(url); }

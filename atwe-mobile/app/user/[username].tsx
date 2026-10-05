@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, FlatList, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +24,7 @@ import { compact, monthYear, timeAgo } from '@/lib/format';
 import { FeedTab } from '@/components/FeedTab';
 import { HighlightsRow } from '@/components/HighlightsRow';
 import { mediaUri } from '@/lib/media';
+import { ApiError } from '@/api/client';
 
 /**
  * A user's X-style profile — banner, overlapping avatar, identity, follow,
@@ -47,7 +48,19 @@ export default function UserProfile() {
   const { c } = useTheme();
   const router = useRouter();
   const { username } = useLocalSearchParams<{ username: string }>();
-  const { data, isLoading, isError, refetch, isRefetching } = useProfile(username);
+  const { data, isLoading, isError, error, refetch, isRefetching } = useProfile(username);
+  /* A renamed handle (route batch 9): the server answers the OLD name with a 404 that
+     names the account's CURRENT handle while the old one is held for it. A universal link
+     reaches this screen without passing the server's 301, so follow it here, the way the
+     web's own profile loader does — replace, so Back never lands on the dead name. */
+  const moved = error instanceof ApiError && error.status === 404
+    && typeof (error.body as { moved?: unknown } | null)?.moved === 'string'
+    ? String((error.body as { moved: string }).moved) : '';
+  useEffect(() => {
+    if (moved && moved.toLowerCase() !== String(username || '').toLowerCase()) {
+      router.replace(`/user/${encodeURIComponent(moved)}` as never);
+    }
+  }, [moved, username, router]);
   const [tab, setTab] = useState<Tab>('posts');
   const likesQ = useLikes(username, tab === 'likes');
 

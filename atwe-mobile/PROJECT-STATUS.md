@@ -14,6 +14,15 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 > version scheme below), so six rounds of work have never been seen on a device. That section says what to do first, in order, and
 > names the two decisions of theirs not to reverse.
 
+## Route batch 10 — links from atwe.com open the right screen (code only, not on a device)
+
+`src/lib/deeplinks.ts` is now a thin wrapper over `src/lib/atwe-routes.js`, a GENERATED copy of the
+web's route registry (`node tools/native-links.js` at the repo root; never edit it by hand). Every
+atwe.com address either opens a real native screen or is left to Safari, and the AASA says the
+same thing, generated from the same table. `app.json` gained `ios.associatedDomains` — without it
+universal links never worked — so **the next EAS build is what switches them on**. Nothing was
+built or uploaded. See CLAUDE.md, "The phone app and atwe.com share one route table".
+
 ## 10 Sep 2026 — THE WEB SPLIT ITS BLUE AND RED IN TWO. THE PHONE HAS NOT YET.
 
 **Do this first when the phone work resumes; it is a token change, not a redesign.**

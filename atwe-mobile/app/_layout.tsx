@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -17,10 +17,9 @@ import { ConnectionProvider } from '@/lib/connection';
 import { StatusScrim } from '@/components/StatusScrim';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { registerForPush } from '@/api/push';
-import { routeForUrl } from '@/lib/deeplinks';
+import { openLink, takePendingLink, onPendingLink } from '@/lib/deeplinks';
 import { loadHapticPref } from '@/lib/haptics';
 import * as Notifications from 'expo-notifications';
-import * as Linking from 'expo-linking';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -49,7 +48,7 @@ function useProtectedRoute(signedIn: boolean, loading: boolean) {
  * notifications, following a link that opened the app, and following a
  * notification that was tapped.
  */
-function useSignedInEffects(signedIn: boolean) {
+function useSignedInEffects(signedIn: boolean, loading: boolean) {
   const router = useRouter();
   // Ask about notifications AFTER sign-in, never on the very first launch —
   // a permission prompt before somebody knows what the app is gets refused.
@@ -64,25 +63,28 @@ function useSignedInEffects(signedIn: boolean) {
     if (!signedIn) return;
     const sub = Notifications.addNotificationResponseReceivedListener((res) => {
       const data = (res?.notification?.request?.content?.data ?? {}) as { url?: string; path?: string };
-      const to = data.url ? routeForUrl(data.url) : (data.path ?? null);
-      if (to) router.push(to as never);
+      const to = data.url || data.path;
+      if (to) void openLink(to);
     });
     return () => sub.remove();
   }, [signedIn, router]);
 
-  // A link from outside — shared, or from the web — opens the right screen,
-  // both when the app was already running and when the link launched it.
+  // A link from outside — shared, or from the web. app/+native-intent.tsx has already
+  // routed it to its native screen; what is left (a DM's server lookup, a web-only page,
+  // "that page doesn't exist") is finished here. A link that arrived while signed out was
+  // bounced to sign-in by the guard, so it is replayed IN FULL once somebody signs in.
+  const wasSignedOut = useRef(false);
+  useEffect(() => { if (!loading && !signedIn) wasSignedOut.current = true; }, [loading, signedIn]);
   useEffect(() => {
     if (!signedIn) return;
-    const go = (url: string | null) => {
-      if (!url) return;
-      const to = routeForUrl(url);
-      if (to) setTimeout(() => router.push(to as never), 200);
+    const run = (full: boolean) => {
+      const url = takePendingLink();
+      if (url) setTimeout(() => { void openLink(url, { routed: !full }); }, 200);
     };
-    Linking.getInitialURL().then(go).catch(() => {});
-    const sub = Linking.addEventListener('url', (e) => go(e.url));
-    return () => sub.remove();
-  }, [signedIn, router]);
+    run(wasSignedOut.current);
+    wasSignedOut.current = false;
+    return onPendingLink(() => run(false));
+  }, [signedIn]);
 }
 
 function RootNavigator() {
@@ -92,7 +94,7 @@ function RootNavigator() {
   const [splashDone, setSplashDone] = useState(false);
   useNoFocusRingOnWeb();
   useProtectedRoute(signedIn, loading);
-  useSignedInEffects(signedIn);
+  useSignedInEffects(signedIn, loading);
 
   /* Hand off from the native splash to our animated one immediately on mount.
      The swap is invisible ONLY because the two are made to agree: same file,
