@@ -889,6 +889,68 @@ async function initSchema() {
   // (admin-grant only). See the "handle claim" routes in server.js.
   await query(`ALTER TABLE reserved_usernames ADD COLUMN IF NOT EXISTS price_cents INTEGER;`);
 
+  /* USERNAME HISTORY (Route Audit batch 9, §37). A handle an account gives up is a public
+     address other people have already shared, so it is remembered here:
+       · the old handle 301s to the account's CURRENT handle for as long as nobody else
+         holds it;
+       · nobody ELSE may register it for 30 days (the hold that stops link hijacking);
+       · once another account legitimately takes it, the new owner wins and the row is
+         retired.
+     user_id is SET NULL, never CASCADE, when an account is deleted: the deleted account's
+     own handle is recorded with user_id NULL (held, redirects nowhere), and its earlier
+     handles keep their row so a deletion never frees a held name early.
+
+     The rows are written by a TRIGGER on users, not by each route, and that is the point:
+     the old handle is recorded in the SAME statement that changes or deletes it, so it is
+     atomic by construction, and no write door (a profile save, a staff assignment, a paid
+     claim, an admin delete, a self-delete, a bot or system account removed, a tool run by
+     hand) can forget it. Nothing is backfilled: renames that happened before this table
+     existed simply have no history. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS username_history (
+      old_lower  TEXT NOT NULL,
+      user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS username_history_old_idx ON username_history(old_lower, changed_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS username_history_user_idx ON username_history(user_id);`);
+  await query(`
+    CREATE OR REPLACE FUNCTION atwe_username_history() RETURNS trigger AS $$
+    BEGIN
+      IF TG_OP = 'DELETE' THEN
+        IF OLD.username IS NOT NULL AND btrim(OLD.username) <> '' THEN
+          INSERT INTO username_history (old_lower, user_id, changed_at) VALUES (lower(OLD.username), NULL, now());
+        END IF;
+        RETURN OLD;
+      END IF;
+      -- A handle that is (re)claimed is current again: whatever history it had is retired.
+      IF NEW.username IS NOT NULL AND btrim(NEW.username) <> '' THEN
+        DELETE FROM username_history WHERE old_lower = lower(NEW.username);
+      END IF;
+      IF TG_OP = 'UPDATE' AND OLD.username IS NOT NULL AND btrim(OLD.username) <> ''
+         AND lower(OLD.username) IS DISTINCT FROM lower(NEW.username) THEN
+        INSERT INTO username_history (old_lower, user_id, changed_at) VALUES (lower(OLD.username), NEW.id, now());
+      END IF;
+      RETURN NEW;
+    END
+    $$ LANGUAGE plpgsql;
+  `);
+  // Created once, never dropped and re-created: two instances booting together must not
+  // race a DROP against each other's CREATE.
+  await query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'users_username_history_upd') THEN
+        CREATE TRIGGER users_username_history_upd AFTER INSERT OR UPDATE OF username ON users
+          FOR EACH ROW EXECUTE FUNCTION atwe_username_history();
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'users_username_history_del') THEN
+        CREATE TRIGGER users_username_history_del AFTER DELETE ON users
+          FOR EACH ROW EXECUTE FUNCTION atwe_username_history();
+      END IF;
+    END $$;
+  `);
+
   // Site traffic analytics — one row per app page-view (navigations only, not API
   // or asset requests). `visitor` is a stable hash of ip+user-agent so we can count
   // unique visitors without storing PII beyond the raw ip (kept for geo lookup).
