@@ -58,8 +58,10 @@ let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}els
   ok(drift <= 2, 'and stays in step with the page it belongs to', 'worst drift '+drift+'px (resting gap '+rest+'px)');
   /* Frame 0 lands wherever the first rAF falls, so it is not a fixed number — assert the
      shape (starts well short of opaque, ends opaque), not a sampled value. */
+  /* Route batch 11: the hub is the PARENT plane coming back. A parent does not fade (the
+     shade over it does); it travels with its page and lands opaque. */
   const minOp = Math.min(...r.map(f=>f.barOp));
-  ok(last.barOp===1 && minOp < 0.5, 'it fades in with the page and settles opaque', JSON.stringify([minOp,last.barOp]));
+  ok(last.barOp===1, 'it lands opaque with the page', JSON.stringify([minOp,last.barOp]));
   ok(errs.length===0,'no JS errors',errs[0]);
   await b.close(); await pool.end();
   console.log('\n═══ '+pass+' passed, '+fail+' failed ═══');

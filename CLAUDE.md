@@ -8681,6 +8681,104 @@ build bump** (`ATWE_BUILD`, `sw.js` `CACHE`, `atwe-routes.js?v=`): the registry 
 `legacyRedirect`/`safeNext`, and an old cached registry simply disables the auth-return note
 (it degrades, it does not break). **The production collision gate is still mandatory.**
 
+### Navigation motion observes navigation (Route Audit batch 11)
+
+**`AtweMotion` (in `index.html`, right after `AtweHistory`) is presentation only.** History, the
+address and the DOM change exactly as before; motion then compares the scene it last saw with the
+scene now and animates the difference. **It never calls `history.*`, `acSetPath` or `acSyncPath`,
+never builds a URL, never picks a Back destination and never makes navigation wait.** Nothing in
+the routing foundation (appGoBack, popstate, History v2, NavEvent emission, registry parents,
+showOverlay/closeOverlay handoff, cancel-first, NEVER_BACK, world roots, Batches 0–10 URLs) changed.
+
+- **When it runs:** a NavEvent (`atwe:navigate`) or a class change on a scene element
+  (MutationObserver), coalesced into ONE `requestAnimationFrame` callback: after the navigating
+  task, before that frame paints. **Not a microtask, and that is measured:** a microtask forced
+  the style recalc the frame does anyway INTO the navigation's own task, giving fewer, longer
+  long tasks (transition-task median 95-108ms against 73-77ms without motion, 4x CPU). A hidden
+  page never runs rAF, so it reconciles at once (quietly). `AtweMotion.settled()` waits for a
+  queued reconcile too, and a tap's pre-navigation snapshot is skipped while one is queued.
+- **What it watches:** the scene elements THEMSELVES (body-level overlays, `.ac-screen`,
+  `#chatWrap`, `#socialWrap`, `.iset-body[data-page]`) plus body's own child list for overlays
+  created later — never a subtree observer on `<body>`. That one was handed every class change
+  in the app, and it measurably slowed the Notifications scroll against the Batch-10 baseline.
+- **Measuring:** a plane's rect/display/scroll is read on pointerdown/keydown (layout still
+  clean), 140ms after scrolling stops, on resize, and after a navigation ONLY for a plane never
+  measured before. Re-measuring every scene right after navigation forced an extra layout pass. The observer is what moves a sheet that waits for data before writing its address
+  (`_ownWait`), a Beam thread that settles its address later, and a Back that closes a panel a
+  task before its popstate — at the moment they appear. A panel already on screen for >180ms
+  before it counted as a page is not animated late (`_moShownAt`).
+- **The scene:** the top-most route-owning overlay (and, for Settings, its visible
+  `.iset-body` panel + the search bar), else the visible `AC_SCREENS` screen, else `#chatWrap` on
+  the AI page.
+- **Direction:** the NavEvent's (push = forward, traverse back/forward, traverse UNKNOWN = a
+  neutral dissolve, `uaTransition` = no Atwe animation, initial/reload/restore = none); without a
+  fresh one, the registry's parent chain (a REPLACE to an ancestor is a Back); then structure
+  (a panel opening is forward, closing is back; a root screen to a non-root one is forward).
+- **Families:** HIERARCHY is **LITE at every width: only the incoming scene moves.** Forward:
+  the child arrives from the trailing side (22% travel on phone/tablet, 32px on desktop) while
+  fading in; Back: the parent arrives from the leading side, the mirror of it, on the same curve
+  (`cubic-bezier(.32,.72,0,1)`, 320/280ms phone+tablet, 240/200 desktop). A panel that is
+  already CLOSING (still on screen at no cost) leaves along the exact reverse of its entry, and a
+  panel that was open beneath it is not animated at all. **The two-plane parallax (a retained
+  live parent with a shade) was REMOVED, deliberately:** it meant laying out and painting two
+  whole scenes per step — 40-60ms of extra long task per Settings step at 4x CPU on a phone, and
+  about 950ms against 600ms per five steps on desktop — and the founder chose the strict
+  long-task gate over it. The two-plane code path survives only under reduced motion, which is
+  unchanged. ROOT = a 170ms fade of the incoming world
+  only, never a slide between peers (a world change is `tab` changing, or a `root-change`
+  NavEvent). SHEET = the overlay's own CSS (`rise` is finally DEFINED — it was referenced by
+  `.job-card-modal` and two cards and never existed). TRANSIENT = untouched. Notifications'
+  panel keeps its own fade; Back INTO it from a destination is a hierarchy pop.
+- **Retained planes (reduced motion only, plus a panel already closing):** a leaving screen or Settings panel is shown in place by `.mo-leaving`
+  (fixed at the rect measured before navigation, its own scroll re-applied), still `.hidden`
+  logically, `inert` + `aria-hidden`, `pointer-events:none`. A panel Back closed is already
+  `.closing`; the engine takes its exit over (holds `_closeDone` until the motion lands, and
+  `showOverlay` re-opening it simply wins). At most one leaving plane per plane. After settle:
+  no `.mo-leaving`, no `.mo-shade`, every inline style restored (`_moWas`), animations cancelled.
+- **Never translated:** the `.overlay` itself (it carries `backdrop-filter`) — its card/column
+  moves; the overlay only fades. Desktop Beam two-pane: a scene that was ALREADY on screen
+  (`prev.shown`) stays still, so only the right pane moves.
+- **Reduced motion:** ONE predicate, `AtweMotion.reduced()` = OS `prefers-reduced-motion` OR
+  `body.reduce-motion`; it also drives `html.mo-reduced`, under which hierarchy/root are a 120ms
+  dissolve (no transform) and sheets/section re-renders/notif detail fade. Decided per motion, so
+  toggling mid-flight takes effect on the next navigation. WAAPI is immune to the OS
+  `!important` duration reset, which is why the dissolve survives it.
+- **Interruptions:** a new change finishes whatever is moving on the planes involved first;
+  `resize` (rotation, breakpoint) and `visibilitychange` → hidden finish everything. Boot,
+  reload, restore and a hidden page never animate. `AtweMotion.off = true` = instant everywhere.
+- **Failure:** if `Element.prototype.animate` is missing nothing runs (`html.mo-on` is not set,
+  so the old Settings/Beam CSS fallbacks still play); if it THROWS, every style set and plane
+  retained is undone in the catch and the destination stays exactly where navigation put it.
+- **Beam Back no longer waits:** `acBackToList` slid the thread out on a 240ms timer and only
+  then navigated. It navigates at once; the motion layer does the slide. `acThreadEnter`'s CSS
+  slide only runs where `AtweMotion.active()` is false.
+- **Permanent `will-change` removed** from `.iset-body`, `.iset-search` and `.me-slide(-back)`;
+  the engine sets it only for the length of a motion. **`.notif-detail` keeps its own**: removing
+  it measurably slowed the Notifications list scroll (the detail panel sits translated over the
+  list and needs its own layer).
+- **Kept, deliberately:** the Account sections re-render `#acMeBody` in place (no old DOM
+  survives to retain), so they keep their own `meSlide` CSS; the in-panel notification detail
+  keeps its CSS transition; menus/popovers/confirms keep their vocabulary. No shared-element
+  transitions, no View Transitions, no custom edge swipe.
+- **Instrumentation:** `window.__mo` (ring of `{family, dir, from, to, kind, reduced, t0, t1,
+  planes}`) and `AtweMotion.settled()`. **A probe that measures geometry right after a
+  navigation must `await AtweMotion.settled()` first** — mid-motion, a plane is legitimately
+  translated.
+- **Guarded by `scratchpad/navmotion.js`** (236 checks): nine chains at 390×844, 844×390,
+  768×1024 and 1440×900, each run with motion ON and OFF and required to land on the identical
+  destination at every step; families/directions; mid-motion inert/aria-hidden/never-hit/≤1 per
+  plane; nothing left after settle; rapid ×10, Back halfway, Forward after Back, overlay and world
+  change mid-motion, rotation, hidden page, uaTransition, slow destination, direct load + reload,
+  `animate` throwing and missing, OS + app reduced motion, scroll restore, and a 4×-CPU layout /
+  long-task comparison against motion off **at phone, tablet AND desktop** (three alternating
+  rounds each; a long-task count no more than +3 and a median no more than +20ms over motion off
+  — the gate the founder held without loosening; it cleared 15 of 15 viewport-runs).
+  `PERF_ONLY=1 node navmotion.js` runs just that comparison. `--break` (navigation delayed
+  behind motion, leaving planes left interactive) fails 20 checks by name — fewer than the 53
+  of the two-plane version simply because fewer planes are retained now. **One run of the
+  long-task check is noise at 4x CPU** (it moved by 300ms between runs of identical code):
+  judge it over several runs, and never by a single red.
+
 ### The phone app and atwe.com share one route table (Route Audit batch 10)
 
 **The native app no longer keeps its own list of addresses.** `atwe-mobile/src/lib/deeplinks.ts`
