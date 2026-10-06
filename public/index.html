@@ -2028,8 +2028,8 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
    directions animate: forward comes in from the right, back from the left. */
 @keyframes meSlideIn{from{opacity:0;transform:translate3d(34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
 @keyframes meSlideBack{from{opacity:0;transform:translate3d(-34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
-.me-slide{animation:meSlideIn .36s cubic-bezier(.32,.72,0,1);will-change:transform,opacity;backface-visibility:hidden;}
-.me-slide-back{animation:meSlideBack .36s cubic-bezier(.32,.72,0,1);will-change:transform,opacity;backface-visibility:hidden;}
+.me-slide{animation:meSlideIn .36s cubic-bezier(.32,.72,0,1);backface-visibility:hidden;}
+.me-slide-back{animation:meSlideBack .36s cubic-bezier(.32,.72,0,1);backface-visibility:hidden;}
 body.reduce-motion .me-slide,body.reduce-motion .me-slide-back{animation:none;}
 /* Search — iOS-Settings-style, INLINE in the scroll flow under the wallet card, its
    own block above the sections (owner). Solid fill, no outline, same 20px radius as
@@ -4391,7 +4391,7 @@ body.light .settings-date{color-scheme:light;}
    this file's worst silent bugs start. */
 .iset-search{display:flex;align-items:center;gap:9px;padding:12px 15px;
   margin:0 2px 12px;min-height:var(--row-h);background:var(--s2);border:none;border-radius:999px;
-  animation:isetSlide .36s cubic-bezier(.32,.72,0,1);will-change:transform,opacity;
+  animation:isetSlide .36s cubic-bezier(.32,.72,0,1);
   backface-visibility:hidden;}
 .set-sub .iset-search{display:none;}
 .iset-search.iset-back-anim{animation:isetSlideBack .36s cubic-bezier(.32,.72,0,1);}
@@ -4414,7 +4414,7 @@ body.reduce-motion .iset-search{animation:none;}
    translate3d) so it's buttery on Chrome/Blink too — Safari already promotes it,
    which is why it felt smooth there but janky on Chrome. iOS easing + a fuller
    slide so it reads like a native app navigation. */
-.iset-body{animation:isetSlide .36s cubic-bezier(.32,.72,0,1);will-change:transform,opacity;backface-visibility:hidden;}
+.iset-body{animation:isetSlide .36s cubic-bezier(.32,.72,0,1);backface-visibility:hidden;}
 @keyframes isetSlide{from{opacity:0;transform:translate3d(34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
 .iset-body.iset-back-anim{animation:isetSlideBack .36s cubic-bezier(.32,.72,0,1);}
 @keyframes isetSlideBack{from{opacity:0;transform:translate3d(-34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
@@ -14997,6 +14997,29 @@ toast-join,.live-count,.nd-action,.notif-back,.notif-more,.ac-icon-btn,.voice-or
     width:100%;min-width:44px;height:100%;min-height:44px;border-radius:inherit;}
 }
 
+
+/* ═══ NAVIGATION MOTION (route batch 11) — see AtweMotion in the script ═══
+   A RETAINED leaving plane: logically hidden (.hidden / .closing stay on it, so nothing
+   that decides navigation sees it), shown in place only while it animates, never
+   hit-testable. Its display value is the one it had a moment ago (--mo-d). */
+.mo-leaving:not(.overlay){display:var(--mo-d,block)!important;pointer-events:none!important;}
+.overlay.mo-leaving{pointer-events:none!important;}
+/* A panel whose exit the motion layer took over: the WAAPI animation owns it, not the
+   CSS close fade it started with. */
+.overlay.mo-leaving,.overlay.mo-leaving > *{animation:none!important;}
+/* The parent's depth shade: opacity only, removed when the motion lands. */
+.mo-shade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:2147483000;border-radius:inherit;}
+/* The sheet family's entrance. It was referenced by .job-card-modal and two other cards
+   and NEVER defined, so those sheets only ever got the backdrop's fade. */
+@keyframes rise{from{opacity:0;transform:translateY(16px) scale(.97);}to{opacity:1;transform:none;}}
+/* Settings hub ↔ page is two planes now (both move); the old incoming-only slide stands
+   down whenever the motion layer can run. */
+html.mo-on .iset-body,html.mo-on #setSearchBar{animation:none!important;}
+/* ONE reduced-motion predicate (the OS setting OR Atwe's own switch) drives the class: a
+   sheet or a section re-render then fades, with no travel and no scale. */
+@keyframes moFade{from{opacity:0;}to{opacity:1;}}
+html.mo-reduced .overlay > *{animation-name:moFade!important;}
+html.mo-reduced .notif-detail{transition:none!important;}
 </style>
 </head>
 <body style="background:#000">
@@ -24938,6 +24961,644 @@ const AtweHistory = (() => {
   };
 })();
 try { window.AtweHistory = AtweHistory; } catch (e) {}
+
+/* ═══ ATWE MOTION — navigation motion, OBSERVING navigation (Route Audit batch 11) ═══
+   Motion is presentation only. Navigation, history, the address and the DOM change happen
+   first, exactly as they always have; this layer then compares what was on screen with
+   what is on screen now and animates the difference. It NEVER calls history.*, never
+   calls acSetPath / acSyncPath, never builds a URL, never chooses a Back destination and
+   never makes navigation wait: the destination is already in place, interactive and
+   focused at t=0, and every animation is a decoration that can be finished or dropped.
+
+   WHEN it runs: after a NavEvent ('atwe:navigate'), and after a scene element changes
+   class (a MutationObserver) — both coalesced into ONE microtask, so it runs after the
+   navigating task and BEFORE that frame paints. The observer is what lets a sheet that
+   waits for its data before writing its address (route batch 7's _ownWait), a Beam
+   thread that settles its address later (batch 8) and a Back that closes a panel one task
+   before its popstate all move at the moment they appear, not when their URL lands.
+
+   WHAT it reads from the NavEvent: kind, direction, family and uaTransition. A traverse
+   whose direction is unknown dissolves; one the browser already animated
+   (hasUAVisualTransition) is not animated again; boot, reload and restore never animate.
+   Without a fresh NavEvent the direction comes from the route registry's parent chain
+   (a REPLACE to a logical parent is a Back), then from structure (a panel opening is
+   forward, closing is back).
+
+   THE FAMILIES (relationship, not screen name):
+     HIERARCHY  two planes: the child travels the full width, the parent a fraction with a
+                shade; Back is the exact inverse. The leaving plane is RETAINED — still
+                logically hidden (.hidden / .closing, so the address sync and the Back
+                model ignore it), shown only by .mo-leaving, inert, aria-hidden, never
+                hit-testable — and released when its animation ends.
+     ROOT       worlds (Home / Beam / Engine / Account / AI): a short fade-through of the
+                incoming scene only. Never a horizontal slide between peers.
+     SHEET      the overlay's own CSS rise/card presentation (`rise` is now defined).
+     TRANSIENT  menus, popovers, confirms: untouched — they are not pages.
+     NONE       state updates, loading, pagination, badges, skeleton → content.
+
+   window.__mo is a ring of what ran; AtweMotion.settled() resolves when nothing is moving.
+   AtweMotion.off = true makes every navigation instant (the "no motion" comparison). */
+const AtweMotion = (() => {
+  const ROOT_SCREENS = ['acHomeScreen', 'acListScreen', 'acSearchScreen', 'acMeScreen', 'chatWrap'];
+  const SCREEN_ROUTE = { acHomeScreen: 'home', acListScreen: 'messages', acSearchScreen: 'search', acMeScreen: 'me',
+    chatWrap: 'ai', acProfileScreen: 'profile', acPostViewScreen: 'post', acThreadScreen: 'beam-dm',
+    acGroupInfoScreen: 'beam-group-info', acCircleScreen: 'circle' };
+  const EASE_H = 'cubic-bezier(.32,.72,0,1)', EASE_ROOT = 'cubic-bezier(.2,0,0,1)';
+  const ring = [];
+  try { window.__mo = ring; } catch (e) {}
+  const running = new Set();        // Animation objects
+  const leaving = new Map();        // plane name → { el, release }
+  let scene = null;                 // the last scene this layer saw
+  let lastEv = null;                // the NavEvent since the last reconcile
+  let queued = false;
+  let lastOpener = null;            // the control the member last pressed
+  const geo = new WeakMap();        // element → { rect, display, scrolls }
+
+  const api = { off: false, ring };
+  const canAnimate = () => { try { return typeof Element.prototype.animate === 'function'; } catch (e) { return false; } };
+  /* ONE predicate: the OS setting OR Atwe's own Reduce motion switch. */
+  function reduced() {
+    try { if (document.body && document.body.classList.contains('reduce-motion')) return true; } catch (e) {}
+    try { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
+  }
+  api.reduced = reduced;
+  function syncReducedClass() { try { document.documentElement.classList.toggle('mo-reduced', reduced()); } catch (e) {} }
+  const rtl = () => (document.documentElement.dir || '').toLowerCase() === 'rtl';
+  /* Phone (incl. a phone on its side) / tablet / desktop — the app's own layout width. */
+  function scale() {
+    const w = (typeof _lw === 'function') ? _lw() : window.innerWidth;
+    /* PHONE is LITE: only the incoming scene moves (a short travel + fade). A retained live
+       parent plane meant laying out and painting two whole scenes per step, which measured
+       as 40-60ms of extra long task per Settings step at 4x CPU. */
+    if (w <= 768) return { child: '22%', parent: '22%', shade: 0, fwd: 320, back: 280, short: false, lite: true };
+    /* Tablet and desktop kept the two-plane parallax only while it stayed inside the long-task
+       gate; measured at 1440x900 it did not (about 950ms of long task per five Settings steps
+       against about 600ms without motion), so they are lite too, with a shorter travel. */
+    if (w < 1100) return { child: '22%', parent: '22%', shade: 0, fwd: 320, back: 280, short: false, lite: true };
+    return { child: '32px', parent: '32px', shade: 0, fwd: 240, back: 200, short: true, lite: true };
+  }
+
+  /* ── The scene ─────────────────────────────────────────────────────────── */
+  const visible = (el) => !!el && el.isConnected && !el.classList.contains('hidden') && !el.classList.contains('closing') && !el.classList.contains('mo-leaving');
+  function isPage(ov) {
+    if (!ov || !ov.id) return false;
+    if (ov.id === 'settingsOverlay' || ov.id === 'notifOverlay' || ov._ownPath || ov._ownWait) return true;
+    try { return !!acViewRouteKey(ov.id); } catch (e) { return false; }
+  }
+  function zOf(el) { const z = parseInt(getComputedStyle(el).zIndex, 10); return Number.isFinite(z) ? z : 0; }
+  function partOf(ov) {
+    if (!ov) return null;
+    for (const c of ov.children) {
+      if (c.classList.contains('mo-shade')) continue;
+      if (getComputedStyle(c).display !== 'none') return c;
+    }
+    return null;
+  }
+  function screenNow() {
+    try {
+      if (typeof _appTab !== 'undefined' && _appTab === 'ai') return document.getElementById('chatWrap');
+      for (const id of AC_SCREENS) { const e = document.getElementById(id); if (e && !e.classList.contains('hidden') && !e.classList.contains('mo-leaving')) return e; }
+    } catch (e) {}
+    return null;
+  }
+  function sceneNow() {
+    const open = [];
+    document.querySelectorAll('body > .overlay').forEach((o) => { if (visible(o) && isPage(o)) open.push(o); });
+    let ov = null, best = -1;
+    if (open.length === 1) ov = open[0];
+    else open.forEach((o, i) => { const k = zOf(o) * 10000 + i; if (k > best) { best = k; ov = o; } });
+    const shown = new Set();
+    try { AC_SCREENS.forEach((id) => { const e = document.getElementById(id); if (e && getComputedStyle(e).display !== 'none') shown.add(e); }); } catch (e) {}
+    const s = { ov, part: partOf(ov), scr: screenNow(), panel: null, bar: null, open: new Set(open), shown,
+      tab: (typeof _appTab !== 'undefined' ? _appTab : null), path: location.pathname };
+    if (ov && ov.id === 'settingsOverlay') {
+      s.panel = ov.querySelector('.iset-body[data-page]:not(.hidden):not(.mo-leaving)');
+      const bar = document.getElementById('setSearchBar');
+      if (bar && getComputedStyle(bar).display !== 'none') s.bar = bar;
+    }
+    return s;
+  }
+  /* Remember where a plane IS, so it can be shown in place after navigation has hidden it. */
+  function measure(el) {
+    if (!el || !el.isConnected) return;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none') return;
+    let scrolls = [];
+    try { scrolls = (typeof _navScrollCandidates === 'function' ? _navScrollCandidates(el) : [el]).map((c, i) => [i, c.scrollTop]).filter((x) => x[1] > 0); } catch (e) {}
+    geo.set(el, { rect: el.getBoundingClientRect(), display: cs.display, scrolls });
+  }
+  /* After a navigation, measure only a plane never measured before. Reading layout in the
+     microtask straight after navigation dirtied the page forced a style + layout pass of
+     its own (30-40ms per Settings step at 4x CPU); full-screen planes keep their box, their
+     scroll is re-measured when scrolling stops, and a tap or key re-measures everything on
+     pointerdown/keydown while layout is still clean. */
+  function measureNew(list) { list.forEach((e) => { if (e && !geo.has(e)) measure(e); }); }
+  function snapshot() {
+    try {
+      scene = sceneNow();
+      [scene.scr, scene.panel, scene.bar].forEach(measure);
+    } catch (e) {}
+  }
+  api.snapshot = snapshot;
+
+  /* ── Relationship ──────────────────────────────────────────────────────── */
+  function ancestor(a, b) {        // is route a an ancestor of route b?
+    try {
+      let r = window.ATWE_ROUTES && ATWE_ROUTES.get(b), n = 0;
+      while (r && n++ < 12) {
+        if (!r.parent || r.parent === 'history') return false;
+        if (r.parent === a) return true;
+        r = ATWE_ROUTES.get(r.parent);
+      }
+    } catch (e) {}
+    return false;
+  }
+  function routeOfPath(p) { try { const m = window.ATWE_ROUTES && ATWE_ROUTES.match(p); return m ? m.name : null; } catch (e) { return null; } }
+  function familyOfOverlay(ov) {
+    if (!ov) return 'hierarchy';
+    if (ov.id === 'notifOverlay') return 'root';
+    let p = ov._ownPath || null;
+    if (!p) { try { const k = acViewRouteKey(ov.id); if (k) p = acRouteKeyPath(k); } catch (e) {} }
+    const name = p ? routeOfPath(p) : null;
+    const r = name && window.ATWE_ROUTES && ATWE_ROUTES.get(name);
+    return r && r.family === 'modal' ? 'sheet' : r && r.family === 'root' ? 'root' : 'hierarchy';
+  }
+  /* The direction of THIS change: the NavEvent's when it has one, else the registry, else
+     structure. 'skip' = do not animate; 'fade' = direction unknowable. */
+  function direction(ev, prev, now, structural) {
+    if (ev) {
+      if (ev.uaTransition) return 'skip';
+      if (['initial', 'reload', 'restore'].includes(ev.kind)) return 'skip';
+      if (ev.kind === 'traverse') return ev.direction === 'back' ? 'back' : ev.direction === 'forward' ? 'forward' : 'fade';
+      if (ev.kind === 'push' || ev.kind === 'root-change') return 'forward';
+      if (ev.kind === 'replace' && ev.from && ev.to && ev.from.route && ev.to.route) {
+        if (ancestor(ev.to.route, ev.from.route)) return 'back';
+        if (ancestor(ev.from.route, ev.to.route)) return 'forward';
+      }
+    }
+    const a = routeOfPath(prev.path), b = routeOfPath(now.path);
+    if (a && b && a !== b) { if (ancestor(b, a)) return 'back'; if (ancestor(a, b)) return 'forward'; }
+    return structural || 'forward';
+  }
+
+  /* ── Running animations ────────────────────────────────────────────────── */
+  function track(anim, el) {
+    running.add(anim);
+    const done = () => running.delete(anim);
+    anim.finished.then(done, done);
+    anim._moEl = el;
+    return anim;
+  }
+  function animate(el, frames, opts) {
+    const a = el.animate(frames, Object.assign({ fill: 'both' }, opts));
+    return track(a, el);
+  }
+  /* Finish (commit to the end, then clean up) every animation touching these elements. */
+  function finishOn(els) {
+    const set = new Set(els.filter(Boolean));
+    [...running].forEach((a) => {
+      if (!set.size || set.has(a._moEl) || [...set].some((e) => e.contains && a._moEl && (e.contains(a._moEl) || a._moEl.contains(e)))) {
+        try { a.finish(); } catch (e) { try { a.cancel(); } catch (_) {} }
+      }
+    });
+  }
+  function finishAll() { finishOn([]); leaving.forEach((l) => { try { l.release(); } catch (e) {} }); }
+  api.finishAll = finishAll;
+  api.settled = () => new Promise((res) => {
+    const check = () => { if (!running.size && !leaving.size && !queued) res(true); else setTimeout(check, 16); };
+    check();
+  });
+
+  /* Inline styles this layer sets, restored exactly. */
+  function setStyles(el, map) {
+    const was = el._moWas || (el._moWas = {});
+    Object.keys(map).forEach((k) => { if (!(k in was)) was[k] = el.style.getPropertyValue(k); el.style.setProperty(k, map[k]); });
+  }
+  function restoreStyles(el) {
+    const was = el && el._moWas; if (!was) return;
+    Object.keys(was).forEach((k) => { if (was[k]) el.style.setProperty(k, was[k]); else el.style.removeProperty(k); });
+    el._moWas = null;
+  }
+  function addShade(el) {
+    const s = document.createElement('div');
+    s.className = 'mo-shade';
+    el.appendChild(s);
+    return s;
+  }
+  /* Lift an IN-FLOW plane above/below its neighbour for the length of the motion. */
+  function stage(el, z, opaque) {
+    const cs = getComputedStyle(el);
+    const m = { 'z-index': String(z), 'will-change': 'transform' };
+    if (cs.position === 'static') m.position = 'relative';
+    if (opaque && (cs.backgroundColor === 'rgba(0, 0, 0, 0)' || cs.backgroundColor === 'transparent')) m['background-color'] = 'var(--bg)';
+    setStyles(el, m);
+  }
+
+  /* RETAIN a plane navigation has just hidden: shown in place by .mo-leaving, inert,
+     aria-hidden, untouchable. Returns null when it cannot be shown where it was. */
+  function retain(el, plane, z) {
+    const g = geo.get(el);
+    if (!el || !el.isConnected || !g) return null;
+    const old = leaving.get(plane);
+    if (old && old.el !== el) { try { old.release(); } catch (e) {} }   // at most ONE per plane
+    const ariaWas = el.getAttribute('aria-hidden');
+    const inertWas = el.inert === true;
+    setStyles(el, { '--mo-d': g.display, position: 'fixed', top: g.rect.top + 'px', left: g.rect.left + 'px',
+      width: g.rect.width + 'px', height: g.rect.height + 'px', margin: '0', 'z-index': String(z),
+      'background-color': 'var(--bg)', 'will-change': 'transform', 'max-width': 'none', 'max-height': 'none' });
+    el.classList.add('mo-leaving');
+    try { el.inert = true; } catch (e) {}
+    el.setAttribute('aria-hidden', 'true');
+    // A transformed / filtered ancestor re-bases a fixed box: correct by what landed.
+    try {
+      const r = el.getBoundingClientRect();
+      const dx = g.rect.left - r.left, dy = g.rect.top - r.top;
+      if (Math.abs(dx) > .5 || Math.abs(dy) > .5) setStyles(el, { top: (g.rect.top + dy) + 'px', left: (g.rect.left + dx) + 'px' });
+    } catch (e) {}
+    try {
+      const cands = typeof _navScrollCandidates === 'function' ? _navScrollCandidates(el) : [el];
+      g.scrolls.forEach(([i, top]) => { if (cands[i]) cands[i].scrollTop = top; });
+    } catch (e) {}
+    const rec = { el, plane, release: null };
+    rec.release = () => {
+      if (leaving.get(plane) === rec) leaving.delete(plane);
+      el.classList.remove('mo-leaving');
+      restoreStyles(el);
+      try { el.inert = inertWas; } catch (e) {}
+      if (ariaWas === null) el.removeAttribute('aria-hidden'); else el.setAttribute('aria-hidden', ariaWas);
+    };
+    leaving.set(plane, rec);
+    return rec;
+  }
+  /* A panel Back closed is already CLOSING (closeOverlay's own retained state: logically
+     gone, still on screen). Take its exit over: hold its hide until the motion lands. */
+  function retainClosing(ov, plane) {
+    if (!ov || !ov.classList.contains('closing')) return null;
+    const old = leaving.get(plane);
+    if (old && old.el !== ov) { try { old.release(); } catch (e) {} }
+    const done = ov._closeDone;
+    clearTimeout(ov._ct);
+    if (done) { ov.removeEventListener('animationend', done); ov._closeDone = null; }
+    ov.classList.add('mo-leaving');
+    const ariaWas = ov.getAttribute('aria-hidden');
+    try { ov.inert = true; } catch (e) {}
+    ov.setAttribute('aria-hidden', 'true');
+    const rec = { el: ov, plane, release: null };
+    rec.release = () => {
+      if (leaving.get(plane) === rec) leaving.delete(plane);
+      ov.classList.remove('mo-leaving');
+      restoreStyles(ov);
+      try { ov.inert = false; } catch (e) {}
+      if (ariaWas === null) ov.removeAttribute('aria-hidden'); else ov.setAttribute('aria-hidden', ariaWas);
+      // Re-shown meanwhile (showOverlay removes .closing)? Then it stays. Else hide it now.
+      if (ov.classList.contains('closing')) {
+        if (done) { ov._closeDone = done; done(); }
+        else { ov.classList.add('hidden'); ov.classList.remove('closing'); }
+      }
+    };
+    leaving.set(plane, rec);
+    return rec;
+  }
+
+  function log(entry) { ring.push(entry); if (ring.length > 80) ring.shift(); }
+  function settleOf(list, entry, cleanup) {
+    const t0 = performance.now();
+    entry.t0 = t0;
+    Promise.all(list.map((a) => a.finished.catch(() => null))).then(() => {
+      entry.t1 = performance.now();
+      cleanup();
+    });
+  }
+
+  /* Focus after a navigation. A KEYBOARD user is taken into the incoming scene (back to the
+     control that opened it, on Back). After a tap nothing is focused programmatically — a
+     script focus with no keyboard behind it draws the focus ring on a phone — but focus is
+     never left sitting on a control the navigation just hid. */
+  let keyboardLast = false;
+  function focusInto(el, back) {
+    try {
+      const ae = document.activeElement;
+      const onHidden = ae && ae !== document.body && (!ae.isConnected || ae.closest('.hidden,.mo-leaving,.closing,[inert]'));
+      if (!keyboardLast) { if (onHidden) ae.blur(); return; }
+      const lost = !ae || ae === document.body || onHidden || (el && !el.contains(ae) && ae.closest('.overlay,.ac-screen,.iset-body'));
+      if (!lost || !el) return;
+      if (back && el._moOpener && el._moOpener.isConnected && el.contains(el._moOpener) && el._moOpener.offsetParent !== null) {
+        el._moOpener.focus({ preventScroll: true }); return;
+      }
+      const t = el.querySelector('[data-mo-focus], .iset-head button, .msg-back, .sheet-close, button[aria-label="Back"], h1, h2, [role="heading"]');
+      if (t) { if (!t.hasAttribute('tabindex') && !/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) t.setAttribute('tabindex', '-1'); t.focus({ preventScroll: true }); }
+    } catch (e) {}
+  }
+
+  /* ── Choreography ──────────────────────────────────────────────────────── */
+  /* child/parent are { el, leavingRec?, move:element-to-transform } */
+  function hierarchy(dir, child, parent, entry) {
+    const k = scale(), s = rtl() ? -1 : 1, red = entry.reduced;
+    const anims = [], shades = [];
+    const dur = dir === 'back' ? k.back : k.fwd;
+    const cx = `translateX(${s < 0 ? '-' : ''}${k.child})`, px = `translateX(${s < 0 ? '' : '-'}${k.parent})`;
+    if (red || dir === 'fade') {
+      const d = 120;
+      if (child && child.move) anims.push(animate(child.move, dir === 'back' ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 0 }, { opacity: 1 }], { duration: d, easing: 'linear' }));
+      if (parent && parent.move) anims.push(animate(parent.move, dir === 'back' ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: parent.leave ? 0 : 1 }], { duration: d, easing: 'linear' }));
+      if (dir === 'fade' && child && child.leaveOv) anims.push(animate(child.leaveOv, [{ opacity: 1 }, { opacity: 0 }], { duration: d, easing: 'linear' }));
+      return anims;
+    }
+    if (k.lite) {
+      /* Incoming-only. Forward: the child arrives from the trailing side; Back: the parent
+         arrives from the leading side, the mirror of it. A panel that is already CLOSING (still
+         on screen, at no cost) leaves along the exact reverse of its entry. */
+      const ease = { duration: dur, easing: EASE_H };
+      const pIn = `translateX(${s < 0 ? '' : '-'}${k.parent})`;
+      const enter = [{ transform: cx, opacity: 0 }, { transform: 'none', opacity: 1 }];
+      if (dir === 'back') {
+        if (child && child.move) anims.push(animate(child.move, enter.slice().reverse(), ease));
+        if (child && child.leaveOv) anims.push(animate(child.leaveOv, [{ opacity: 1 }, { opacity: 0 }], ease));
+        if (parent && parent.move && !parent.already) anims.push(animate(parent.move, [{ transform: pIn, opacity: 0 }, { transform: 'none', opacity: 1 }], ease));
+      } else {
+        if (child && child.move) anims.push(animate(child.move, enter, ease));
+        if (parent && parent.move && parent.leave) anims.push(animate(parent.move, [{ opacity: 1 }, { opacity: 0 }], ease));
+        if (parent && parent.overChild) anims.push(animate(parent.overChild, [{ opacity: 1 }, { opacity: 0, offset: .6 }, { opacity: 0 }], { duration: dur, easing: 'linear' }));
+      }
+      entry.shades = shades;
+      return anims;
+    }
+    const childIn = k.short
+      ? [{ transform: cx, opacity: 0 }, { opacity: 1, offset: .4 }, { transform: 'none', opacity: 1 }]
+      : [{ transform: cx }, { transform: 'none' }];
+    const childOut = k.short
+      ? [{ transform: 'none', opacity: 1 }, { opacity: 1, offset: .6 }, { transform: cx, opacity: 0 }]
+      : [{ transform: 'none' }, { transform: cx }];
+    if (child && child.move) anims.push(animate(child.move, dir === 'back' ? childOut : childIn, { duration: dur, easing: EASE_H }));
+    if (child && child.leaveOv) anims.push(animate(child.leaveOv, [{ opacity: 1 }, { opacity: 0 }], { duration: dur, easing: EASE_H }));
+    if (parent && parent.move) {
+      const pf = [{ transform: 'none' }, { transform: px }];
+      anims.push(animate(parent.move, dir === 'back' ? pf.slice().reverse() : pf, { duration: dur, easing: EASE_H }));
+      const sh = addShade(parent.move); shades.push(sh);
+      anims.push(animate(sh, dir === 'back' ? [{ opacity: k.shade }, { opacity: 0 }] : [{ opacity: 0 }, { opacity: k.shade }], { duration: dur, easing: EASE_H }));
+      // A parent on a HIGHER layer than its child (a panel handing over to a screen) cannot
+      // be covered by it, so it dissolves away instead of sitting over the child.
+      if (parent.overChild) anims.push(animate(parent.overChild, [{ opacity: 1 }, { opacity: 0, offset: .6 }, { opacity: 0 }], { duration: dur, easing: 'linear' }));
+    }
+    entry.shades = shades;
+    return anims;
+  }
+
+  function play(prev, now, ev, ctx) {
+    const entry = { family: 'none', dir: null, from: (ev && ev.from && ev.from.path) || prev.path,
+      to: (ev && ev.to && ev.to.path) || now.path, kind: ev ? ev.kind : 'dom',
+      reduced: reduced(), t0: 0, t1: 0, cancelled: false, planes: {} };
+    const cleanups = ctx.cleanups;
+    let anims = [];
+    const ovChanged = prev.ov !== now.ov;
+    const scrChanged = prev.scr !== now.scr && !!now.scr;
+    const panelChanged = !ovChanged && now.ov && now.ov.id === 'settingsOverlay' && prev.panel !== now.panel && !!now.panel;
+    if (!ovChanged && !scrChanged && !panelChanged) return null;
+    // Something on these planes really changed: whatever is still moving on them commits to
+    // its end first, so a new motion never starts on top of a ghost.
+    finishOn([prev.ov, now.ov, prev.scr, now.scr, prev.panel, now.panel, prev.part, now.part]);
+
+    let opened = now.ov && !prev.open.has(now.ov) ? now.ov : null;
+    // Already on screen for a while (it appeared before it counted as a page)? Not now.
+    if (opened && opened._moShownAt && performance.now() - opened._moShownAt > 180) opened = null;
+    const closed = prev.ov && !visible(prev.ov) ? prev.ov : null;
+    const revealed = closed && now.ov && prev.open.has(now.ov) ? now.ov : null;
+
+    /* World change: a root fade-through of the incoming scene. */
+    const rootSwitch = scrChanged && !opened && ROOT_SCREENS.includes(now.scr.id) &&
+      (prev.tab !== now.tab || (ev && ev.kind === 'root-change')) && !(closed && familyOfOverlay(closed) === 'hierarchy');
+    if (rootSwitch && now.scr && !opened) {
+      entry.family = 'root'; entry.dir = 'none';
+      const d = direction(ev, prev, now, 'forward');
+      if (d === 'skip') return null;
+      if (scrChanged) {
+        stage(now.scr, 1, false);
+        anims.push(animate(now.scr, [{ opacity: 0 }, { opacity: 1 }], { duration: entry.reduced ? 120 : 170, easing: EASE_ROOT }));
+        cleanups.push(() => restoreStyles(now.scr));
+      }
+      entry.planes = { incoming: now.scr && now.scr.id };
+      return { entry, anims, cleanups };
+    }
+
+    /* A routed SHEET (cart): its own CSS presentation; nothing to choreograph. */
+    if (opened && familyOfOverlay(opened) === 'sheet') { entry.family = 'sheet'; entry.dir = 'forward'; return { entry, anims: [], cleanups: [] }; }
+    if (closed && !opened && familyOfOverlay(closed) === 'sheet' && !scrChanged) { entry.family = 'sheet'; entry.dir = 'back'; return { entry, anims: [], cleanups: [] }; }
+    /* Notifications is a ROOT-level panel: opening or closing it on its own is its own fade.
+       Coming BACK to it from a destination it opened is still a hierarchy pop. */
+    const rootPanelOpen = opened && familyOfOverlay(opened) === 'root';
+    if ((rootPanelOpen && !(ev && ev.kind === 'traverse' && ev.direction === 'back')) ||
+        (closed && familyOfOverlay(closed) === 'root' && !scrChanged && !opened)) {
+      entry.family = 'root'; entry.dir = 'none';
+      return { entry, anims: [], cleanups: [] };
+    }
+
+    const structural = (opened && !closed) ? 'forward' : (closed && !opened) ? 'back'
+      : (scrChanged && ROOT_SCREENS.includes(prev.scr && prev.scr.id) && !ROOT_SCREENS.includes(now.scr.id)) ? 'forward'
+      : (scrChanged && !ROOT_SCREENS.includes(prev.scr && prev.scr.id) && ROOT_SCREENS.includes(now.scr.id)) ? 'back' : 'forward';
+    const dir = direction(ev, prev, now, structural);
+    if (dir === 'skip') return null;
+    if (entry.family === 'none') entry.family = 'hierarchy';
+    entry.dir = dir;
+    const back = dir === 'back';
+
+    let child = null, parent = null;
+    // Phone, motion not reduced: nothing hidden is re-shown (see scale()).
+    const lite = !!scale().lite && !entry.reduced;
+    if (panelChanged) {
+      /* Settings hub ↔ page, inside the one Settings card: both panels are scenes. */
+      const leave = !lite && prev.panel && retain(prev.panel, 'settings', back ? 3 : 1);
+      const leaveBar = !lite && prev.bar && prev.bar !== now.bar && retain(prev.bar, 'settings-bar', back ? 3 : 1);
+      if (leave) cleanups.push(() => leave.release());
+      if (leaveBar) cleanups.push(() => leaveBar.release());
+      stage(now.panel, back ? 1 : 3, true); cleanups.push(() => restoreStyles(now.panel));
+      if (now.bar && now.bar !== prev.bar) { stage(now.bar, back ? 1 : 3, true); cleanups.push(() => restoreStyles(now.bar)); }
+      if (back) { child = { move: leave ? prev.panel : null }; parent = { move: now.panel }; }
+      else { child = { move: now.panel }; parent = { move: leave ? prev.panel : null, leave: true }; }
+      anims = hierarchy(dir, child, parent, entry);
+      // The search bar rides with the hub, whichever side the hub is on.
+      const hubBar = back ? now.bar : (leaveBar ? prev.bar : null);
+      const hubBarLeaving = back ? (leaveBar ? prev.bar : null) : null;
+      if (lite && dir !== 'fade') {
+        // The hub's search bar arrives with the hub on Back, the same way the hub does.
+        if (back && now.bar && now.bar !== prev.bar) {
+          const k = scale(), s = rtl() ? -1 : 1;
+          anims.push(animate(now.bar, [{ transform: `translateX(${s < 0 ? '' : '-'}${k.parent})`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: k.back, easing: EASE_H }));
+        }
+      } else if (!entry.reduced && dir !== 'fade') {
+        const k = scale(), s = rtl() ? -1 : 1;
+        const px = `translateX(${s < 0 ? '' : '-'}${k.parent})`;
+        if (hubBar) anims.push(animate(hubBar, back ? [{ transform: px }, { transform: 'none' }] : [{ transform: 'none' }, { transform: px }], { duration: back ? k.back : k.fwd, easing: EASE_H }));
+        if (hubBarLeaving) anims.push(animate(hubBarLeaving, [{ transform: 'none' }, { transform: `translateX(${s < 0 ? '-' : ''}${k.child})` }], { duration: k.back, easing: EASE_H }));
+      }
+      entry.planes = { child: (back ? prev.panel : now.panel)?.getAttribute('data-page'), parent: (back ? now.panel : prev.panel)?.getAttribute('data-page'), leaving: leave ? prev.panel.getAttribute('data-page') : null };
+      if (!back) now.panel._moOpener = lastOpener;
+      focusInto(now.ov, back);
+      return { entry, anims, cleanups };
+    }
+
+    /* Panels (overlays) and screens. Collect the incoming and the leaving scene. */
+    let inEl = null, inMove = null, leaveRec = null, leaveMove = null, leaveOv = null;
+    if (opened) { inEl = opened; inMove = partOf(opened); }
+    else if (revealed) { inEl = revealed; inMove = partOf(revealed); }
+    else if (scrChanged) { inEl = now.scr; inMove = now.scr; }
+    else if (closed && now.scr) { inEl = now.scr; inMove = now.scr; }      // a panel closed back onto its screen
+    if (closed) {
+      leaveRec = retainClosing(closed, 'overlay');
+      if (leaveRec) { leaveMove = partOf(closed); leaveOv = closed; }
+    } else if (!lite && scrChanged && prev.scr && getComputedStyle(prev.scr).display === 'none') {
+      leaveRec = retain(prev.scr, 'screen', back ? 3 : 1);
+      if (leaveRec) leaveMove = prev.scr;
+    }
+    if (leaveRec) cleanups.push(() => leaveRec.release());
+    // A scene that was ALREADY on screen (the Beam list in the desktop two-pane) stays still:
+    // only the pane that actually changed animates.
+    if (inMove && !opened && !revealed && prev.shown && prev.shown.has(inMove)) inMove = null;
+    if (!inMove && !leaveMove) return { entry, anims: [], cleanups };
+
+    // Layering: a retained overlay leaving is lifted over whatever replaced it on Back.
+    if (leaveOv && back) setStyles(leaveOv, { 'z-index': String(zOf(leaveOv) + 1) });
+    const inIsOverlay = !!(opened || revealed);
+    const leaveIsOverlay = !!leaveOv;
+    if (inMove && !inIsOverlay) { stage(inMove, back ? 1 : 2, true); cleanups.push(() => restoreStyles(inMove)); }
+    if (inMove && inIsOverlay) { setStyles(inMove, { 'will-change': 'transform' }); cleanups.push(() => restoreStyles(inMove)); }
+    if (leaveMove && leaveIsOverlay) { setStyles(leaveMove, { 'will-change': 'transform' }); cleanups.push(() => restoreStyles(leaveMove)); }
+    // An in-flow plane has to be positioned to carry a shade.
+    if (inMove && inIsOverlay && back && getComputedStyle(inMove).position === 'static') setStyles(inMove, { position: 'relative' });
+
+    if (back) {
+      child = { move: leaveMove, leaveOv: leaveOv };
+      parent = { move: inMove, already: !!revealed };
+    } else {
+      child = { move: inMove };
+      // A parent on a higher layer (a panel) than an incoming screen dissolves out of the way.
+      parent = { move: leaveMove, leave: true, overChild: (leaveIsOverlay && !inIsOverlay) ? leaveOv : null };
+      // An overlay still open BENEATH the new one is a parent that never left.
+      if (!lite && !leaveMove && opened && prev.ov && prev.ov !== opened && visible(prev.ov)) {
+        const pm = partOf(prev.ov);
+        if (pm) { setStyles(pm, { 'will-change': 'transform' }); cleanups.push(() => restoreStyles(pm)); parent = { move: pm }; }
+      }
+    }
+    if (dir === 'fade' && child) child.leaveOv = leaveOv;
+    anims = hierarchy(dir, child, parent, entry);
+    entry.planes = { incoming: inEl && inEl.id, leaving: leaveRec ? leaveRec.el.id : null,
+      child: child && child.move && (child.move.id || (child.move.parentElement && child.move.parentElement.id)) || null,
+      parent: parent && parent.move && (parent.move.id || (parent.move.parentElement && parent.move.parentElement.id)) || null };
+    if (!back && inEl) inEl._moOpener = lastOpener;
+    focusInto(inEl, back);
+    return { entry, anims, cleanups };
+  }
+
+  /* ── Reconcile: one per task, after navigation ─────────────────────────── */
+  function reconcile() {
+    queued = false;
+    const ev = lastEv; lastEv = null;
+    if (!scene) { snapshot(); return; }
+    const prev = scene;
+    let now;
+    try { now = sceneNow(); } catch (e) { return; }
+    const booting = (() => { try { return AtweHistory.booting; } catch (e) { return false; } })();
+    const quiet = api.off || booting || document.hidden || !canAnimate() || (ev && ['initial', 'reload', 'restore'].includes(ev.kind));
+    if (quiet) { finishAll(); scene = now; measureNew([now.scr, now.panel, now.bar]); return; }
+    let result = null;
+    const ctx = { cleanups: [] };
+    try {
+      result = play(prev, now, ev, ctx);
+    } catch (e) {
+      // Motion failing must never touch the navigation that already happened: undo every
+      // style it set, release every plane it retained, and leave the destination as it is.
+      ctx.cleanups.forEach((f) => { try { f(); } catch (_) {} });
+      try { document.querySelectorAll('.mo-shade').forEach((x) => x.remove()); } catch (_) {}
+      try { finishAll(); } catch (_) {}
+      result = null;
+    }
+    scene = now;
+    try { measureNew([now.scr, now.panel, now.bar]); } catch (e) {}
+    if (!result) return;
+    const { entry, anims, cleanups } = result;
+    log(entry);
+    const cleanup = () => {
+      (entry.shades || []).forEach((s) => s.remove());
+      cleanups.forEach((f) => { try { f(); } catch (e) {} });
+      // A finished WAAPI animation with fill:both still holds its end frame: drop it so
+      // no transform or opacity survives the motion.
+      anims.forEach((a) => { try { a.cancel(); } catch (e) {} });
+    };
+    if (!anims.length) { cleanup(); entry.t0 = entry.t1 = performance.now(); return; }
+    settleOf(anims, entry, cleanup);
+  }
+  /* In the frame's animation step, NOT a microtask of the navigating task. Both run before
+     paint, so nothing flashes; but a microtask forced the style recalc the frame would have
+     done anyway INTO the navigation's own task, making fewer, longer long tasks (measured: a
+     transition task median 95-108ms against 73-77ms without motion, at 4x CPU). A hidden page
+     never runs rAF, so it reconciles at once (quietly: reconcile does not animate there). */
+  function schedule() {
+    if (queued) return; queued = true;
+    if (document.hidden) { Promise.resolve().then(reconcile); return; }
+    requestAnimationFrame(() => { if (queued) reconcile(); });
+  }
+
+  /* ── Wiring ────────────────────────────────────────────────────────────── */
+  function init() {
+    syncReducedClass();
+    try { document.documentElement.classList.toggle('mo-on', canAnimate()); } catch (e) {}
+    try { window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', syncReducedClass); } catch (e) {}
+    window.addEventListener('atwe:navigate', (e) => { lastEv = e.detail || null; schedule(); });
+    const isScene = (t) => t && t.nodeType === 1 && (
+      (t.parentNode === document.body && t.classList.contains('overlay')) || t.classList.contains('ac-screen') ||
+      t.id === 'chatWrap' || t.id === 'socialWrap' || (t.classList.contains('iset-body') && t.hasAttribute('data-page')));
+    /* Watch the SCENE elements themselves, never the whole document: a subtree observer is
+       handed every class change in the app, and a scrolling list toggles plenty (measured:
+       it cost the Notifications scroll several ms of p95 at 4x CPU). The scenes are static
+       markup; an overlay created later is picked up from body's own child list, and an
+       observer registered on a node keeps working when showOverlay moves it. */
+    try {
+      const seen = new WeakSet();
+      const mo = new MutationObserver((list) => {
+        for (const m of list) {
+          if (m.type === 'childList') { m.addedNodes.forEach(watch); continue; }
+          if (m.target === document.body) { syncReducedClass(); continue; }
+          const t = m.target;
+          if (isScene(t) && !t.classList.contains('mo-leaving')) {
+            if (t.classList.contains('overlay') && m.oldValue && /\bhidden\b/.test(m.oldValue) && !t.classList.contains('hidden')) t._moShownAt = performance.now();
+            schedule();
+          }
+        }
+      });
+      const OPTS = { attributes: true, attributeFilter: ['class'], attributeOldValue: true };
+      const watch = (t) => { if (isScene(t) && !seen.has(t)) { seen.add(t); mo.observe(t, OPTS); } };
+      mo.observe(document.body, { childList: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+      document.querySelectorAll('body > .overlay, .ac-screen, #chatWrap, #socialWrap, .iset-body[data-page]').forEach(watch);
+    } catch (e) {}
+    // Where the member is, kept current cheaply: before any press, and as they scroll.
+    const opener = (e) => {
+      keyboardLast = e.type === 'keydown';
+      const t = e.target && e.target.closest && e.target.closest('button,a,[role="button"],[onclick],[tabindex]');
+      if (t) lastOpener = t;
+      if (!queued) snapshot();   // a navigation still waiting for its frame keeps its 'before'
+    };
+    document.addEventListener('pointerdown', opener, true);
+    document.addEventListener('keydown', opener, true);
+    /* Re-measured ONCE when scrolling stops, never per frame: a scroll handler that reads
+       layout on every frame is exactly the cost the scroll probes guard against. A tap's
+       pointerdown re-measures anyway, so a navigation always sees the current position. */
+    let st = 0;
+    document.addEventListener('scroll', () => {
+      clearTimeout(st);
+      st = setTimeout(() => { if (!running.size && !leaving.size) { try { [scene && scene.scr, scene && scene.panel].forEach(measure); } catch (e) {} } }, 140);
+    }, { capture: true, passive: true });
+    // Orientation / breakpoint change, or the page going away: land everything now.
+    window.addEventListener('resize', () => { if (running.size || leaving.size) finishAll(); try { [scene && scene.scr, scene && scene.panel, scene && scene.bar].forEach(measure); } catch (e) {} });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { finishAll(); if (queued) reconcile(); } });
+    snapshot();
+  }
+  api.init = init;
+  api.active = () => canAnimate() && !api.off;
+  api.scene = () => scene;
+  return api;
+})();
+try { window.AtweMotion = AtweMotion; } catch (e) {}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => AtweMotion.init());
+else setTimeout(() => AtweMotion.init(), 0);
 
 /* A path for a route NAME, built by the route registry (public/atwe-routes.js) so no
    caller concatenates a URL by hand. The fallback is the literal the app wrote before the
@@ -41243,11 +41904,10 @@ function acBackToList() {
     if (h && cur && h.next != null && cur.idx === h.next && AtweHistory.hasPrev()) { _histDepth = Math.max(0, _histDepth - 1); history.back(); return; }
     if (AC.mode === 'group') acGoGroups(); else acGoMessages();
   };
-  const s = document.getElementById('acThreadScreen');
-  if (s && !s.classList.contains('hidden') && !_jellyReduced()) {
-    s.classList.remove('ac-enter'); void s.offsetWidth; s.classList.add('ac-exit'); // slide out to the right
-    setTimeout(() => { go(); s.classList.remove('ac-exit'); }, 240);
-  } else go();
+  /* Route batch 11: navigation never waits for motion. The thread used to slide out on a
+     240ms timer and only THEN navigate; now Back happens at once and the motion layer
+     (AtweMotion) animates the conversation out over the list it is returning to. */
+  go();
 }
 async function acDeleteConversation() {
   if (AC.mode !== 'dm' || !AC.peer) return;
@@ -59325,6 +59985,9 @@ function acCapCache(cache, id) {
 // Slide the thread screen in from the right (one-shot; class self-removes).
 function acThreadEnter() {
   const s = document.getElementById('acThreadScreen'); if (!s) return;
+  // The motion layer moves the thread AND the list together (route batch 11); this
+  // incoming-only CSS slide is the fallback for a browser that cannot run it.
+  if (window.AtweMotion && AtweMotion.active()) return;
   s.classList.remove('ac-enter'); void s.offsetWidth; // restart the animation if re-opened fast
   s.classList.add('ac-enter');
   setTimeout(() => s.classList.remove('ac-enter'), 320);

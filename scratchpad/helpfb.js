@@ -58,20 +58,24 @@ let pass=0,fail=0; const ok=(c,m,x)=>{if(c){pass++;console.log('  ok   '+m);}els
 
   // the Settings search bar moves with the page
   await p.evaluate(()=>{acGoProfileHub();openSettings();}); await p.waitForTimeout(1300);
+  /* Route batch 11: Settings hub <-> page is TWO planes moved by the motion layer (WAAPI),
+     not the old incoming-only CSS keyframe, so ask the browser what is actually animating:
+     coming back, the bar must move WITH the hub panel, on the same timing. */
   const anim = await p.evaluate(async()=>{
     const bar=document.getElementById('setSearchBar'); if(!bar) return null;
     setNav('privacy'); await new Promise(r=>setTimeout(r,600));
     const hiddenOnSub = getComputedStyle(bar).display==='none';
-    setBack(); await new Promise(r=>requestAnimationFrame(r));
-    const cs=getComputedStyle(bar);
-    const bodyAnim=getComputedStyle(document.querySelector('.iset-body[data-page="hub"]')).animationName;
-    return {hiddenOnSub, name:cs.animationName, dur:cs.animationDuration, bodyAnim};
+    setBack(); await new Promise(r=>setTimeout(r,60));
+    const hub=document.querySelector('.iset-body[data-page="hub"]');
+    const of=(el)=>document.getAnimations().filter(a=>a.effect&&a.effect.target===el&&!(a instanceof CSSAnimation)&&!(a instanceof CSSTransition))
+      .map(a=>({dur:a.effect.getTiming().duration, ease:a.effect.getTiming().easing, moves:JSON.stringify(a.effect.getKeyframes()).includes('translateX')}));
+    return {hiddenOnSub, bar:of(bar), body:of(hub)};
   });
   ok(!!anim, 'the settings search bar exists');
   ok(anim.hiddenOnSub, 'it is hidden on a sub-page');
-  ok(anim.name==='isetSlideBack', 'coming back, it slides in with the page instead of sitting still', anim.name);
-  ok(anim.name===anim.bodyAnim, 'the same animation the page itself uses', anim.name+' vs '+anim.bodyAnim);
-  ok(anim.dur==='0.36s', 'and the same duration', anim.dur);
+  ok(anim.bar.some(a=>a.moves), 'coming back, it slides in with the page instead of sitting still', JSON.stringify(anim.bar));
+  ok(anim.body.some(a=>a.moves) && anim.bar[0] && anim.body[0] && anim.bar[0].ease===anim.body[0].ease, 'the same motion the page itself uses', JSON.stringify(anim));
+  ok(anim.bar[0] && anim.body[0] && anim.bar[0].dur===anim.body[0].dur, 'and the same duration', JSON.stringify(anim));
 
   ok(errs.length===0,'no JS errors',errs.join(' | '));
   await b.close(); await pool.end();
