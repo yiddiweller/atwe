@@ -41,7 +41,7 @@ node seed-fixtures.js 2>&1 | sed 's/^/-- fixtures: /'
 # measured a signed-out app - reporting it as a product fault. Catch that before spending
 # an hour finding out the hard way.
 
-for f in qadsn profilemenu buttons rowsize notifscroll demomedia gutters sethandoff concentric fullscan offstate sbfoot timealign menutrim iconsize oneeye actionrow postcorners evencards headcentre adcard postcard skelgrey trayline radii pillfit cardsweep postdetail postshot blurup settle toastpolish welcome setslide helpfb mehub meacct meidx mesearch mesearchx menonadmin mecolor medesk megap setpage focusring polish3 mefeedback engsettle imgedge appsearch aiguide navlayer aipage aileak addtab polish2 aicomposer clicktest structure everywhere searchsweep deskcols authpane chatscroll voicenote chathead fixtext lastseen chatedge acctswitch pwsave navnotif smooth attach sendundo openbottom layouts navtap apperrors emptystates bootspeed storagesign feedskel cluster profcard tabpills topglass reachable signupflow suskip signuphandoff obresume accttype deadends journeys admintabs admindead adminsweep bizevidence admintouch fillroles notifguard ctlsweep wayback touchwide gapmob notifhdr acctbug worldhdr verchk contrastfix touchsize legible aiknows aiagent deepstates twoperson shoppause wallethandoff navhandoff setpush setdeep histv2 route3 setroutes route5 route6 route7 route8 route9 motion nodash dashlive nohang callpath tapown rtalive aitell tabrow navclear loadstate errstate; do
+for f in qadsn profilemenu buttons rowsize notifscroll demomedia gutters sethandoff concentric fullscan offstate sbfoot timealign menutrim iconsize oneeye actionrow postcorners evencards headcentre adcard postcard skelgrey trayline radii pillfit cardsweep postdetail postshot blurup settle toastpolish welcome setslide helpfb mehub meacct meidx mesearch mesearchx menonadmin mecolor medesk megap setpage focusring polish3 mefeedback engsettle imgedge appsearch aiguide navlayer aipage aileak addtab polish2 aicomposer clicktest structure everywhere searchsweep deskcols authpane chatscroll voicenote chathead fixtext lastseen chatedge acctswitch pwsave navnotif smooth attach sendundo openbottom layouts navtap apperrors emptystates bootspeed storagesign feedskel cluster profcard tabpills topglass reachable signupflow suskip signuphandoff obresume accttype deadends journeys admintabs admindead adminsweep bizevidence admintouch fillroles notifguard ctlsweep wayback touchwide gapmob notifhdr acctbug worldhdr verchk contrastfix touchsize legible aiknows aiagent deepstates twoperson shoppause wallethandoff navhandoff setpush setdeep histv2 route3 setroutes route5 route6 route7 route8 route9 navmotion motion nodash dashlive nohang callpath tapown rtalive aitell tabrow navclear loadstate errstate; do
   [ -f "$f.js" ] || { echo "-- $f -- MISSING"; continue; }
   echo "-- $f --"
   # EVERY PROBE GETS 600s, AND A PROBE THAT GENUINELY NEEDS LONGER IS NAMED HERE WITH ITS
@@ -83,6 +83,9 @@ for f in qadsn profilemenu buttons rowsize notifscroll demomedia gutters sethand
     # history and the auth return across a full reload; it spawns one extra server on a
     # dead database for the 503 case. ~3 minutes; a stall must not eat the night.
     route9)     cap=900 ;;
+    # navmotion (route batch 11) runs nine navigation chains with motion on and off at four
+    # viewports, then the edge cases and a 4x-CPU comparison: 230 checks, ~375s measured.
+    navmotion)  cap=900 ;;
     *)          cap=600 ;;
   esac
   timeout "$cap" node "$f.js" 2>&1 | tail -3   # totals only; run a probe directly for its full output
