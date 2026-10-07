@@ -68,11 +68,16 @@ test('non-ASCII and over-long names are refused', () => {
   for (const n of ['jöhn', 'jоhn' /* Cyrillic o */, 'a'.repeat(41), 'john doe', 'john@x']) assert.ok(REG.usernameShapeError(n), n);
 });
 
-test('the database seed is UNCHANGED: SYSTEM_ROUTES is still exactly the router set', () => {
+test('the database seed is UNCHANGED: SYSTEM_ROUTES is the router set plus the holder-kept defensive words', () => {
   // lockSystemRoutes seeds SYSTEM_ROUTES into reserved_usernames on every boot. It must
   // not grow: the wider new-username set is enforced in code, so a deploy writes no new
-  // rows and nobody holding a newly-protected word is affected.
-  assert.deepStrictEqual([...SYSTEM_ROUTES], REG.parseReserved());
+  // rows and nobody holding a newly-protected word is affected. Build 1877 narrowed what
+  // the ROUTER claims (an existing holder of `atwe` / `support` keeps their profile) and
+  // must not have narrowed the seed: it is still the 140 words build 1876 seeded.
+  assert.deepStrictEqual([...SYSTEM_ROUTES], REG.seedReserved());
+  assert.deepStrictEqual([...SYSTEM_ROUTES], [...new Set([...REG.parseReserved(), ...REG.PARSE_DEFENSIVE])].sort());
+  for (const w of REG.parseReserved()) assert.ok(SYSTEM_ROUTES.includes(w), w + ' is router-reserved but not seeded');
+  assert.strictEqual(SYSTEM_ROUTES.length, 140, 'the seed is the same size it was in build 1876');
   for (const w of SYSTEM_ROUTES) assert.ok(NEW_SET.has(w), w);
   assert.ok(ALLOCATION_RESERVED.length > SYSTEM_ROUTES.length, 'the new-username set should be the wider one');
 });

@@ -48,9 +48,15 @@ function clientTables() {
 }
 
 test('the client and server reserved-word lists are identical', () => {
+  // The client's RESERVED_PATHS is the ROUTER set: the words never read as a handle.
+  // routes.js SYSTEM_ROUTES (the boot seed) is wider since build 1877 — it also carries
+  // the defensive words an existing holder keeps — so the comparison is with the
+  // registry's router set, and the seed must contain all of it.
   const { reserved } = clientTables();
+  const REG = require(path.join(ROOT, 'public', 'atwe-routes.js'));
+  for (const w of reserved) assert.ok(SYSTEM_ROUTES.includes(w), w + ' is router-reserved but not seeded');
   const a = [...new Set(reserved)].sort();
-  const b = [...new Set(SYSTEM_ROUTES)].sort();
+  const b = [...new Set(REG.parseReserved())].sort();
   const onlyClient = a.filter((x) => !b.includes(x));
   const onlyServer = b.filter((x) => !a.includes(x));
   assert.deepStrictEqual(onlyClient, [],

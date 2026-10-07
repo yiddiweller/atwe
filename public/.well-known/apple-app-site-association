@@ -562,202 +562,12 @@
             "caseSensitive": false
           },
           {
-            "/": "/about",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/about/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
             "/": "/admin.html",
             "exclude": true,
             "caseSensitive": false
           },
           {
             "/": "/admin.html/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/assets",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/assets/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/atwe",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/atwe/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/atwe-ai",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/atwe-ai/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/atweai",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/atweai/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/auth",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/auth/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/billing",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/billing/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/blog",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/blog/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/business",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/business/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/careers",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/careers/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/cdn",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/cdn/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/checkout",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/checkout/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/companies",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/companies/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/confirm",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/confirm/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/contact",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/contact/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/cookies",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/cookies/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/delete",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/delete/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/download",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/download/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/edit",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/edit/*",
             "exclude": true,
             "caseSensitive": false
           },
@@ -792,16 +602,6 @@
             "caseSensitive": false
           },
           {
-            "/": "/files",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/files/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
             "/": "/index.html",
             "exclude": true,
             "caseSensitive": false
@@ -812,42 +612,12 @@
             "caseSensitive": false
           },
           {
-            "/": "/invite",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/invite/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/legal",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/legal/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
             "/": "/locked.html",
             "exclude": true,
             "caseSensitive": false
           },
           {
             "/": "/locked.html/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/logout",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/logout/*",
             "exclude": true,
             "caseSensitive": false
           },
@@ -872,202 +642,12 @@
             "caseSensitive": false
           },
           {
-            "/": "/media",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/media/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/new",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/new/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
             "/": "/null",
             "exclude": true,
             "caseSensitive": false
           },
           {
             "/": "/null/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/oauth",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/oauth/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/official",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/official/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/org",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/org/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/organization",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/organization/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/page",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/page/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/pages",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/pages/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/password",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/password/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/pay",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/pay/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/plans",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/plans/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/premium",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/premium/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/press",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/press/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/pricing",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/pricing/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/privacy",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/privacy/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/privacy-policy",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/privacy-policy/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/pro",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/pro/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/public",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/public/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/register",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/register/*",
             "exclude": true,
             "caseSensitive": false
           },
@@ -1082,46 +662,6 @@
             "caseSensitive": false
           },
           {
-            "/": "/root",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/root/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/security",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/security/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/signin",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/signin/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/signout",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/signout/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
             "/": "/sitemap.xml",
             "exclude": true,
             "caseSensitive": false
@@ -1132,92 +672,12 @@
             "caseSensitive": false
           },
           {
-            "/": "/sso",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/sso/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/staff",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/staff/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/static",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/static/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/status",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/status/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/support",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/support/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
             "/": "/sw.js",
             "exclude": true,
             "caseSensitive": false
           },
           {
             "/": "/sw.js/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/system",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/system/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/terms",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/terms/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/terms-of-service",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/terms-of-service/*",
             "exclude": true,
             "caseSensitive": false
           },
@@ -1238,46 +698,6 @@
           },
           {
             "/": "/undefined/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/upgrade",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/upgrade/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/verify",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/verify/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/welcome",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/welcome/*",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/you",
-            "exclude": true,
-            "caseSensitive": false
-          },
-          {
-            "/": "/you/*",
             "exclude": true,
             "caseSensitive": false
           },
