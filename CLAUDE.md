@@ -8143,7 +8143,24 @@ the default world (`appTab`) and then push the deep link, so a fresh `/settings`
 THREE entries, every reload added TWO more, and browser Back from a shared link landed on a
 Home the member never visited. Until boot has applied its route (`consumePendingRoute` ends
 the phase ~500ms later), or the member's first trusted gesture, or a 10s failsafe, a push
-is written as a replace. **Consequence, as the approved model says:** browser Back from a
+is written as a replace.
+
+**BOOT ENDS ONLY ONCE ITS ARRIVAL ADDRESS IS WRITTEN (Batch 12B).** The 500ms timer and the
+deep link's address write are two independent clocks: `openDeepLink` runs at +80ms and its
+address is written by `acSyncPath` on the NEXT animation frame. When the main thread stalls,
+that frame lands after the timer and the write (asked for as a push by `showOverlay`) became a
+real push: a fabricated entry behind a direct link, so App Back and browser Back walked into
+it. Measured by random timing on 12 alternating route5 runs: 1 in 6 on build 1875 and 2 in 6
+on the tree before Batch 11, i.e. pre-existing, never Batch 11's. The timer now calls
+`acEndBootWhenWritten()`: if a path write is still queued (`_pathSyncQueued`), boot ends in
+that frame callback's `finally`, right after the write; otherwise at once. The first-gesture
+and 10s fallbacks are untouched, and nothing after boot changes meaning. Guarded by
+`scratchpad/bootrace.js`, which FORCES the race (frames held back 650ms across the boundary)
+and runs every case twice — once with the pre-fix line swapped in, which must reproduce the
+push (proof the harness bites), once on the real page. `--break` fails 36 checks by name.
+**Do not "fix" a boot race by lengthening the timer** — it only moves the boundary.
+
+**Consequence, as the approved model says:** browser Back from a
 freshly opened deep link now leaves Atwe (real history) instead of landing on a fabricated
 Home entry, and closing a deep-linked panel rewrites the address in place (`_histDepth` is
 0) rather than walking back. In-app Back (`appGoBack`) is untouched.
