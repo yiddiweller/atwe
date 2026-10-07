@@ -1,0 +1,566 @@
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { api } from './client';
+
+/**
+ * Social feed — mirrors the backend `GET /api/social/feed?scope=` and the
+ * `mapPost` shape exactly (see server.js). The app is the consumer, so field
+ * names match the API (note `created_at` is snake_case from the row).
+ */
+
+export type FeedScope = 'foryou' | 'following' | 'circles' | 'bookmarks';
+
+export interface PostAuthor {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  verified: boolean;
+  accountType: 'personal' | 'business';
+}
+
+export interface Post {
+  id: number;
+  body: string;
+  image: string | null;
+  images: string[];
+  created_at: string;
+  editedAt: string | null;
+  promoted: boolean;
+  likes: number;
+  replies: number;
+  liked: boolean;
+  mine: boolean;
+  reposts: number;
+  reposted: boolean;
+  views: number;
+  bookmarked: boolean;
+  locked?: boolean;
+  subscribersOnly?: boolean;
+  ppvCents?: number;
+  /** Present only on a post that IS a poll. */
+  poll?: Poll | null;
+  /** The post this one quotes, rendered flat inside it. */
+  quote?: QuotedPost | null;
+  author: PostAuthor;
+}
+
+interface FeedResponse {
+  posts: Post[];
+  hasMore: boolean;
+}
+
+/** Load a feed scope (React Query cached; pull-to-refresh calls refetch). */
+export function useFeed(scope: FeedScope) {
+  return useQuery({
+    queryKey: ['feed', scope],
+    queryFn: () => api.get<FeedResponse>(`/api/social/feed?scope=${scope}`),
+  });
+}
+
+/**
+ * Infinite feed — each "load more" sends the ids we already have (`seen`) so the
+ * server returns the NEXT unseen batch (mirrors the web's infinite scroll).
+ */
+export function useInfiniteFeed(scope: FeedScope) {
+  return useInfiniteQuery({
+    queryKey: ['feed-inf', scope],
+    queryFn: ({ pageParam }) => {
+      const seen = (pageParam as number[]) ?? [];
+      const q = seen.length ? `&seen=${seen.join(',')}` : '';
+      // Collections is the bookmarks list, which is its own endpoint rather
+      // than a scope on the feed — same cards, different source.
+      if (scope === 'bookmarks') {
+        return api.get<FeedResponse>('/api/social/bookmarks').then((r) => ({
+          posts: (r as unknown as { posts?: Post[] }).posts ?? [],
+          hasMore: false,
+        }));
+      }
+      return api.get<FeedResponse>(`/api/social/feed?scope=${scope}${q}`);
+    },
+    initialPageParam: [] as number[],
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.hasMore || !lastPage.posts.length) return undefined;
+      // The full set of ids seen so far becomes the next page's exclude list.
+      return allPages.flatMap((p) => p.posts.map((x) => x.id)).slice(-200);
+    },
+  });
+}
+
+/** Like / unlike a post (mirrors POST/DELETE /api/social/posts/:id/like). */
+export async function likePost(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/posts/${id}/like`);
+  else await api.del(`/api/social/posts/${id}/like`);
+}
+
+/** Repost / undo (mirrors POST/DELETE /api/social/posts/:id/repost). */
+export async function repostPost(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/posts/${id}/repost`);
+  else await api.del(`/api/social/posts/${id}/repost`);
+}
+
+/** Bookmark / un-bookmark (mirrors POST/DELETE /api/social/posts/:id/bookmark). */
+export async function bookmarkPost(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/posts/${id}/bookmark`);
+  else await api.del(`/api/social/posts/${id}/bookmark`);
+}
+
+/** A post plus its replies — `GET /api/social/posts/:id`. */
+export interface PostWithMeta extends Post {
+  canReply?: boolean;
+  replyScope?: string;
+}
+export interface PostDetail {
+  post: PostWithMeta;
+  replies: Post[];
+}
+
+/** Load one post + its replies (React Query cached; keyed by id). */
+export function usePost(id: string | number) {
+  return useQuery({
+    queryKey: ['post', String(id)],
+    queryFn: () => api.get<PostDetail>(`/api/social/posts/${id}`),
+    enabled: id != null && id !== '',
+  });
+}
+
+/** Create a post, or a reply when `parentId` is given. Returns the new post. */
+export async function createPost(input: {
+  body: string;
+  parentId?: number;
+  /** A photo, as a data URL. A post with a picture and no words is a real post
+   *  — requiring text as well would mean attaching one and then not being
+   *  allowed to send it. */
+  image?: string;
+  /** What is in the picture, for anyone who cannot see it. */
+  imageAlt?: string;
+  /** 2-4 options. Top-level posts only — the server ignores it on a reply. */
+  poll?: string[];
+  /** How long the poll runs: 1, 3, 7 or 14 days. */
+  pollDays?: number;
+  /** The id of the post this one quotes. */
+  quoteId?: number;
+}): Promise<{ post: Post }> {
+  return api.post<{ post: Post }>('/api/social/posts', {
+    body: input.body,
+    ...(input.parentId != null ? { parentId: input.parentId } : {}),
+    ...(input.image ? { image: input.image } : {}),
+    ...(input.imageAlt ? { imageAlt: input.imageAlt } : {}),
+    /* Two options is the minimum the server accepts, and it silently drops a
+       shorter list — so a half-filled poll must not be sent at all, or the post
+       goes out as plain text and the author never finds out why. */
+    ...(input.poll && input.poll.length >= 2
+      ? { poll: input.poll, pollDays: input.pollDays ?? 7 }
+      : {}),
+    ...(input.quoteId != null ? { quoteId: input.quoteId } : {}),
+  });
+}
+
+/**
+ * A user's public profile — mirrors `GET /api/social/profile/:username`
+ * (see server.js line ~8079). Only the fields the native profile screen needs
+ * are typed; the payload carries more (skills, experience, recommendations, …)
+ * for later phases.
+ */
+export interface ProfileUser {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  banner: string | null;
+  bio: string | null;
+  location: string | null;
+  website: string | null;
+  headline: string | null;
+  verified: boolean;
+  accountType: 'personal' | 'business';
+  joinedAt: string | null;
+  /** Seven days from Monday; each `{closed:true}` or `{open,close}`. */
+  businessHours?: unknown[] | null;
+}
+/**
+ * One line of somebody's work history. NB the list carries NO location and NO
+ * description — those live on the edit form, not on the profile payload, and
+ * declaring them would have rendered two permanently empty lines. Checked
+ * against a real payload rather than assumed.
+ */
+export interface Experience {
+  id: number;
+  title: string;
+  company: string | null;
+  startYear: number | null;
+  endYear: number | null;
+  /** Set when the company is itself an Atwe business account. */
+  companyUserId?: number | null;
+  companyUserUsername?: string | null;
+}
+
+export interface Education {
+  id: number;
+  school: string;
+  degree: string | null;
+  field: string | null;
+  startYear: number | null;
+  endYear: number | null;
+}
+
+export interface Certification {
+  id: number;
+  name: string;
+  issuer: string | null;
+  issueYear: number | null;
+  expireYear: number | null;
+  credentialId: string | null;
+  url: string | null;
+}
+
+export interface Skill {
+  id: number;
+  name: string;
+  endorsements: number;
+  /** True when the VIEWER has endorsed it. */
+  endorsed: boolean;
+  /** Passed the skill assessment — the small tick. */
+  assessed: boolean;
+}
+
+export interface Recommendation {
+  id: number;
+  body: string;
+  relationship: string | null;
+  createdAt: string;
+  author: PostAuthor;
+}
+
+export interface Profile {
+  user: ProfileUser;
+  /** Business accounts: the star rating, so the profile can show it without a
+   *  second request. */
+  reviewSummary?: { count: number; average: number } | null;
+  counts: { followers: number; following: number; posts: number; connections: number | null };
+  connectionState: 'self' | 'connected' | 'pending_out' | 'pending_in' | 'none';
+  isFollowing: boolean;
+  isMe: boolean;
+  posts: Post[];
+  replies: Post[];
+  /** Sits above the timeline with a "Pinned" label, de-duped from the list. */
+  pinnedPost?: Post | null;
+  /** They follow YOU — the chip beside the handle. */
+  followsYou?: boolean;
+  /** Up to three people you follow who follow them, plus the total. */
+  followedBy?: PostAuthor[];
+  followedByCount?: number;
+  /** 0-100 marketplace credibility, computed on read. The payload carries a
+   *  great deal more (certification progress, per-kind rating breakdowns); only
+   *  what is actually shown is named here. */
+  trustScore?: { score: number; tier: string; dealings?: number; ratingAvg?: number | null } | null;
+  experiences?: Experience[];
+  education?: Education[];
+  certifications?: Certification[];
+  skills?: Skill[];
+  recommendations?: Recommendation[];
+}
+
+/**
+ * Posts this account has publicly liked — the Likes tab, lazy-loaded on the
+ * first tap rather than with the profile, because most visits never open it.
+ */
+export function useLikes(username: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['profile-likes', username],
+    queryFn: () => api.get<{ posts: Post[] }>(`/api/social/likes/${username}`),
+    enabled: !!username && enabled,
+  });
+}
+
+/** Load a user's profile by @handle (React Query cached; keyed by username). */
+export function useProfile(username: string | undefined) {
+  return useQuery({
+    queryKey: ['profile', username],
+    queryFn: () => api.get<Profile>(`/api/social/profile/${encodeURIComponent(username!)}`),
+    enabled: !!username,
+  });
+}
+
+/** Follow / unfollow a user by id (mirrors POST/DELETE /api/social/follow/:id). */
+export async function followUser(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/follow/${id}`);
+  else await api.del(`/api/social/follow/${id}`);
+}
+
+/** A trending hashtag — `GET /api/social/trending` → `{ trends: [{tag,count}] }`. */
+export interface Trend {
+  tag: string;
+  count: number;
+}
+export function useTrending() {
+  return useQuery({
+    queryKey: ['trending'],
+    queryFn: () => api.get<{ trends: Trend[] }>('/api/social/trending'),
+    staleTime: 60_000,
+  });
+}
+
+/** A "who to follow" suggestion — `GET /api/social/suggestions` (mapSuggestUser). */
+export interface SuggestUser {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  verified: boolean;
+  headline: string | null;
+  accountType: 'personal' | 'business';
+  followers: number;
+  mutuals: number;
+}
+export function useSuggestions() {
+  return useQuery({
+    queryKey: ['suggestions'],
+    queryFn: () => api.get<{ users: SuggestUser[] }>('/api/social/suggestions'),
+    staleTime: 60_000,
+  });
+}
+
+/** A person search result — `GET /api/search?scope=people&q=` (mapSearchUser). */
+export interface SearchUser {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  verified: boolean;
+  accountType: 'personal' | 'business';
+  headline: string | null;
+}
+export function useSearchPeople(q: string) {
+  const query = q.trim();
+  return useQuery({
+    queryKey: ['search-people', query],
+    queryFn: () =>
+      api.get<{ users: SearchUser[] }>(`/api/search?scope=people&q=${encodeURIComponent(query)}`),
+    enabled: query.length >= 1,
+    staleTime: 30_000,
+  });
+}
+
+/* ── What you can do ABOUT a post ─────────────────────────────────────────── */
+
+/**
+ * Tell the feed you do not want to see this. It hides the post outright and
+ * down-ranks that author for you — it is not a block and it never tells them.
+ */
+export async function notInterested(id: number): Promise<void> {
+  await api.post(`/api/social/posts/${id}/not-interested`, {});
+}
+
+/** Mute an account: their posts leave your feeds, silently. Not a block. */
+export async function muteUser(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/mute/${id}`, {});
+  else await api.del(`/api/social/mute/${id}`);
+}
+
+/** Block: cuts contact in BOTH directions, everywhere. */
+export async function blockUser(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/block/${id}`, {});
+  else await api.del(`/api/social/block/${id}`);
+}
+
+/**
+ * The reasons the server will accept. Anything else is filed as `other`, so the
+ * list here is the server's own `REPORT_REASONS`, not a friendlier invention.
+ */
+export const REPORT_REASONS = [
+  { key: 'harassment', label: 'Harassment or hate' },
+  { key: 'spam', label: 'Spam' },
+  { key: 'scam', label: 'A scam' },
+  { key: 'sensitive', label: 'Sensitive or graphic content' },
+  { key: 'illegal', label: 'Something illegal' },
+  { key: 'privacy', label: 'It shares private information' },
+  { key: 'fake', label: 'It is fake or misleading' },
+  { key: 'other', label: 'Something else' },
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number]['key'];
+
+export async function reportThing(
+  targetType: 'post' | 'user' | 'job' | 'listing' | 'feedpost',
+  targetId: number,
+  reason: ReportReason,
+  note?: string,
+): Promise<void> {
+  await api.post('/api/reports', { targetType, targetId, reason, note });
+}
+
+export async function deletePost(id: number): Promise<void> {
+  await api.del(`/api/social/posts/${id}`);
+}
+
+/** Pin one of your own top-level posts to the top of your profile. */
+export async function pinPost(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/posts/${id}/pin`, {});
+  else await api.del(`/api/social/posts/${id}/pin`);
+}
+
+/* ── Polls, and quoting ───────────────────────────────────────────────────── */
+
+export interface PollOption {
+  id: number;
+  text: string;
+  votes: number;
+}
+
+export interface Poll {
+  options: PollOption[];
+  total: number;
+  /** The option id you picked, or null. One vote each, and it cannot be changed. */
+  myVote: number | null;
+  endsAt: string | null;
+  closed: boolean;
+}
+
+/** Vote, and get the whole post back with the counts already updated. */
+export function votePoll(postId: number, optionId: number) {
+  return api.post<{ post: Post }>(`/api/social/posts/${postId}/vote`, { optionId });
+}
+
+/** The post being quoted, as it rides on the quoting post. */
+export interface QuotedPost {
+  id: number;
+  body: string | null;
+  image: string | null;
+  media: string | null;
+  mediaKind: string | null;
+  created_at: string;
+  author: PostAuthor;
+}
+
+/* ── Curated lists ────────────────────────────────────────────────────────── */
+
+export interface UserList {
+  id: number;
+  name: string;
+  members: number;
+  created_at: string;
+}
+
+export function useLists() {
+  return useQuery({
+    queryKey: ['lists'],
+    queryFn: () => api.get<{ lists: UserList[] }>('/api/social/lists'),
+  });
+}
+export function useListTimeline(id: number | undefined) {
+  return useQuery({
+    queryKey: ['list-timeline', id],
+    /* Posts only — the list's own name comes from `GET /api/social/lists/:id`,
+       which is why the screen asks for both. */
+    queryFn: () => api.get<{ posts: Post[] }>(`/api/social/lists/${id}/timeline`),
+    enabled: id != null,
+  });
+}
+/** The list itself and who is on it — one call, `GET /api/social/lists/:id`. */
+export function useListMembers(id: number | undefined) {
+  return useQuery({
+    queryKey: ['list-members', id],
+    queryFn: () => api.get<{ list: { id: number; name: string }; members: PostAuthor[] }>(
+      `/api/social/lists/${id}`,
+    ),
+    enabled: id != null,
+  });
+}
+export function createList(name: string) {
+  return api.post<{ list: UserList }>('/api/social/lists', { name });
+}
+export function deleteList(id: number) {
+  return api.del(`/api/social/lists/${id}`);
+}
+/**
+ * Adding takes the user id in the BODY as `uid`, and removing takes it in the
+ * PATH. Not symmetric, and guessing it was symmetric produced a 404 that looked
+ * like the list did not exist.
+ */
+export function setListMember(listId: number, userId: number, on: boolean) {
+  if (on) return api.post(`/api/social/lists/${listId}/members`, { uid: userId });
+  return api.del(`/api/social/lists/${listId}/members/${userId}`);
+}
+
+/* ── Close friends ────────────────────────────────────────────────────────── */
+
+/**
+ * Who sees a "close friends" story. They are never told they are on it — that
+ * is the point, and it is worth saying on the screen so nobody assumes
+ * otherwise.
+ */
+export function useCloseFriends() {
+  return useQuery({
+    queryKey: ['close-friends'],
+    queryFn: () => api.get<{ friends: PostAuthor[] }>('/api/close-friends'),
+  });
+}
+export function setCloseFriend(userId: number, on: boolean) {
+  if (on) return api.post(`/api/close-friends/${userId}`, {});
+  return api.del(`/api/close-friends/${userId}`);
+}
+
+/* ── Story highlights ─────────────────────────────────────────────────────── */
+
+export interface HighlightItem {
+  id: number;
+  kind: 'image' | 'video' | 'text';
+  media: string | null;
+  caption: string | null;
+  bg: string | null;
+}
+
+export interface Highlight {
+  id: number;
+  title: string;
+  cover: string | null;
+  count: number;
+  /** True on your own — the viewer offers editing only then. */
+  mine?: boolean;
+  items?: HighlightItem[];
+}
+
+/**
+ * Stories kept past their 24 hours. The server SNAPSHOTS the content into the
+ * highlight, so one survives the story expiring — a highlight is a copy, not a
+ * pointer, and that is why an expired story still shows here.
+ */
+export function useHighlights(username: string | undefined) {
+  return useQuery({
+    queryKey: ['highlights', username],
+    queryFn: () => api.get<{ highlights: Highlight[] }>(`/api/highlights?username=${username}`),
+    enabled: !!username,
+  });
+}
+/**
+ * There is NO `GET /api/highlights/:id` — the list route already returns each
+ * highlight with its items, so a viewer reads from that rather than asking for
+ * one. Written the other way first, and every highlight opened as "not
+ * available" because the route it called does not exist.
+ */
+export function useOneHighlight(username: string | undefined, id: number | undefined) {
+  const q = useHighlights(username);
+  return {
+    ...q,
+    highlight: (q.data?.highlights ?? []).find((h) => h.id === id) ?? null,
+  };
+}
+export function addToHighlight(storyId: number, target: { title: string } | { highlightId: number }) {
+  /* It answers `{ok, highlightId}`, NOT the highlight — reading `.highlight`
+     off this would be undefined forever, which is the exact failure this
+     project's type checker exists to catch. */
+  return api.post<{ ok: true; highlightId: number }>('/api/highlights', { storyId, ...target });
+}
+export function deleteHighlight(id: number) {
+  return api.del(`/api/highlights/${id}`);
+}
+
+/* ── Translate a post ─────────────────────────────────────────────────────── */
+
+/**
+ * Translate into the reader's own language. 503 without an API key, which the
+ * caller shows as "not available" rather than as a failure.
+ */
+export function translatePost(id: number, to: string) {
+  return api.post<{ text: string; from?: string }>(`/api/social/posts/${id}/translate`, { to });
+}

@@ -1,0 +1,509 @@
+import { useEffect, useState } from 'react';
+import {
+  View,
+  ScrollView,
+  FlatList,
+  Pressable,
+  TextInput,
+  ActivityIndicator,
+  RefreshControl,
+  StyleSheet,
+  type ViewStyle,
+} from 'react-native';
+import { useRouter, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Text } from '@/components/Text';
+import { Screen } from '@/components/Screen';
+import { Button } from '@/components/Button';
+import { Avatar } from '@/components/Avatar';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { useTheme } from '@/theme/ThemeProvider';
+import { spacing, radius, post as card } from '@/theme/tokens';
+import { haptics } from '@/lib/haptics';
+import { BrandBar } from '@/components/BrandBar';
+import { ChromeBar, ENGINE_SEARCH_H, useFloatingChrome, BRAND_BAR_H } from '@/components/Chrome';
+import { useChromeRetract } from '@/lib/chromeRetract';
+
+/** What a pane hands back up so the world's chrome can get out of the way. */
+type ScrollHandler = ReturnType<typeof useChromeRetract>['onScroll'];
+import {
+  useTrending,
+  useSuggestions,
+  useSearchPeople,
+  followUser,
+  type SuggestUser,
+  type SearchUser,
+} from '@/api/social';
+import { compact } from '@/lib/format';
+import { HapticInput } from '@/components/HapticInput';
+
+/**
+ * Engine — discovery & explore. A search field over `GET /api/search?scope=people`
+ * on top of the web Search page's empty state (`acSearchDiscover`): Trending +
+ * Who to follow. More scopes (shop / jobs / posts) come in later slices.
+ */
+export default function Engine() {
+  const { c, spacing } = useTheme();
+  const chrome = useChromeRetract();
+  /* The bar hands down its own measured height — see `useFloatingChrome`.
+     The estimate keeps the first frame right so nothing jumps. */
+  const bar = useFloatingChrome(BRAND_BAR_H + ENGINE_SEARCH_H);
+  const [q, setQ] = useState('');
+  const [dq, setDq] = useState(''); // debounced
+  useEffect(() => {
+    const t = setTimeout(() => setDq(q), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  return (
+    <Screen edges={[]}>
+      {/* No ＋ here: Engine is discovery, there is nothing to compose. The web
+          hides it on this world too. */}
+      {dq.trim()
+        ? <SearchResults q={dq} onScroll={chrome.onScroll} pad={bar.pad} />
+        : <Explore spacing={spacing} onScroll={chrome.onScroll} pad={bar.pad} />}
+
+      <ChromeBar retract={chrome.hidden} onLayout={bar.onLayout}>
+      <BrandBar
+        world="engine"
+        moreMenu={[
+          { label: 'Settings', icon: 'settings-outline', onPress: () => router.push('/settings') },
+          { label: 'Saved', icon: 'bookmark-outline', onPress: () => router.push('/starred') },
+          { label: 'Help & feedback', icon: 'help-circle-outline', onPress: () => router.push('/feedback') },
+        ]}
+      />
+      {/* Search bar */}
+      <View style={styles.searchWrap}>
+        <View style={[styles.search, { backgroundColor: c.s2 }]}>
+          <Ionicons name="search" size={18} color={c.t3} />
+          <HapticInput
+            style={[styles.searchInput, { color: c.text }]}
+            placeholder="Search Atwe"
+            placeholderTextColor={c.t3}
+            value={q}
+            onChangeText={setQ}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel="Search"
+            onSubmitEditing={() => { if (q.trim()) router.push(`/search?q=${encodeURIComponent(q.trim())}`); }}
+          />
+          {q.length > 0 && (
+            <Pressable onPress={() => setQ('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color={c.t3} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+      </ChromeBar>
+    </Screen>
+  );
+}
+
+function SearchResults({ q, onScroll, pad }: { q: string; onScroll: ScrollHandler; pad: ViewStyle }) {
+  const { c } = useTheme();
+  const { data, isLoading, isError } = useSearchPeople(q);
+  const users = data?.users ?? [];
+
+  if (isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={c.accent} />
+      </View>
+    );
+  }
+  if (isError) {
+    return (
+      <View style={styles.center}>
+        <Text variant="body" tone="t2">
+          Search failed. Try again.
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <FlatList
+      data={users}
+      keyExtractor={(u) => String(u.id)}
+      renderItem={({ item }) => <PersonRow user={item} />}
+      keyboardShouldPersistTaps="handled"
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+      contentContainerStyle={[users.length ? { paddingBottom: 120 } : styles.emptyWrap, pad]}
+      ListEmptyComponent={
+        <View style={styles.center}>
+          <Text variant="body" tone="t3">
+            No people found for “{q}”.
+          </Text>
+        </View>
+      }
+    />
+  );
+}
+
+function PersonRow({ user }: { user: SearchUser }) {
+  const { c } = useTheme();
+  const router = useRouter();
+  const biz = user.accountType === 'business';
+  return (
+    <Pressable
+      onPress={() => user.username && router.push(`/user/${user.username}`)}
+      style={({ pressed }) => [
+        styles.personRow,
+        { borderBottomColor: c.border },
+        pressed && { backgroundColor: c.s1 },
+      ]}
+    >
+      <Avatar name={user.name} avatar={user.avatar} biz={biz} size={46} />
+      <View style={styles.personMid}>
+        <View style={styles.nameLine}>
+          <Text variant="headline" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {user.name}
+          </Text>
+          {user.verified && <VerifiedBadge />}
+        </View>
+        {user.username && (
+          <Text variant="caption" tone="t3" numberOfLines={1}>
+            @{user.username}
+          </Text>
+        )}
+        {!!user.headline && (
+          <Text variant="caption" tone="t2" numberOfLines={1} style={{ marginTop: 1 }}>
+            {user.headline}
+          </Text>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+function Explore({ spacing, onScroll, pad }: {
+  spacing: ReturnType<typeof useTheme>['spacing'];
+  onScroll: ScrollHandler;
+  pad: ViewStyle;
+}) {
+  const { c } = useTheme();
+  const router = useRouter();
+  const trending = useTrending();
+  const suggestions = useSuggestions();
+  const loading = trending.isLoading || suggestions.isLoading;
+  const trends = trending.data?.trends ?? [];
+  const people = suggestions.data?.users ?? [];
+  const refresh = () => {
+    trending.refetch();
+    suggestions.refetch();
+  };
+
+  /* No early return while it loads: iOS minimises the tab bar against the
+     scroll view it found ONCE, so a world that swaps its scroller out for a
+     spinner never gets the effect. The spinner goes inside instead. */
+  return (
+    <ScrollView
+      contentContainerStyle={[{ paddingBottom: 120 }, pad]}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={trending.isRefetching || suggestions.isRefetching}
+          onRefresh={refresh}
+          tintColor={c.t3}
+        />
+      }
+    >
+      {loading && (
+        <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
+      )}
+      {/* The one thing on Engine that is not a list: ask, in your own words.
+          Blue is identity here, not action — this is the assistant's own colour
+          — so the gradient is the accent and the pill inside it stays white,
+          which keeps "white acts" true even on a coloured ground. */}
+      <Pressable
+        onPress={() => { haptics.tap(); router.push('/ai'); }}
+        style={({ pressed }) => [styles.aiHero, pressed && { opacity: 0.92 }]}
+        accessibilityRole="button"
+        accessibilityLabel="Ask Atwe AI"
+      >
+        <LinearGradient
+          colors={[c.accent, '#3D6BFF', '#6E3AFF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.aiHeroFill}
+        >
+          <View style={{ flex: 1 }}>
+            <Text variant="headline" style={{ color: '#fff' }}>Ask Atwe AI</Text>
+            <Text variant="caption" style={{ color: 'rgba(255,255,255,0.86)', marginTop: 3 }}>
+              Find anything, or get something written
+            </Text>
+          </View>
+          <View style={styles.aiHeroPill}>
+            <Ionicons name="sparkles" size={16} color={c.accent} />
+          </View>
+        </LinearGradient>
+      </Pressable>
+
+      {/* Discover tiles */}
+      <View style={{ paddingTop: spacing.sm }}>
+        <Text variant="headline" style={styles.sectionTitle}>
+          Discover
+        </Text>
+        {/* Engine is discovery only — every personal surface lives on Account.
+            The tiles scroll sideways so the row can grow without shrinking each
+            one to a stamp. */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tileRow}
+        >
+          <DiscoverTile
+            icon="storefront-outline"
+            label="Marketplace"
+            sub="Shop goods & services"
+            onPress={() => router.push('/marketplace')}
+          />
+          <DiscoverTile
+            icon="briefcase-outline"
+            label="Jobs"
+            sub="Roles open now"
+            onPress={() => router.push('/jobs')}
+          />
+          <DiscoverTile
+            icon="people-outline"
+            label="Find workers"
+            sub="People open to work"
+            onPress={() => router.push('/workers')}
+          />
+          <DiscoverTile
+            icon="calendar-outline"
+            label="Events"
+            sub="What's on near you"
+            onPress={() => router.push('/events')}
+          />
+          <DiscoverTile
+            icon="construct-outline"
+            label="Services"
+            sub="Find anyone, for anything"
+            onPress={() => router.push('/services')}
+          />
+          <DiscoverTile
+            icon="business-outline"
+            label="Businesses"
+            sub="The directory"
+            onPress={() => router.push('/businesses')}
+          />
+          <DiscoverTile
+            icon="sparkles-outline"
+            label="Shop with AI"
+            sub="Say what you want"
+            onPress={() => router.push('/ai-shop')}
+          />
+          <DiscoverTile
+            icon="school-outline"
+            label="Courses"
+            sub="Learn something"
+            onPress={() => router.push('/courses')}
+          />
+          <DiscoverTile
+            icon="people-circle-outline"
+            label="Communities"
+            sub="Rooms to join"
+            onPress={() => router.push('/communities')}
+          />
+          <DiscoverTile
+            icon="mail-outline"
+            label="Newsletters"
+            sub="Worth reading"
+            onPress={() => router.push('/newsletters')}
+          />
+          <DiscoverTile
+            icon="color-palette-outline"
+            label="Showcase"
+            sub="Work worth seeing"
+            onPress={() => router.push('/showcase')}
+          />
+        </ScrollView>
+      </View>
+
+      {trends.length > 0 && (
+        <View style={{ paddingTop: spacing.xl }}>
+          <Text variant="headline" style={styles.sectionTitle}>
+            Trending
+          </Text>
+          {trends.map((t, i) => (
+            <View key={t.tag} style={[styles.trendRow, { borderBottomColor: c.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text variant="micro" tone="t3">
+                  {i + 1} · Trending
+                </Text>
+                <Text variant="headline" style={{ color: c.accent, marginTop: 1 }}>
+                  #{t.tag}
+                </Text>
+                <Text variant="caption" tone="t3" style={{ marginTop: 1 }}>
+                  {compact(t.count)} {t.count === 1 ? 'post' : 'posts'}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {people.length > 0 && (
+        <View style={{ paddingTop: spacing.xl }}>
+          <Text variant="headline" style={styles.sectionTitle}>
+            Who to follow
+          </Text>
+          {people.map((p) => (
+            <SuggestRow key={p.id} user={p} />
+          ))}
+        </View>
+      )}
+
+      {trends.length === 0 && people.length === 0 && (
+        <View style={styles.center}>
+          <Ionicons name="search" size={40} color={c.t3} />
+          <Text variant="body" tone="t2" style={{ marginTop: 10, textAlign: 'center' }}>
+            Nothing to explore yet — check back as Atwe grows.
+          </Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function SuggestRow({ user }: { user: SuggestUser }) {
+  const { c } = useTheme();
+  const router = useRouter();
+  const biz = user.accountType === 'business';
+  const [following, setFollowing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const toggle = async () => {
+    const next = !following;
+    setFollowing(next);
+    setBusy(true);
+    try {
+      await followUser(user.id, next);
+    } catch {
+      setFollowing(!next);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Pressable
+      onPress={() => user.username && router.push(`/user/${user.username}`)}
+      style={({ pressed }) => [
+        styles.personRow,
+        { borderBottomColor: c.border },
+        pressed && { backgroundColor: c.s1 },
+      ]}
+    >
+      <Avatar name={user.name} avatar={user.avatar} biz={biz} size={48} />
+      <View style={styles.personMid}>
+        <View style={styles.nameLine}>
+          <Text variant="headline" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {user.name}
+          </Text>
+          {user.verified && <VerifiedBadge />}
+        </View>
+        {user.username && (
+          <Text variant="caption" tone="t3" numberOfLines={1}>
+            @{user.username}
+          </Text>
+        )}
+        {!!user.headline && (
+          <Text variant="caption" tone="t2" numberOfLines={1} style={{ marginTop: 1 }}>
+            {user.headline}
+          </Text>
+        )}
+        {user.mutuals > 0 && (
+          <Text variant="micro" tone="t3" style={{ marginTop: 2 }}>
+            {user.mutuals} mutual{user.mutuals === 1 ? '' : 's'}
+          </Text>
+        )}
+      </View>
+      <Button
+        title={following ? 'Following' : 'Follow'}
+        kind={following ? 'secondary' : 'primary'}
+        loading={busy}
+        onPress={toggle}
+        style={styles.followBtn}
+      />
+    </Pressable>
+  );
+}
+
+function DiscoverTile({
+  icon,
+  label,
+  sub,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  sub: string;
+  onPress: () => void;
+}) {
+  const { c, radius } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.tile,
+        { backgroundColor: c.s1, borderRadius: radius.card },
+        pressed && { opacity: 0.85 },
+      ]}
+    >
+      <View style={[styles.tileIcon, { backgroundColor: c.accentDim }]}>
+        <Ionicons name={icon} size={22} color={c.accent} />
+      </View>
+      <Text variant="headline" style={{ marginTop: 10 }}>{label}</Text>
+      <Text variant="caption" tone="t3" style={{ marginTop: 2 }}>{sub}</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  searchWrap: { paddingHorizontal: 12, paddingBottom: 10, height: ENGINE_SEARCH_H },
+  aiHero: { marginHorizontal: spacing.gutter, marginTop: spacing.sm, borderRadius: card.cardRadius, overflow: 'hidden' },
+  aiHeroFill: { flexDirection: 'row', alignItems: 'center', padding: 18 },
+  aiHeroPill: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center', marginLeft: 12,
+  },
+  tileRow: { paddingHorizontal: spacing.gutter, gap: 12 },
+  tile: { width: 176, padding: 14 },
+  tileIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  search: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    height: 40,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 16, paddingVertical: 0 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, minHeight: 200 },
+  emptyWrap: { flexGrow: 1 },
+  sectionTitle: { paddingHorizontal: spacing.gutter, marginBottom: 6, fontSize: 20 },
+  trendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.gutter,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  personRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.gutter,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  personMid: { flex: 1, marginLeft: 12, marginRight: 10 },
+  nameLine: { flexDirection: 'row', alignItems: 'center' },
+  followBtn: { minHeight: 34, paddingHorizontal: spacing.gutter },
+});

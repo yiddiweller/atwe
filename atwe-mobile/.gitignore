@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+/ios
+/android
+
+# Env / secrets
+.env
+.env.local
+*.p8
+*.p12
+*.mobileprovision
+
+# Misc
+.DS_Store
+*.log
+npm-debug.*
+
+# The web build used only to LOOK at the screens during development.
+dist-web/
