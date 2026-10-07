@@ -313,8 +313,13 @@ async function direct(browser, F, vp, tag) {
       tag + ' 34. direct ' + u + ' rebuilds exactly that node (one Settings body, ' + (lf ? 'its sheet' : 'no sheet') + '), no fabricated prev', [s.path, s.bodies, s.leaves, s.stale, s.st]);
     /* NB boot opens the default world before the deep link (pre-existing, batch 2: every
        deep link does it), so a replace to the world's address may come first. What matters
-       here: boot never PUSHES, and the address it settles on is this node. */
-    say(bootEv.every((e) => e.kind === 'replace' || e.kind === 'initial') && bootEv.length && bootEv[bootEv.length - 1].to.path === u && s.len === 2,
+       here: boot never PUSHES, and the address it settles on is this node.
+       NB a boot may write NOTHING (Batch 12B, proved by holding frames): acSyncPath coalesces
+       per frame, so when the first frame lands after the deep link has opened, the world write
+       and the node's write merge into ONE, which is a no-op because the URL already is the
+       node. Requiring a replace failed on that correct outcome; the address itself is the
+       proof of where it settled. */
+    say(bootEv.every((e) => e.kind === 'replace' || e.kind === 'initial') && s.path === u && (!bootEv.length || bootEv[bootEv.length - 1].to.path === u) && s.len === 2,
       tag + ' 34. ...booting it never pushes, settles on ' + u + ', one Atwe entry', [bootEv.map((e) => [e.kind, e.to && e.to.path]), s.len]);
     if (['hub', 'privacy'].includes(pg) && !lf || ['devices', 'currency', 'whats-new', 'muted-words'].includes(lf)) {
       await reload(p);
