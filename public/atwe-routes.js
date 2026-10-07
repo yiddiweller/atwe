@@ -335,10 +335,11 @@
                                                           parent: 'post', family: 'modal', seo: 'noindex' }),
   ];
 
-  /* Words a username can never be because the ROUTER treats them as not-a-handle
-     today, beyond the first segment of a live route. This is the literal defensive
-     set that public/index.html's RESERVED_PATHS carries; the registry test requires
-     parseReserved() to equal RESERVED_PATHS exactly, so neither can drift. */
+  /* Words a NEW username can never be, beyond the first segment of a live route.
+     Only some of them are also claimed by the ROUTER — see PARSE_RESERVED below:
+     the rest are kept by any account that already held them (build 1877). The
+     registry test requires parseReserved() to equal index.html's RESERVED_PATHS
+     exactly, so the two routers cannot drift. */
   const PARSE_DEFENSIVE = [
     'index.html', 'admin.html', 'locked.html', 'sw.js', 'manifest.json',
     'manifest.webmanifest', 'favicon.png', 'favicon.ico', 'robots.txt', 'sitemap.xml',
@@ -479,11 +480,34 @@
     return params;
   }
 
-  const PARSE_RESERVED = (() => {
-    const set = new Set(PARSE_DEFENSIVE);
+  /* GRANDFATHERED HOLDERS OF A DEFENSIVE WORD KEEP THEIR PROFILE (build 1877).
+     PARSE_DEFENSIVE is two different things in one list, and only one of them is an
+     address. The ROUTER claims a word (so it can never be read as a handle) only when
+     something real answers there or a code bug produces it:
+       · the first segment of a LIVE route (added below, from the route table itself);
+       · a server-owned root (SERVER_ROOTS);
+       · a file name (anything with a dot: express.static serves it first);
+       · a JavaScript value a bug can put in a path (PARSE_CODE_GUARDS).
+     Every other defensive word (`atwe`, `support`, `about`, `official` …) is reserved
+     for NEW usernames only — exactly what NEAR_TERM already is — so an account that
+     held one before it was reserved keeps a working atwe.com/<name>, and an address
+     nobody holds is simply an unknown profile (404, noindex). A word that later gains
+     a real route moves into the router set by itself, and the route wins. */
+  const PARSE_CODE_GUARDS = ['null', 'undefined', 'true', 'false'];
+  const LIVE_ROOTS = (() => {
+    const set = new Set();
     liveRoutes().forEach((x) => [x.pattern].concat(x.aliases).forEach((p) => { const f = firstLiteral(p); if (f) set.add(f); }));
     return set;
   })();
+  const PARSE_RESERVED = (() => {
+    const set = new Set(LIVE_ROOTS);
+    PARSE_DEFENSIVE.forEach((w) => {
+      if (w.includes('.') || SERVER_ROOTS.includes(w) || PARSE_CODE_GUARDS.includes(w)) set.add(w);
+    });
+    return set;
+  })();
+  /* Defensive words a NEW username can never be, which an EXISTING holder keeps. */
+  const HOLDER_DEFENSIVE = PARSE_DEFENSIVE.filter((w) => !PARSE_RESERVED.has(w)).sort();
 
   /* The order a path is tried in. Literal-first patterns before handle patterns, and
      within the handle family the most specific shape first. */
@@ -541,6 +565,12 @@
   /* The words the ROUTER refuses as a handle, today. Equal to index.html's RESERVED_PATHS. */
   function parseReserved() { return [...PARSE_RESERVED].sort(); }
 
+  /* The words seeded into reserved_usernames on every boot (routes.js SYSTEM_ROUTES):
+     the router set plus the holder-kept defensive words. It is deliberately the SAME
+     set it was before build 1877 — narrowing what the router claims must not narrow
+     what a new account is refused. */
+  function seedReserved() { return [...new Set([...PARSE_RESERVED, ...PARSE_DEFENSIVE])].sort(); }
+
   /* Every first path segment a route (live or planned, current or `next`) uses. */
   function routeRoots() {
     const set = new Set();
@@ -553,7 +583,7 @@
      roots + near-term namespaces. Static filenames are added by the caller that can
      read the /public directory (server.js), since this file cannot touch a disk. */
   function allocationReserved() {
-    const set = new Set(PARSE_RESERVED);
+    const set = new Set(seedReserved());
     routeRoots().forEach((x) => set.add(x));
     SERVER_ROOTS.forEach((x) => set.add(x));
     NEAR_TERM.forEach((x) => set.add(x));
@@ -843,10 +873,11 @@
   return {
     version: 1,
     ROUTES, PARAM_TYPES, SETTINGS_PAGES, SETTINGS_TREE, SETTINGS_LEAVES, PROFILE_SECTIONS, PARSE_DEFENSIVE, SERVER_ROOTS,
+    PARSE_CODE_GUARDS, HOLDER_DEFENSIVE,
     ACCOUNT_SECTIONS, ACCOUNT_TOOLS,
     NEAR_TERM, FILE_EXT_RE, NOTIF_TARGETS,
     get, match, build, splitPath, firstLiteral, liveRoutes, slugify, idSlug, parseIdSlug,
-    parseReserved, routeRoots, allocationReserved, usernameShapeError,
+    parseReserved, seedReserved, routeRoots, allocationReserved, usernameShapeError,
     legacyRedirect, safeNext,
     BROWSER, NATIVE, WEB_ACTION_QUERY, OWN_HOSTS, appLinkComponents, appLinkMatch, appLinkAllows,
     splitAtweUrl, nativeLink, aasaDocument,

@@ -23016,7 +23016,7 @@ html.mo-reduced .notif-detail{transition:none!important;}
      THE ?v= IS THE BUILD, and test/route-registry.test.js fails if it drifts from
      ATWE_BUILD: the service worker serves static files cache-first, so an unversioned
      URL would hand a new shell yesterday's registry. Bump it with ATWE_BUILD. -->
-<script src="/atwe-routes.js?v=1876"></script>
+<script src="/atwe-routes.js?v=1877"></script>
 <script>
 /* ═══════════════════════════════════════════════
    CRASH TELEMETRY — must run FIRST (before anything that could throw).
@@ -23042,7 +23042,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1876'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1877'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -24395,10 +24395,14 @@ const ENTITY_ROUTES = ['post', 'job', 'listing', 'event', 'group', 'circle', 'co
    by the ONE rule in the route registry (ATWE_ROUTES.idSlug); the id is authoritative. */
 const SLUG_ENTITIES = ['listing', 'job', 'event', 'service', 'course', 'newsletter'];
 
-/* Words a username can NEVER be, because they are real addresses on atwe.com.
-   Derived from the tables above so it can never fall out of step with them,
-   plus the file names and a defensive set of words that would invite
-   impersonation or confusion if someone registered them. */
+/* Words the ROUTER never reads as a handle, because something real answers at
+   atwe.com/<word>: a route (derived from the tables above, so it can never fall out
+   of step with them), a server-owned root, a file, or a value only a code bug puts in
+   a path. Defensive words such as `atwe`, `support` or `about` are NOT here (build
+   1877): a NEW account can never take one (the server refuses it), but an account
+   that already held one keeps a working atwe.com/<name>, and an address nobody holds
+   is an unknown profile. Must equal ATWE_ROUTES.parseReserved() exactly
+   (test/route-registry.test.js). */
 const RESERVED_PATHS = (() => {
   const set = new Set([
     // A tool marked flat:false has no /<key> address, so its key is not a reserved root.
@@ -24407,16 +24411,10 @@ const RESERVED_PATHS = (() => {
     // real files served from /public
     'index.html', 'admin.html', 'locked.html', 'sw.js', 'manifest.json',
     'manifest.webmanifest', 'favicon.png', 'favicon.ico', 'robots.txt', 'sitemap.xml',
-    // infrastructure + reserved-for-later
-    'api', 'admin', 'static', 'assets', 'public', 'cdn', 'media', 'files', 'download',
-    'beam', 'engine', 'profile', 'account', 'register', 'logout', 'signin', 'signout',
-    'password', 'auth', 'oauth', 'sso', 'verify', 'confirm', 'invite', 'welcome',
-    'about', 'contact', 'support', 'legal', 'privacy', 'privacy-policy', 'terms',
-    'terms-of-service', 'cookies', 'security', 'status', 'blog', 'press', 'careers',
-    'pricing', 'plans', 'upgrade', 'pro', 'premium', 'billing', 'checkout', 'pay',
-    'company', 'companies', 'business', 'organization', 'org', 'page', 'pages',
-    'atwe', 'atweai', 'atwe-ai', 'official', 'staff', 'team', 'root', 'system',
-    'null', 'undefined', 'true', 'false', 'me', 'you', 'new', 'edit', 'delete',
+    // server-owned roots and the world roots
+    'api', 'admin', 'beam', 'engine', 'profile', 'account', 'company', 'team', 'me',
+    // a value only a bug puts in a path ('/' + undefined)
+    'null', 'undefined', 'true', 'false',
   ]);
   return set;
 })();

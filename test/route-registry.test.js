@@ -669,7 +669,10 @@ test('batch 7: malformed typed paths reject cleanly and never become a username'
 test('batch 7: a business stays at its username; cart stays a modal; no checkout or Engine-AI route', () => {
   assert.strictEqual(R.match('/someshop').name, 'profile');
   for (const n of ['business', 'engine-business', 'checkout', 'engine-ai', 'shop-ai']) assert.strictEqual(R.get(n), null, n);
-  assert.strictEqual(R.match('/business/5'), null);
+  // No business ENTITY route: `business` is a defensive word (build 1877), so /business/5
+  // is at most the generic profile lookup — never a typed business page.
+  const biz = R.match('/business/5');
+  assert.ok(biz === null || biz.name === 'profile', JSON.stringify(biz));
   assert.strictEqual(R.match('/engine/business/5'), null);
   assert.strictEqual(R.match('/engine/ai'), null);
   const cart = R.get('cart');
@@ -821,7 +824,10 @@ test('batch 9: safeNext keeps Atwe-local live routes, canonicalised, and refuses
     'https://evil.com', 'http://atwe.com/x', 'javascript:alert(1)', 'JaVaScRiPt:alert(1)', '/javascript:alert(1)',
     'data:text/html,x', '  //evil.com', '/\t/evil.com', '/%09/evil.com', '/%0d%0aSet-Cookie:x', '/beam\u0000', '',
     'evil.com', '../account', '/login', '/signup?next=/x', '/reset-password?token=t', '/%E0%A4%A', null, 42, {}, '/' + 'a'.repeat(700),
-    '/official', '/settings/nope'];
+    '/undefined', '/settings/nope'];
+  // (A defensive word such as /official is profile-shaped since build 1877 — a local,
+  // harmless address an existing holder answers — so it is no longer the example of a
+  // non-route here; a code-guard word is.)
   bad.forEach((b) => assert.strictEqual(R.safeNext(b), null, JSON.stringify(b) + ' must be refused'));
 });
 

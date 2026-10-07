@@ -4,13 +4,15 @@
  * Since Route Audit batch 0/1 these come from ONE place, the route registry
  * (public/atwe-routes.js), which the page, the server and the tests all read:
  *
- *   SYSTEM_ROUTES        the words the ROUTER refuses as a handle today. Seeded into
- *                        the reserved_usernames table on every boot (lockSystemRoutes)
- *                        and used by the crawler preview to skip non-profiles. Its value
- *                        is unchanged from the literal list this file used to carry —
- *                        test/routes.test.js still requires it to equal the client's
- *                        RESERVED_PATHS, and test/route-registry.test.js requires the
- *                        registry to equal that too.
+ *   SYSTEM_ROUTES        the words seeded into the reserved_usernames table on every
+ *                        boot (lockSystemRoutes). Since build 1877 this is the registry's
+ *                        seedReserved(): the router set PLUS the defensive words an
+ *                        existing holder keeps (`atwe`, `support`, `about` …). Its value
+ *                        is exactly what it was in build 1876 — narrowing what the
+ *                        ROUTER claims must never narrow what a new account is refused.
+ *                        The router's own set is REGISTRY.parseReserved(), which
+ *                        test/routes.test.js and test/route-registry.test.js hold equal
+ *                        to the client's RESERVED_PATHS.
  *
  *   ALLOCATION_RESERVED  the larger set a NEW username is checked against: the above
  *                        plus every approved future route root, the server-owned roots
@@ -22,7 +24,7 @@
  */
 const REG = require('./public/atwe-routes.js');
 
-const SYSTEM_ROUTES = REG.parseReserved();
+const SYSTEM_ROUTES = REG.seedReserved();
 const ALLOCATION_RESERVED = REG.allocationReserved();
 
 module.exports = { SYSTEM_ROUTES, ALLOCATION_RESERVED, REGISTRY: REG };
