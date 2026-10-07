@@ -24466,6 +24466,20 @@ const SELF_ROUTED_SCREENS = ['acProfileScreen', 'acPostViewScreen', 'acCircleScr
    Self-correcting: if a surface opens by some path nobody thought of, the next
    sync still lands on the right address. */
 let _pathSyncQueued = false;
+/* BOOT ENDS ONLY ONCE ITS ARRIVAL ADDRESS IS WRITTEN. consumePendingRoute ends the boot phase
+   on a 500ms timer, and the deep link it opens writes its address on the NEXT animation
+   frame (acSyncPath). Those are two independent clocks: when the main thread stalls, the
+   frame can land after the timer, and the arrival write - still asked for as a push by
+   showOverlay - became a real push, leaving a fabricated entry behind a direct link
+   (measured: 1 run in 6 on the release tree, 2 in 6 on the tree before it). So if that write
+   is still queued when the timer fires, boot ends right after it runs, inside the same frame
+   callback. Nothing else changes: the first-gesture and 10s fallbacks still end boot on
+   their own, and every write after this one has its normal push/replace meaning. */
+let _bootEndAfterSync = false;
+function acEndBootWhenWritten() {
+  if (_pathSyncQueued) { _bootEndAfterSync = true; return; }
+  try { AtweHistory.endBoot(); } catch (e) {}
+}
 /* THE STRONGEST HISTORY INTENT ASKED FOR IN THE FRAME BEING COALESCED. acSyncPath is
    rAF-debounced, so several callers land in one frame — and a handover is exactly that
    shape: the panel being left syncs (push:false, it is not a new destination) and the
@@ -24558,7 +24572,9 @@ function acSyncPath(opts) {
       if (_appTab === 'search' && _searchScope === 'jobs') { acSetPath(acRouteKeyPath('jobs'), _push); return; }
       if (_appTab === 'home' && _acFeedScope === 'bookmarks') { acSetPath('/collections', _push); return; }
       acSetPath(WORLD_PATH[_appTab] || '/', _push);
-    } catch (e) {}
+    } catch (e) {} finally {
+      if (_bootEndAfterSync) { _bootEndAfterSync = false; try { AtweHistory.endBoot(); } catch (e) {} }
+    }
   });
 }
 
@@ -25825,7 +25841,7 @@ function acAuthNextTake() {
 function consumePendingRoute() {
   /* The arrival entry is built once whatever this schedules has run (the latest opener
      below fires at +220ms; a Settings deep link adds +60ms and a frame). */
-  setTimeout(() => { try { AtweHistory.endBoot(); } catch (e) {} }, 500);
+  setTimeout(acEndBootWhenWritten, 500);
   /* A destination written down before a full page load. It applies only when this load
      did not arrive with a destination of its own (Home, or a sign-in page): an address
      the member opened just now always wins over one remembered from before. */
