@@ -224,10 +224,19 @@ test('usernames: the app accepts exactly what the web router accepts', () => {
     ['x'.repeat(41), false], ['.john', false], ['john.', false], ['-john', false], ['john_', false], ['a..b', false], ['john.png', false]]) {
     assert.equal(R.usernameShapeError(n) === null, ok, n);
   }
-  // reserved roots are never a profile, in the app or on the iPhone
-  for (const w of ['settings', 'beam', 'engine', 'account', 'official', 'staff', 'api', 'admin', 'register']) {
+  // real roots are never a profile, in the app or on the iPhone
+  for (const w of ['settings', 'beam', 'engine', 'account', 'api', 'admin', 'me', 'undefined']) {
     const l = R.nativeLink('https://atwe.com/' + w);
     assert.ok(!(l.kind === 'native' && l.route === 'profile'), w);
+  }
+  // A defensive word (build 1877) is refused for NEW usernames but is not an address of
+  // its own, so it goes to the profile lookup — on the web and on the iPhone alike —
+  // and only an account that already held it answers there (@atwe, @support).
+  for (const w of ['atwe', 'support', 'official', 'staff', 'register']) {
+    assert.ok(R.HOLDER_DEFENSIVE.includes(w), w + ' is a holder-kept defensive word');
+    const l = R.nativeLink('https://atwe.com/' + w);
+    assert.ok(l.kind === 'native' && l.route === 'profile' && l.path === '/user/' + w, w);
+    assert.equal(web('/' + w), w, w + ' on the web');
   }
 });
 

@@ -8362,13 +8362,16 @@ reserves its name so no member can register a username that shadows it. The shap
 `gift_cards` or `giftCards`). `test/routes.test.js` enforces that mechanically.
 
 **Reserved usernames are derived, not hand-maintained.** `RESERVED_PATHS` in
-`index.html` is built FROM `APP_ROUTES` plus the auth/entity prefixes plus a
-defensive set (impersonation-bait like `official`, `staff`, `atwe`). `routes.js`
-holds the server's matching `SYSTEM_ROUTES`, which `lockSystemRoutes()` seeds into
-the `reserved_usernames` table on every boot — so `usernameReserved()` blocks them
-at signup AND at username-change. **There is no build step, so the two copies
-cannot literally share a module; `test/routes.test.js` fails if they ever drift.**
-Add a route → add the word in BOTH places, or the test tells you.
+`index.html` is the ROUTER set: built FROM `APP_ROUTES` plus the auth/entity prefixes,
+the file names, the server roots and four code-bug words (`null`/`undefined`/`true`/
+`false`). The defensive set (impersonation-bait like `official`, `staff`, `atwe`,
+`support`, `about`) is NOT in it since build 1877 — see "An account that already held a
+reserved word keeps its profile" below. `routes.js` `SYSTEM_ROUTES` (router set + the
+defensive words, 140, unchanged) is seeded into `reserved_usernames` on every boot, and
+`newUsernameError` refuses the wider allocation set at signup AND at username-change.
+**There is no build step, so the two copies cannot literally share a module;
+`test/routes.test.js` fails if they ever drift.** Add a route → add the word in BOTH
+places, or the test tells you.
 
 **The address bar is DERIVED, not written by hand.** Rather than 45 openers each
 remembering to set a URL, **`acSyncPath()`** works out what the address should be
@@ -8481,10 +8484,12 @@ refused name as `reserved` so the signup screen says so up front.
   and the name it already holds always passes. Nobody is renamed; saving a profile never
   fails because a handle predates the rule.
 - **The DATABASE SEED IS UNCHANGED.** `routes.js` `SYSTEM_ROUTES` (seeded into
-  `reserved_usernames` on every boot) is exactly the ROUTER's own set — 136 words in
-  batch 1, **137 since batch 3 made `/go` a route** (so a deploy seeds one new row,
-  `go`). The wider set is enforced in code only, so nobody who already holds e.g. `shop`
-  loses anything. `test/usernames.test.js` asserts SYSTEM_ROUTES == the router set.
+  `reserved_usernames` on every boot) was the ROUTER's own set until build 1876 — 136
+  words in batch 1, 137 once `/go` became a route, 140 after batch 7. **Since build 1877
+  it is `seedReserved()`: the router set PLUS the defensive words**, i.e. the same 140
+  words, while the router itself claims only 82. The wider set is enforced in code only,
+  so nobody who already holds e.g. `shop` loses anything. `test/usernames.test.js`
+  asserts the seed is still exactly those 140 words.
 - **Production release gate:** `node tools/reserved-collisions.js <database-url>` runs the
   approved Route Audit §45 query inside `BEGIN READ ONLY` and lists every existing handle
   the gate would refuse for a NEW account. No default database, on purpose. Hits are
@@ -8494,6 +8499,50 @@ refused name as `reserved` so the signup screen says so up front.
   names still pass, grandfathering, signup/exists/admin-assign/system-account/paid-claim
   over real HTTP, and a source check that every write door calls the gate. Self-tested:
   removing the admin-assign guard or the grandfather clause fails it by name.
+
+### An account that already held a reserved word keeps its profile (build 1877)
+
+**Production 1876 answered `atwe.com/atwe` and `atwe.com/support` with 404 "Page not
+found"**, while both are real, founder-approved, grandfathered accounts (the production
+collision scan found exactly these two). The words had sat in the router's DEFENSIVE list
+since "Routing, phase 1" (25 Aug 2026), so the app had never opened them as profiles;
+batch 9 then made the server agree, and the shell's 200 became a 404. A signed-out visitor
+saw the login screen, a crawler saw a missing page.
+
+**The defensive list was two things in one, and only one of them is an address.** The
+ROUTER (`PARSE_RESERVED` in the registry = `RESERVED_PATHS` in the app) now claims a word
+only when something real answers there: the first segment of a LIVE route, a server root
+(`SERVER_ROOTS`), a file name (anything with a dot), or `PARSE_CODE_GUARDS` — `null`,
+`undefined`, `true`, `false`, which only a bug writes into a path. Everything else in
+`PARSE_DEFENSIVE` (`HOLDER_DEFENSIVE`, 58 words: `atwe`, `support`, `about`, `official`,
+`staff` …) is reserved for NEW usernames only — exactly the rule `NEAR_TERM` has always
+followed — so an existing holder keeps `atwe.com/<name>`, and an address nobody holds is an
+unknown profile (404, noindex, no card), never a fake one.
+
+| set | what | size |
+|---|---|---|
+| `parseReserved()` | the router: never read as a handle | 82 (was 140) |
+| `seedReserved()` = `SYSTEM_ROUTES` | seeded into `reserved_usernames` at boot | 140, **unchanged** |
+| `allocationReserved()` | refused for a NEW username (`newUsernameError`) | 217, **unchanged** |
+
+**A real route always wins, by construction**: live roots are in the router set whatever
+anyone holds, and a defensive word that later gains a route moves into it by itself. Nothing
+in the database changed, no account was renamed, and there is no per-name special case —
+`@atwe` and `@support` resolve because they are holders, the same as any other would.
+
+**The iPhone follows automatically**: the AASA's step 3 excludes only router words, so the
+regenerated file (`node tools/native-links.js`) hands `/atwe` and `/support` to the app's
+profile screen. **`/?u=atwe` already worked** (it builds the profile route directly) and
+then rewrote the address to `/atwe`, which broke on reload; it no longer does.
+
+Guarded by **`test/grandfathered-reserved.test.js`** (11, real server): a normal profile,
+`/atwe` and `/support` on the server, the app router and the iPhone mapping, the rule being
+general (`official`), an unowned word 404 with no card, a real route beating a holder of
+`beam`, new signup and rename-into refused, deactivated/missing identical, username history
+followed, and the signed-out peek. Self-tested: the 1876 router fails 5 of the 11 by name.
+Four older assertions that encoded "a defensive word is never a profile" were reframed onto
+what they protected (no business entity route; `safeNext` refuses a non-address; real roots
+are never profiles; the seed is unchanged).
 
 ### History v2 + NavEvent — `AtweHistory` (Route Audit batch 2)
 
