@@ -8301,8 +8301,9 @@ page out of it, and the same address always rebuilds the same node from any star
   `traverse()`: an entry at the bare `/settings` carrying `setPage` is rewritten ONCE in place
   (`AtweHistory.rewriteLegacy`) to the page's real URL, `setPage`/`via` dropped, and is an
   ordinary URL-routed entry from then on. It emits no NavEvent of its own.
-- **Titles:** a Settings route declares `title` in the registry; `acSyncTabTitle` shows
-  `<title> · Atwe` (unread count still leads). No other route declares one yet.
+- **Titles:** Settings and Account routes declare a `title` in the registry, but since build
+  1878 the browser tab never shows it: the tab always reads exactly "Atwe" (see "The browser
+  tab and Google say Atwe"). The registry titles are data only.
 - **Known, pre-existing (batch 2), left alone:** a direct deep link's boot first replaces the
   address to the default world's (`appTab` at boot), then to the link. It never pushes and
   the address settles on the link; it applies to every deep link, not only Settings.
@@ -8891,6 +8892,80 @@ AASA claimed `/*`, so the iPhone grabbed every atwe.com link whether or not the 
   Android claim is release work, deliberately not done here.
 - **Serving it needs no build bump**: the server reads the AASA file per request, and the web never
   reads `native`, so an old cached registry in a browser simply lacks data it does not use.
+
+## The browser tab and Google say "Atwe" (build 1878)
+
+The founder's locked decisions after the brand/SEO audit of build 1877:
+
+| | rule |
+|---|---|
+| the browser tab | always exactly `Atwe`: no unread count, no "(3)", no page name ("Wallet · Atwe") |
+| Google's site name | `Atwe`: WebSite `name` "Atwe", `url` https://atwe.com/, and **no `alternateName`** |
+| the company | Organization `name` "Atwe", `legalName` "Atwe Inc.", `url` https://atwe.com/ |
+| product-facing titles | always "Atwe", never "Atwe Inc." |
+| the description | "The network built for business. Connect, message, hire, sell and grow, all in one place." word for word |
+
+**The tab.** `acSyncTabTitle()` writes only the literal `'Atwe'`, and only if the document
+says something else. The static shell's `<title>` is already "Atwe", so for a person it never
+writes at all (the probe records every write and requires none). Unread state lives in the
+bell and the Beam badge. The unread total still drives the installed app's icon badge
+(`navigator.setAppBadge`), deliberately unchanged, and so does the second writer of that badge
+(`acSetBadge`, messages only). `acRouteTitle()` is deleted.
+
+**DO NOT PUT `alternateName` BACK.** It listed atwe.com, Atwe.com and www.atwe.com. Google uses
+an alternate name when its confidence in the main one drops, so our own markup was handing it
+exactly the label the founder did not want ("atwe.com" as the site name in results). Do not
+replace it with "Atwe Inc." either: Google could show that.
+
+**THE CANONICAL ONLY EVER NAMES A PUBLIC, INDEXABLE ADDRESS (`acCanonicalIndexable`).** A
+signed-out visit to atwe.com, which is exactly what Googlebot is, runs `openLogin()`, which
+rewrites the visible address to /login. `acSetPath` used to move the canonical tag and og:url
+with every address change, so the home page's RENDERED HTML told Google its real version was
+https://atwe.com/login, a page the server answers noindex, while the raw HTML said
+https://atwe.com/. Google's rule is that a canonical set by JavaScript must equal the one in the
+original HTML. Now `acSetCanonical` moves them only for the home page and the routes the
+registry marks `seo: 'index'` (profile, post, listing, job, event, browse pages...); a private
+or noindex address leaves whatever is there; and a document the server sent with a robots
+noindex meta (crawler copies of 404s, private posts, /login) never gets a canonical put back.
+**The /login address itself did not change: this is not a routing change**, and public pages
+keep exactly the canonical they had. Nothing in the app reads the canonical or og:url, so a
+person sees no difference.
+
+**Not search results, still one tap away, never through robots.txt:**
+
+| | page | header |
+|---|---|---|
+| the admin dashboard | `admin.html` carries `noindex, nofollow` | every response on admin.atwe.com: `X-Robots-Tag: noindex, nofollow` |
+| `/privacy.html`, `/terms.html`, `/guidelines.html` | each carries `noindex, follow` | `X-Robots-Tag: noindex, follow` (`NOINDEX_DOCS` in server.js) |
+
+Google was showing the privacy page as a brand sitelink because it was the only real link on
+the rendered home page (twice: "Privacy Policy" and "Cookie Use"). A page a crawler may not
+fetch is a page whose noindex it never reads, so **robots.txt is unchanged and must stay that
+way.** The sign-in screen's Privacy Policy link must also stay: Google's sign-in (OAuth)
+verification requires the home page to link the privacy policy. There is still no sitemap,
+deliberately (not yet).
+
+**KNOWN SEO DEBT, deliberately left for its own task:** for a link-preview crawler the server
+sends a per-page title ("Name (@user) · Atwe"), and `acSyncTabTitle` resets it to "Atwe" once
+Google renders the page, so Google sees "Atwe" as the title of every profile, post and listing.
+It was already so before build 1878; `brandtitle.js` prints it as a note. Fixing it means letting
+a crawler's copy keep the server's title, a separate founder decision.
+
+Guarded by `test/brand-meta.test.js` (18: the shipped head, the schema, the app's own tab-title
+and canonical functions run in a sandbox against the real route registry for every literal live
+route, robots.txt, and a live server for the home page, the legal documents, the admin host,
+a profile and the unchanged statuses) and `scratchpad/brandtitle.js` (71, real browser: real
+unread notifications and messages, every world, Settings, an Account tool, a profile and a
+post, Back, Forward, reload and direct loads; the in-app badges; the canonical inside the app;
+Googlebot rendering the home page with atwe.com mapped to the local server; admin and legal
+noindex over HTTP). Its self-tests: `--break` serves the build-1877 tab title, canonical and
+schema inside the page (36 named failures), and `BASE=<a build-1877 server>` runs it against the
+old server (41). **Two traps it hit:** Playwright's `route.fetch()` runs in Node, not the
+browser, so it ignores `--host-resolver-rules` and resolves the REAL atwe.com (the proxy
+answered 403 and the self-test failed for an environmental reason); it now fetches the local
+server explicitly with `host: atwe.com`. And a probe that wants the SERVER's status must use
+Node fetch or a context with `serviceWorkers: 'block'`, because an installed service worker
+answers every navigation with the cached shell.
 
 ## Search & typeahead
 

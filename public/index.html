@@ -23,8 +23,12 @@
 <meta name="twitter:title" content="Atwe"/>
 <meta name="twitter:description" content="The network built for business. Connect, message, hire, sell and grow, all in one place."/>
 <meta name="twitter:image" content="https://atwe.com/icon-384.png"/>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Atwe","alternateName":["atwe.com","Atwe.com","www.atwe.com"],"url":"https://atwe.com/"}</script>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Atwe","url":"https://atwe.com/","logo":"https://atwe.com/icon-384.png"}</script>
+<!-- Google's site name is "Atwe" (founder, build 1878). The WebSite block deliberately has NO
+     alternateName: it used to list atwe.com, Atwe.com and www.atwe.com, which handed Google
+     exactly the label the founder does not want. "Atwe Inc." is the company's legalName only;
+     every product-facing title stays "Atwe". -->
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Atwe","url":"https://atwe.com/"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Atwe","legalName":"Atwe Inc.","url":"https://atwe.com/","logo":"https://atwe.com/icon-384.png"}</script>
 <!-- ── BOOT PREFLIGHT ──────────────────────────────────────────────────────────
      The shell is ~4.9MB decoded (1.27MB over the wire), so on a phone the browser
      spends nearly two seconds downloading, decompressing and parsing it BEFORE the
@@ -23016,7 +23020,7 @@ html.mo-reduced .notif-detail{transition:none!important;}
      THE ?v= IS THE BUILD, and test/route-registry.test.js fails if it drifts from
      ATWE_BUILD: the service worker serves static files cache-first, so an unversioned
      URL would hand a new shell yesterday's registry. Bump it with ATWE_BUILD. -->
-<script src="/atwe-routes.js?v=1877"></script>
+<script src="/atwe-routes.js?v=1878"></script>
 <script>
 /* ═══════════════════════════════════════════════
    CRASH TELEMETRY — must run FIRST (before anything that could throw).
@@ -23042,7 +23046,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1877'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1878'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -24793,10 +24797,30 @@ const CANONICAL_ORIGIN = /(^|\.)atwe\.(com|ai|app|co)$/i.test(location.hostname)
   ? 'https://atwe.com' : location.origin;
 /* Keep <link rel=canonical> and og:url in step with the address as the app moves.
    The server already rewrites both for link-preview crawlers, which don't run JS;
-   this covers the ones that do, and means "view source" never disagrees with the
-   address bar. */
+   this covers the ones that do.
+   THEY ONLY EVER NAME A PUBLIC, INDEXABLE ADDRESS (build 1878). They used to follow every
+   address change, so a signed-out visit to atwe.com (which is what Googlebot is) moved the
+   home page's canonical and og:url to https://atwe.com/login the moment the sign-in screen
+   rewrote the address: the home page's own rendered HTML then pointed Google at a page the
+   server marks noindex. Google's rule is that a canonical set by JavaScript must equal the
+   one in the original HTML. So the home page and the routes the registry marks seo:'index'
+   (a profile, a post, a listing...) still move them exactly as before; a private or noindex
+   address (sign-in, Beam, Settings, Account, search) leaves whatever is there; and a
+   document the server sent as noindex never gets a canonical put back. The visible address
+   is untouched: /login is still what a signed-out visitor sees. */
+function acCanonicalIndexable(path) {
+  try {
+    if (document.querySelector('meta[name="robots"][content*="noindex"]')) return false;
+    const p = String(path || '/').split(/[?#]/)[0] || '/';
+    if (p === '/') return true;
+    const m = window.ATWE_ROUTES && ATWE_ROUTES.match(p);
+    const r = m && ATWE_ROUTES.get(m.name);
+    return !!(r && r.seo === 'index');
+  } catch (e) { return false; }
+}
 function acSetCanonical(path) {
   try {
+    if (!acCanonicalIndexable(path)) return;
     const href = CANONICAL_ORIGIN + (path || '/');
     let l = document.querySelector('link[rel="canonical"]');
     if (!l) { l = document.createElement('link'); l.rel = 'canonical'; document.head.appendChild(l); }
@@ -37945,26 +37969,19 @@ function acSyncBellDot() {
 
 
 /* ─── Notifications ─── */
-// Browser-tab unread count, WhatsApp-Web-style: "(N) Atwe" while there are unread
-// messages + notifications, back to plain "Atwe" when clear. Fed by the same two
-// sinks that drive the in-app badges, so it can never drift from them.
-/* The title a route declares in the registry (route batch 4: the Settings hierarchy is
-   the first to declare them — "Privacy & safety · Atwe"). Everything else stays "Atwe". */
-function acRouteTitle() {
-  try {
-    const m = window.ATWE_ROUTES && ATWE_ROUTES.match(location.pathname);
-    const r = m && ATWE_ROUTES.get(m.name);
-    return r && r.title ? i18nT(r.title) : '';
-  } catch (e) { return ''; }
-}
+/* THE BROWSER TAB ALWAYS READS EXACTLY "Atwe" (founder, build 1878): no unread count, no
+   "(3)", no page name such as "Wallet · Atwe". Unread state lives inside Atwe's own UI (the
+   bell, the Beam badge), never in the tab. The static shell's <title> is already "Atwe", so
+   for a person this never writes at all. It only resets a document that arrived with
+   another title: the per-page card the server builds for a link-preview crawler. That reset
+   is why Google's rendered title for a profile is "Atwe" rather than "Name (@user) · Atwe";
+   it is known SEO debt, deliberately left for its own task. The registry's route titles
+   are data only now. */
 function acSyncTabTitle() {
   const total = (AC._tabMsgUnread || 0) + (AC._notifUnread || 0);
-  const rt = acRouteTitle();
-  const base = rt ? rt + ' · Atwe' : 'Atwe';
-  const t = total > 0 ? `(${total > 99 ? '99+' : total}) ${base}` : base;
-  if (document.title !== t) document.title = t;
-  // Installed-app icon badge (iOS 16.4+/Android/desktop PWA): the same unread
-  // total as the tab title, on the home-screen icon. No-op where unsupported.
+  if (document.title !== 'Atwe') document.title = 'Atwe';
+  // Installed-app icon badge (iOS 16.4+/Android/desktop PWA): the unread total on the
+  // home-screen icon, unchanged by build 1878. No-op where unsupported.
   try {
     if ('setAppBadge' in navigator) { if (total > 0) navigator.setAppBadge(total).catch(() => {}); else navigator.clearAppBadge().catch(() => {}); }
   } catch (_) {}
@@ -68363,7 +68380,7 @@ async function _acRefreshUnread() {
     if (nav) { nav.textContent = unread; nav.classList.toggle('hidden', !unread); }
     if (dot) dot.classList.add('hidden');   // the dot is retired — the Beam nav ICON turns blue instead
     acBeamNavNotif(unread);
-    AC._tabMsgUnread = unread || 0; acSyncTabTitle(); // "(N) Atwe" in the browser tab
+    AC._tabMsgUnread = unread || 0; acSyncTabTitle(); // the icon badge's total; the tab itself always reads "Atwe"
     acSetBadge(unread || 0);   // and the number on the dock icon, when installed
     document.getElementById('acTabDot')?.classList.toggle('hidden', !dmUnread);
     document.getElementById('acTabDotG')?.classList.toggle('hidden', !groupUnread);
