@@ -1570,10 +1570,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// On the admin subdomain (admin.atwe.com), the dashboard is the homepage.
+// On the admin subdomain (admin.atwe.com), the dashboard is the homepage. Nothing on that
+// host is ever a search result (build 1878): every response says so in X-Robots-Tag, and
+// admin.html repeats it in its own <head>. robots.txt deliberately still lets crawlers fetch
+// the host, because a page a crawler may not fetch is a page whose noindex it never reads.
+// A browser ignores the header, so the dashboard works exactly as before.
 app.use((req, res, next) => {
-  if (req.hostname === ADMIN_HOST && (req.path === '/' || req.path === '/index.html')) {
-    return res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+  if (req.hostname === ADMIN_HOST) {
+    res.set('X-Robots-Tag', 'noindex, nofollow');
+    if (req.path === '/' || req.path === '/index.html') {
+      return res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    }
   }
   next();
 });
@@ -1851,6 +1858,17 @@ function renderLegalPage(file, which) {
   _legalCache[file] = html;
   return html;
 }
+/* The legal documents stay one tap away for everyone and stay linked wherever they must be
+   (Google's sign-in verification needs the home page to link the privacy policy), but they
+   are not search results (founder, build 1878): Google was showing the privacy page as a
+   brand sitelink. Each page says noindex in its own <head>; this repeats it as a header.
+   Never move it into robots.txt: a page a crawler may not fetch is a page whose noindex it
+   never reads. */
+const NOINDEX_DOCS = new Set(['/privacy.html', '/terms.html', '/guidelines.html']);
+app.use((req, res, next) => {
+  if (NOINDEX_DOCS.has(req.path)) res.set('X-Robots-Tag', 'noindex, follow');
+  next();
+});
 for (const [route, file] of Object.entries(LEGAL_PAGES)) {
   const which = file.startsWith('privacy') ? 'privacy' : 'terms';
   app.get(route, (_req, res, next) => {

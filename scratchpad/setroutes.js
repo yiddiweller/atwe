@@ -160,7 +160,8 @@ async function inAppTree(browser, F, vp, tag) {
   say(nodeIs(s1, 'hub') && s1.len === home.len + 1, tag + ' 1. Home → /settings: the hub, one new entry', [s1.path, home.len, s1.len]);
   say(ev.length === 1 && ev[0].kind === 'push' && ev[0].to.path === '/settings' && stateOk(s1, 'settings') && s1.st.idx === home.st.idx + 1,
     tag + ' 1b. one push NavEvent, a new idx, route settings, path = URL', ev.map((e) => [e.kind, e.to && e.to.path]));
-  say(/^Settings · Atwe$|\) Settings · Atwe$/.test(s1.title), tag + ' 1c. the title comes from the route', s1.title);
+  // Build 1878: the tab never carries a page name or an unread count (founder).
+  say(s1.title === 'Atwe', tag + ' 1c. the tab reads exactly "Atwe", not the page name', s1.title);
 
   for (const [page, label] of PAGES) {
     const a = await snap(p);
@@ -171,7 +172,7 @@ async function inAppTree(browser, F, vp, tag) {
     say(tapped && nodeIs(b, page) && b.len <= a.len + 1, tag + ' ' + page + ': the hub row opens /settings/' + page + ' as ONE entry (a push; it drops any forward entries, as every push does)', [tapped, b.path, b.bodies, a.len, b.len]);
     say(ev.length === 1 && ev[0].kind === 'push' && ev[0].direction === 'forward' && stateOk(b, routeName(page)) && b.st.idx > a.st.idx && b.st.prev === a.st.idx,
       tag + ' ' + page + ': one forward push, a new idx, route ' + routeName(page) + ', prev = the hub', [ev.map((e) => e.kind), b.st]);
-    say(b.title.endsWith(label + ' · Atwe'), tag + ' ' + page + ': the title is the page', b.title);
+    say(b.title === 'Atwe', tag + ' ' + page + ': the tab still reads exactly "Atwe"', b.title);
 
     for (const [lp, leaf, view, row] of LEAVES.filter((x) => x[0] === page && x[3])) {
       const c = await snap(p);

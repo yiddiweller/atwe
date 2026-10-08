@@ -124,7 +124,9 @@ const snap = (p) => p.evaluate(() => {
 });
 const evSince = (p, n) => p.evaluate((k) => AtweHistory.log.slice(k), n);
 const navEvents = (evs) => evs.filter((e) => ['push', 'replace', 'root-change', 'traverse'].includes(e.kind));
-const titled = (s, t) => new RegExp('(^|\\) )' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' · Atwe$').test(s.title);
+// Build 1878: the tab always reads exactly "Atwe", never "<Section> · Atwe" (founder). The
+// section's own name is still checked on the page itself (sec / secTitle).
+const titled = (s) => s.title === 'Atwe';
 /* No stale state behind the URL: nothing of another route is open, and history.state carries
    only bookkeeping (no section name, no setPage/via). */
 const cleanState = (s) => !!s.st && s.st.atwe === 2 && Number.isInteger(s.st.idx) && s.st.path === s.path

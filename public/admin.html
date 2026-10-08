@@ -4,6 +4,10 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <meta name="theme-color" content="#000000"/>
+<!-- The staff dashboard is never a search result (build 1878). The server repeats this as an
+     X-Robots-Tag header on every admin.atwe.com response; robots.txt still lets crawlers fetch
+     the page, or they could never read this tag. -->
+<meta name="robots" content="noindex, nofollow"/>
 <title>Atwe Admin</title>
 <meta name="apple-mobile-web-app-title" content="Atwe Admin"/>
 <link rel="icon" type="image/png" sizes="any" href="/favicon.png"/>
