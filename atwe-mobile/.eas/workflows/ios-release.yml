@@ -1,0 +1,69 @@
+# Atwe iPhone PRODUCTION: the deliberate App Store release.
+#
+# -- WHY A TAG AND NOT A BRANCH ---------------------------------------------
+# `main` is production for the web and ordinary work reaches it all the time.
+# If a push to main built the phone app, a one-line server fix would queue an
+# app review. A store release is a decision somebody makes, so this fires ONLY
+# on a release tag, and only one shaped `release-ios-*`.
+#
+# -- HOW TO RELEASE ---------------------------------------------------------
+#   1. The commit is already on main: it went development -> beta -> main by
+#      exact-SHA fast-forward, and the founder approved it.
+#   2. Prove it:  git fetch origin && git merge-base --is-ancestor <sha> origin/main
+#   3. git tag -a release-ios-26.8.1 -m "Atwe iOS 26.8.1" <that exact sha>
+#   4. git push origin release-ios-26.8.1
+#   5. This builds with the `production` profile (https://atwe.com) and uploads
+#      to App Store Connect, about 20 minutes.
+#   6. A HUMAN opens App Store Connect and presses Submit for Review.
+#
+# Step 6 is not optional and is not automated here: EAS `submit` uploads a
+# build, it does not release it to the public. The upload is mechanical, the
+# release is a decision.
+#
+# Never tag a commit that is not on main. EAS runs this file as it exists IN
+# THE TAGGED COMMIT, so a tag on an old commit that predates this file builds
+# nothing, and a tag on a commit that never reached main would ship code that
+# was never approved.
+#
+# -- WHY `release-ios-*` AND NOT `release-*` --------------------------------
+# Android, Mac and Windows releases will want tags of their own one day
+# (release-android-*, ...). A generic `release-*` would catch those and queue an
+# iPhone store build by accident. Keep the platform in the pattern.
+#
+# There are no `branches:` in this trigger. With `tags` given and `branches`
+# absent, EAS treats branches as an empty list, so no push to any branch can
+# start a store build. Never delete the `tags` line to "pause" it: with NEITHER
+# key present EAS builds on every push to every branch. Comment out the whole
+# `on:` block instead.
+#
+# NB validating this file with PYTHON reports the trigger as missing: PyYAML is
+# YAML 1.1, where a bare `on:` is the BOOLEAN true. EAS parses YAML 1.2, where it
+# is the plain string "on". Leave it unquoted.
+#
+# -- ANDROID IS NOT WIRED UP YET, ON PURPOSE --------------------------------
+# eas.json's Android submit settings point at ./play-service-account.json, which
+# does not exist and must never be committed (it is in .gitignore), and there is
+# no Play developer account yet. Give Android its own workflow and tag on the
+# day that account exists, not before.
+
+name: Atwe iOS release (App Store)
+
+on:
+  push:
+    tags: ['release-ios-*']
+
+jobs:
+  build:
+    name: Build iOS (production profile, atwe.com)
+    type: build
+    params:
+      platform: ios
+      profile: production
+  submit:
+    name: Upload to App Store Connect
+    needs: [build]
+    type: submit
+    params:
+      platform: ios
+      profile: production
+      build_id: ${{ needs.build.outputs.build_id }}

@@ -21,48 +21,48 @@ This file is that guarantee. It is committed, so it cannot be lost with a sessio
 > the real anchor and none of them moved.
 
 Both are **already pushed to the remote**, so they survive anything that happens
-locally. They are the same tree by content; the SHAs differ only because `main` is
-maintained by cherry-pick rather than by merge.
+locally, and both are still in the history of `development`, `beta` and `main`.
+Outside `atwe-mobile/` (which `main` did not carry yet) they held the same web app;
+the SHAs differ because `main` was then maintained by cherry-pick. That era is over:
+since October 2026 the three branches move by exact-commit fast-forward
+(`docs/BRANCHES-AND-RELEASES.md`).
 
-Local annotated tags `polish-baseline-main` and `polish-baseline-branch` point at
-them as a convenience. **They are NOT on the remote** — this environment's GitHub
-credentials return `HTTP 403` for a tag push while allowing branch pushes. The
-commit SHAs above are the real anchor; the tags are a nicety.
+Local annotated tags `polish-baseline-main` and `polish-baseline-branch` pointed at
+them as a convenience. **They were never on the remote**: that session's GitHub
+credentials returned `HTTP 403` for a tag push while allowing branch pushes. The
+commit SHAs above are the real anchor.
 
-## Putting production back
+## Putting it back WITHOUT rewriting history
 
-One command, and the site is exactly as it was:
+`development`, `beta` and `main` only ever move FORWARD. The GitHub ruleset refuses
+force pushes on all three, and the recipe that used to be here (`git reset --hard`
+plus `git push --force-with-lease`) is **retired**. Never use it on a long-lived
+branch. "Back the way it was" is done in two moves instead:
 
-```
-git fetch origin main
-git checkout main
-git reset --hard 4c4daaa27de54d1e84294640638bec5adfb09627
-git push --force-with-lease origin main
-```
+**1. If the live site is wrong right now, roll the DEPLOYMENT back.** Railway → the
+production service → Deployments → the last good deployment → Rollback. That puts the
+previous build back on atwe.com at once without touching git. beta.atwe.com has its
+own Deployments list and rolls back the same way.
 
-`--force-with-lease` rather than `--force`: it refuses if somebody else has pushed
-to `main` since, so a revert can never silently throw away work that arrived in the
-meantime.
+**2. Then undo it in git, FORWARD.** On `development`, make NEW commits that undo the
+change, then promote that exact commit development → beta → main like any other
+change. The deployment rollback holds the line until it lands.
 
-## Putting the working branch back
-
-```
-git checkout beta          # or development, whichever you are putting back
-git reset --hard 1bcf3a6bd6f94ffdf8eef2a00aa2dbcaa2baaa4f
-git push --force-with-lease origin beta
-```
-
-## Taking back ONE change instead of all of them
-
-The polish pass is deliberately committed in small, separately-named batches, so a
-single piece can be lifted out without losing the rest:
+The polish pass is deliberately committed in small, separately-named batches (the
+seven commits `1bcf3a6..055d6f4`), so one piece can be lifted out without losing the
+rest:
 
 ```
-git log --oneline 4c4daaa..HEAD        # every polish commit, newest first
-git revert <the one commit>            # undo just that one
+git fetch origin
+git switch development && git pull --ff-only
+git log --oneline 1bcf3a6..055d6f4     # the seven polish commits, newest first
+git revert <the one commit>            # undo just that one, as a new commit
+git revert 1bcf3a6..055d6f4            # or all seven, newest first, as new commits
 ```
 
-That is the reason for many small commits rather than one large one.
+That is the reason for many small commits rather than one large one. Every build
+since then was made on top of this pass, so a revert can conflict; resolve it by hand,
+run the regression, then promote. Nothing here ever needs a force push.
 
 ## What "back the way it is now" actually means
 

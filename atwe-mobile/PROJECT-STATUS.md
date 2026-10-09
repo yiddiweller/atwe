@@ -6,13 +6,17 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 > file top-to-bottom and continue from **Next up** — same phased, hand-held,
 > one-step-at-a-time style. (Also registered in the repo's `CLAUDE.md`.)
 
-> ## ⏸ THE APP IS PAUSED — jump to **"STOPPED HERE"** at the very bottom first.
-> The work is finished and committed; it is stopped on **EAS build credits**, not
-> on code. **CONFIRMED by the founder on expo.dev, 2 Sep 2026** — the builds did
-> not fail on anything in this repo, they never ran for lack of credits. Their
-> phone runs **0.13** and the tree is now **26.8 Beta** (was 0.19.0 — see the
-> version scheme below), so six rounds of work have never been seen on a device. That section says what to do first, in order, and
-> names the two decisions of theirs not to reverse.
+> ## ⏸ THE APP WAITS ON A FOUNDER DECISION — jump to **"STOPPED HERE"** at the very bottom first.
+> The work is finished and committed; it is not stopped on code. It was stopped on
+> **EAS build credits** from 2 Sep 2026 (confirmed by the founder on expo.dev). On
+> **9 Oct 2026** they verified the account now has enough credit for the next proof
+> build, and that the last successful iOS build was **26.8.0 (41)**, started by hand
+> from `beta` on 25 Sep. The tree is **26.8 Beta** (was 0.19.0, see the version scheme
+> below). Which build is on their phone now is unconfirmed (an older note said 0.13;
+> builds 40 and 41 came after it), so ask rather than assume.
+> **No branch push builds the phone app any more:** see **"HOW A NEW VERSION REACHES
+> THE FOUNDER'S PHONE"** and `docs/BRANCHES-AND-RELEASES.md`. "STOPPED HERE" says what
+> to do first, in order, and names the two decisions of theirs not to reverse.
 
 ## Route batch 10 — links from atwe.com open the right screen (code only, not on a device)
 
@@ -240,9 +244,10 @@ device without an EAS build, and **that trigger is theirs to give** — see
   (`useMarketplace`/`useListing`/`saveListing` + `listingPrice`). A **Discover →
   Marketplace** tile now leads the Engine Explore surface. Full in-app checkout
   (address + wallet/escrow) is a later slice.
-- **Auto-ship pipeline:** pushes to the working branch now trigger an EAS Workflow
-  build + TestFlight submit automatically — the founder just taps **Update** (no
-  Mac, no manual `eas build`).
+- **Auto-ship pipeline (historical, RETIRED):** pushes to the working branch used to
+  trigger an EAS Workflow build + TestFlight submit automatically. That trigger is gone
+  for good: no branch push builds the phone app now. A TestFlight build is
+  `ios-beta.yml`, run by hand (see "HOW A NEW VERSION REACHES THE FOUNDER'S PHONE").
 
 ## Recently added (native, prior run)
 - **Post actions complete:** repost + bookmark are now interactive on every card
@@ -707,26 +712,40 @@ present — and that is the one App Store Connect actually reads.
 
 ### To fire it
 
-This container has **no Expo login**, so the build cannot be started from here —
-that needs the account password and 2FA. From a machine that has the repo:
+_Updated Oct 2026: the 0.2.0 instructions here used a workflow that no longer exists.
+This is the current way to start a TestFlight build._
 
-```bash
-cd atwe-mobile
-npx eas-cli login          # once per machine
-npx eas workflow:run mobile-beta.yml
+This container has **no Expo login**, so the build cannot be started from here —
+that needs the account password and 2FA. The simplest route is the Expo dashboard:
+the GitHub repo IS connected to the Expo project now (the founder verified it on
+9 Oct 2026):
+
+```
+Expo dashboard → the atwe project → Workflows → Run workflow → git ref: beta → ios-beta.yml
 ```
 
-That workflow builds the production profile **and submits to TestFlight** in one
-go (`.eas/workflows/mobile-beta.yml`). Or the two steps by hand:
+Or from a machine that has the repo, on a clean checkout of exactly the approved
+beta commit:
 
 ```bash
-npx eas build -p ios --profile production
+git fetch origin && git switch --detach <approved beta commit>
+cd atwe-mobile
+npx eas-cli login          # once per machine
+npx eas workflow:run ios-beta.yml
+```
+
+That workflow builds the **`beta` profile** (it talks to beta.atwe.com) **and
+submits to TestFlight** in one go (`.eas/workflows/ios-beta.yml`). Or the two steps
+by hand:
+
+```bash
+npx eas build -p ios --profile beta
 npx eas submit -p ios --latest
 ```
 
-**The Expo dashboard's "Run workflow" button needs the GitHub repo connected to
-the Expo project first** — PROJECT-STATUS has that listed as not yet done, so
-assume the CLI is the route until somebody connects it.
+A store build is different again: a `release-ios-*` tag on an exact commit already
+on `main` starts `ios-release.yml` (the `production` profile, atwe.com). See
+`docs/BRANCHES-AND-RELEASES.md`.
 
 Then: Apple processes the build (usually 5–20 minutes) and it appears in
 TestFlight as **Atwe 0.2.0**.
@@ -1481,47 +1500,53 @@ their phone at 2am.
 
 ## 🚢 HOW A NEW VERSION REACHES THE FOUNDER'S PHONE
 
-**Promote `development` to `beta`. That is the whole thing.**
+**Two separate steps, and both are the founder's decision. Promoting a commit never
+builds the phone app.**
 
-```bash
-git checkout beta && git merge development && git push origin beta
-```
+1. **Promote the exact approved commit to `beta`**, by fast-forward. Never a merge,
+   never a cherry-pick:
 
-`.eas/workflows/mobile-beta.yml` fires on a push to **`beta`** whose changes
-touched `atwe-mobile/`, builds the production profile, and submits to TestFlight
-by itself. The founder does nothing — they get a TestFlight notification about
-20 minutes later. A beta push that only changed the website or the server builds
-nothing, because every iOS build costs a credit.
+   ```bash
+   git fetch origin
+   git merge-base --is-ancestor origin/beta <approved commit> && echo OK   # must say OK
+   git push origin <approved commit>:refs/heads/beta                       # never --force
+   ```
 
-By hand, any time: `cd atwe-mobile && npx eas workflow:run mobile-beta.yml`.
+   That redeploys beta.atwe.com by itself. It builds no phone app.
 
-The old `ship` branch did this job and is being retired; `mobile-beta.yml` still
-lists it so nothing breaks during the changeover. Full picture:
+2. **Run the TestFlight build BY HAND on that same commit:** Expo dashboard → the
+   `atwe` project → Workflows → Run workflow → git ref `beta` → `ios-beta.yml` (or
+   `cd atwe-mobile && npx eas workflow:run ios-beta.yml` from a clean checkout of
+   exactly that commit). It builds the `beta` profile, which talks to
+   **beta.atwe.com**, and submits to TestFlight. The founder gets a TestFlight
+   notification about 20 minutes later.
+
+`ios-beta.yml` has no trigger at all, on purpose: a build costs a credit and is a
+decision, so no push to any branch can start one.
+
+The **App Store** release is separate again: a `release-ios-*` tag on an exact commit
+already on `main` starts `ios-release.yml` (the `production` profile, atwe.com), and
+a person then presses Submit for Review in App Store Connect. Full picture:
 `docs/BRANCHES-AND-RELEASES.md`.
 
-**Why a dedicated branch rather than either extreme.** It used to fire on EVERY
-push, and that emptied the account's monthly iOS build credits twice — every
-colour tweak, one credit. Removing the trigger fixed the cost and created a worse
-problem: shipping became six clicks in a web page that a non-technical founder had
-to perform by hand, and on 1 Sep it took most of an hour of their evening with me
-talking them through each click. The `ship` branch is the middle ground: **work is
-free, shipping is one push, and WHEN to ship is still their call** — they say "ship
-it", we push.
+**`ship` is retired. Never push to it.** It was the old trigger: a working branch was
+force-pushed to it and EAS built. Its own old copy of `build-ios.yml` still builds when
+`ship` is pushed, so a push there would put OLD code on TestFlight. It is deleted once
+an `ios-beta.yml` build has gone to TestFlight successfully.
 
-`ship` is a **pointer, not a place work accumulates** — force-push it, its history
-is deliberately disposable.
+**Why by hand, after everything that came before.** The build used to fire on EVERY
+push, and that emptied the account's monthly iOS build credits twice — every colour
+tweak, one credit. Removing the trigger made shipping six clicks a non-technical
+founder had to perform, which on 1 Sep took most of an hour of their evening. The
+`ship` branch then made it one push, and a path-filtered `beta` trigger followed; both
+still let MOVING A BRANCH spend a credit. Now moving a branch never does. A build
+happens exactly when somebody starts it, on a commit already approved on beta, so the
+phone build and beta.atwe.com are the same commit and WHEN to ship is still their call.
 
-**A push trigger only fires when the workflow file exists ON the branch pushed**,
-so `ship` must be made from a branch that already has it. Pushing the working
-branch to `ship` does exactly that, which is why that is the documented move.
-
-**Running it by hand still works** (Expo dashboard → Workflows → Run workflow →
-enter the git ref → Load → pick the file → Confirm, or
-`npx eas workflow:run mobile-beta.yml`). Note the dashboard's git-ref box defaults
-to `main`, **and `main` has no `atwe-mobile/` in it at all** — so it reports "no
-workflow files found" until you type `beta` or `development`. That cost real
-confusion. (Normalizing `main` onto the shared history would put `atwe-mobile/`
-there and end this; see `docs/BRANCHES-AND-RELEASES.md`.)
+**Running it from the dashboard:** Workflows → Run workflow → enter the git ref → Load
+→ pick the file → Confirm. The git-ref box defaults to `main`; type `beta`. (`main` has
+carried `atwe-mobile/` since 7 Oct 2026, so it no longer reports "no workflow files
+found"; it is simply not the commit a beta build wants.)
 
 ### What was learned about the cost, and it is not what this file used to say
 
@@ -1543,15 +1568,15 @@ ordinary change — a colour, an icon, a one-line fix — spent one. That is wha
 credits out in an earlier run, and it quietly happened again: **three routine commits
 in one afternoon cost three builds** before anyone noticed.
 
-**Pushing to `development` now builds nothing at all**, however much of the phone app
-it touches. Only a push to `beta` builds, and only when the change actually touched
-`atwe-mobile/` — so the credit is spent when a version is ready to be tested, not
-while it is being written. A build also happens whenever a person asks for one:
+**No push builds anything any more**: not to `development`, not to `beta`, not to
+`main`, however much of the phone app it touches. A build happens only when a person
+starts one, on the approved beta commit, so the credit is spent when a version is
+ready to be tested, not while it is being written:
 
 ```
-Expo dashboard → Workflows → "Atwe beta (TestFlight)" → Run workflow
-# or
-cd atwe-mobile && npx eas workflow:run mobile-beta.yml
+Expo dashboard → Workflows → "Atwe iOS beta (TestFlight)" → Run workflow → git ref: beta
+# or, from a clean checkout of exactly the approved beta commit
+cd atwe-mobile && npx eas workflow:run ios-beta.yml
 ```
 
 **So: commit and push freely while working — that is free — and run ONE build at the end
@@ -1559,7 +1584,7 @@ of a batch.** Do not restore the trigger, however convenient auto-shipping looks
 founder asked for exactly this and the reason is a real, recurring cost.
 
 **Delivery note:** new native code reaches the founder's phone only via a rebuild
-(`eas build -p ios --profile production` → `eas submit`). Before the next build,
+(`ios-beta.yml`, or `eas build -p ios --profile beta` → `eas submit`). Before the next build,
 **sync the repo `package.json` to the founder's working SDK-54 set + worklets**
 (see the divergence note below) so the repo builds cleanly — ideally set up the
 GitHub → Expo online build so updates don't need the Mac.
@@ -2640,8 +2665,9 @@ destinations and 1/1 Beam destination still reachable from ⋯, 0 page errors.**
 
 **This is committed and pushed to the working branch but deliberately NOT
 shipped.** The founder is near the end of their free EAS builds and asked to
-hold. `ship` is one commit behind on purpose. Do not push to `ship` until they
-say so.
+hold. (At the time `ship` was the build trigger and was held one commit behind on
+purpose. `ship` is retired now: never push to it. See "HOW A NEW VERSION REACHES THE
+FOUNDER'S PHONE".)
 
 ### Round nineteen — the "layers" were the retracted bar resting ON the clock
 
@@ -2879,6 +2905,13 @@ branch (now `development`). **Nothing shipped.**
 
 ## ⏸ STOPPED HERE — read this first when picking the app back up
 
+> **Update, 9 Oct 2026:** the founder verified that the EAS account has enough credit
+> for the next proof build, and that the last successful iOS build was **26.8.0 (41)**,
+> started by hand from `beta` on 25 Sep (build 40 before it came from `ship`). Which
+> build is on their phone now is unconfirmed, so ask; the 0.13 below is the 2 Sep
+> picture. Promotion no longer builds anything: step 2 below is now promote, then run
+> `ios-beta.yml` by hand.
+
 **The app on the founder's phone is 0.13. The tree is 26.8 Beta** (0.19.0 when
 this was written). Builds 0.14
 through 0.19 never reached them, almost certainly because the free EAS build
@@ -2891,10 +2924,11 @@ So the first three moves, in order:
 1. ~~Check expo.dev → Builds.~~ **DONE — the founder checked on 2 Sep 2026 and
    it is credits.** The builds never ran; nothing here is broken. No need to
    re-investigate this.
-2. **Get credits, then ship ONE build** by promoting `development` to `beta`
-   (`git checkout beta && git merge development && git push origin beta`). It
-   carries six rounds of work at once, so expect the founder to have a lot to
-   react to — walk them through it one screen at a time, as always.
+2. **Ship ONE build.** With the founder's go-ahead, promote the approved commit to
+   `beta` by fast-forward, then run `ios-beta.yml` BY HAND on that commit (both steps
+   are under "HOW A NEW VERSION REACHES THE FOUNDER'S PHONE"; promotion alone builds
+   nothing). It carries six rounds of work at once, so expect the founder to have a
+   lot to react to — walk them through it one screen at a time, as always.
 3. **Only then** judge the material. The web preview cannot render Liquid Glass
    or a native blur; every "does it look like Apple's?" question is unanswerable
    until it is on a phone.
@@ -2903,7 +2937,9 @@ So the first three moves, in order:
 - **iOS 26 minimum.** They chose real glass over reach, twice, in plain words.
   The App Store will not offer the app below 26. If reach ever matters more,
   raise it with them — do not reinstate a fallback.
-- **No shipping without their word.** `ship` is the trigger and it is theirs.
+- **No shipping without their word.** A TestFlight build (`ios-beta.yml`, run by hand)
+  and a store release (a `release-ios-*` tag on an exact `main` commit) are both theirs
+  to give. `ship` is retired: never push to it.
 
 **Still open, and none of it is blocked on code:** placing a call in Beam needs
 `react-native-webrtc`; Atwe Pro on iOS needs a decision about Apple's 15–30%

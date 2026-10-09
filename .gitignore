@@ -14,3 +14,16 @@ scratchpad/destinations.json
 seed/beta-identity.json
 seed/atwe-beta.json
 seed/*-beta.json
+
+# Native signing and store credentials, anywhere in the repository. These are
+# secrets: EAS keeps Atwe's Apple credentials on its own servers, and the Play
+# upload key (atwe-mobile/eas.json points at ./play-service-account.json) must
+# never be committed. None of these is tracked today; this keeps it that way.
+play-service-account.json
+*.p8
+*.p12
+*.jks
+*.keystore
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist

@@ -26,6 +26,15 @@
         "buildType": "apk"
       }
     },
+    "beta": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://beta.atwe.com"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "env": {

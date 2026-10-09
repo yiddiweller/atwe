@@ -1,0 +1,57 @@
+# Atwe iPhone BETA: build in the cloud and put it in TestFlight. MANUAL ONLY.
+#
+# -- WHAT THIS IS FOR -------------------------------------------------------
+# The testing half of the phone release. It puts the approved BETA commit on
+# the founder's phone through TestFlight, talking to the BETA server
+# (beta.atwe.com), before anybody else sees it.
+#
+#   development  building. Never builds a phone app.
+#   beta         the web build is beta.atwe.com; THIS FILE, run BY HAND on the
+#                approved beta commit, is the matching TestFlight build
+#   main         production. The store build is ios-release.yml, started by a
+#                release-ios-* tag on an exact main commit.
+#
+# -- WHY THERE IS NO `on:` BLOCK, AND THERE MUST NEVER BE ONE ---------------
+# A beta build is a decision, never a side effect of moving a branch. EAS reads
+# a workflow with no `on:` as manual only: it runs when somebody starts it and
+# at no other time. So promoting a commit to beta (or to main) builds nothing,
+# and no push to any branch can spend a build credit.
+#
+# Do NOT add a branch or tag trigger here "temporarily". If `on: push:` is
+# present with neither `branches` nor `tags`, EAS defaults branches to ['*'] and
+# this would build on EVERY push to EVERY branch.
+#
+# -- HOW TO RUN IT -----------------------------------------------------------
+# On the exact commit the founder approved on beta:
+#   Expo dashboard -> Workflows -> Run workflow -> git ref: beta -> ios-beta.yml
+#   or:  cd atwe-mobile && npx eas workflow:run ios-beta.yml
+# Check the commit it reports matches the approved beta SHA before trusting it.
+#
+# -- WHAT IT BUILDS ---------------------------------------------------------
+# The `beta` build profile in eas.json: a store-signed iOS build (TestFlight
+# only accepts those) whose EXPO_PUBLIC_API_URL is https://beta.atwe.com, with
+# the build number taken from EAS and raised by one (appVersionSource: remote).
+# The upload is the same submit job the earlier working workflow used, with
+# the same `production` SUBMIT profile, so the App Store Connect app and the
+# EAS-managed Apple credentials are exactly what already works. A submit
+# profile is not a build profile: it only says where the upload goes.
+#
+# iOS only. Android has no Play account or upload key yet.
+
+name: Atwe iOS beta (TestFlight)
+
+jobs:
+  build:
+    name: Build iOS (beta profile, beta.atwe.com)
+    type: build
+    params:
+      platform: ios
+      profile: beta
+  submit:
+    name: Upload to TestFlight
+    needs: [build]
+    type: submit
+    params:
+      platform: ios
+      profile: production
+      build_id: ${{ needs.build.outputs.build_id }}

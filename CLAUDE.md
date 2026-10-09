@@ -124,8 +124,10 @@ touch-target decisions the founder handed over deliberately (*"go ahead with eve
 still have open and close it down, make your own decision, make some good research what
 other big platforms do"*), and all three were decided, applied and guarded in build 1836 —
 see **"TWO COLOURS, TWO ROLES"** below.
-Next in the founder's order is the **iPhone**, which needs two things from them and nothing
-from the code: EAS build credits, and the `ship` push that is theirs to give.
+Next in the founder's order is the **iPhone**, which needs nothing from the code and one
+thing from them: their go-ahead to run the TestFlight build BY HAND (`ios-beta.yml` on the
+approved beta commit; see `docs/BRANCHES-AND-RELEASES.md`). Build credit is no longer the
+blocker: on 9 Oct 2026 they verified the EAS account has enough for that proof build.
 **Progress: run `node tools/features.js`.** It prints the only two numbers that exist,
 built and to-do. **Never quote a number from this file.**
 
@@ -311,16 +313,20 @@ from exactly there. **Keep `PROJECT-STATUS.md` updated** as each phase lands so 
 always reflects the true state, and commit + push every change to
 **`development`** (the working branch — see `docs/BRANCHES-AND-RELEASES.md`).
 
-**⏸ As of 2 Sep 2026 the app is PAUSED on EAS build credits, not on code** —
-confirmed by the founder on expo.dev; the builds never ran, nothing here failed.
-The tree is **26.8 Beta** (0.19.0 before the year-style scheme below); the founder's
-phone still runs **0.13**, so six rounds of
-finished work have never been seen on a device. `PROJECT-STATUS.md` opens with
-this and its **"STOPPED HERE"** section says what to do first. **Never run an EAS
-build unasked** — promoting `development` to **`beta`** is what builds a phone app
-(`atwe-mobile/.eas/workflows/mobile-beta.yml`), and that promotion is the founder's
-to give. Committing and pushing to `development` is free and always fine: nothing
-on that branch builds anything or reaches anybody. The app now **requires iOS 26** (real
+**⏸ The app waits on a founder decision, not on code.** It was paused on EAS build
+credits from 2 Sep 2026. On 9 Oct 2026 the founder verified the account has enough
+credit for the next proof build, and that the last successful iOS build was
+**26.8.0 (41)**, started by hand from `beta` on 25 Sep 2026. (The 2 Sep note that their
+phone still ran **0.13** predates builds 40 and 41; which build is on their phone now is
+unconfirmed, so ask rather than assume.) The tree is **26.8 Beta** (0.19.0 before the
+year-style scheme below). `PROJECT-STATUS.md` opens with this and its **"STOPPED HERE"**
+section says what to do first. **Never run an EAS build unasked**, and know that
+**promoting a commit never builds the phone app**: a TestFlight build is started BY HAND
+with `atwe-mobile/.eas/workflows/ios-beta.yml` on the approved beta commit (it talks to
+beta.atwe.com), and a store build starts only from a `release-ios-*` tag on an exact
+commit already on `main` (`ios-release.yml`). Both are the founder's to give; see
+`docs/BRANCHES-AND-RELEASES.md`. Committing and pushing to `development` is free and
+always fine: nothing on that branch builds anything or reaches anybody. The app now **requires iOS 26** (real
 Liquid Glass, no fallback — their decision, taken twice); do not reinstate a
 fallback to widen reach without asking them.
 
@@ -394,8 +400,11 @@ from them; "go" is the whole instruction.
 4. Test end-to-end against a real Postgres + a real browser: the happy path, the
    permission boundaries, and the races. Then a full-app + all-admin-tabs sweep
    for page errors.
-5. Bump `ATWE_BUILD` + `sw.js` `CACHE` in lockstep, commit, push to the working
-   branch, cherry-pick to `main`, verify the divergence markers, push `main`.
+5. Bump `ATWE_BUILD` + `sw.js` `CACHE` + the `atwe-routes.js?v=` in lockstep ON
+   `development`, commit, push `development`. Promotion is never automatic and never a
+   cherry-pick: when the founder approves, that EXACT commit moves development → beta,
+   and later beta → main, by fast-forward (`docs/BRANCHES-AND-RELEASES.md`). Then run
+   `./tools/shipcheck.sh` to see which commit each branch really holds.
 6. Update `features-data.js` for what genuinely shipped, then report to the owner
    in **plain, non-technical language**: what it does and why it matters, what
    was already built, what broke and how it was caught, and what is NOT done.
@@ -12433,6 +12442,19 @@ body-level layer and the composer lives inside `#app`, which is its own stacking
 
 ## Deployment
 
+**Three long-lived branches, one direction: `development → beta → main`.** Railway's
+production environment deploys `main` (atwe.com), its beta environment deploys `beta`
+(beta.atwe.com), and `development` deploys nowhere. Promotion moves the EXACT approved
+commit forward by fast-forward: no cherry-picks, no merges between these branches (the
+one-time October 2026 join that made fast-forwards possible aside), no force pushes (a
+GitHub ruleset blocks force pushes and deletions on all three), and no development → main
+shortcut. **`main` is the source of truth for the web and for every
+native release.** No branch push builds the phone app: TestFlight is `ios-beta.yml`, run
+by hand; the App Store is `ios-release.yml`, started only by a `release-ios-*` tag on an
+exact main commit. `ship` is legacy: never push to it. Rollback is a Railway deployment
+rollback plus a forward `git revert`, never a history rewrite. The whole procedure is
+`docs/BRANCHES-AND-RELEASES.md`.
+
 Railway builds with NIXPACKS and runs `node server.js`. Healthcheck path is
 `/api/health` (timeout 100, restart on failure up to 10 retries). In the Railway
 project: attach a **PostgreSQL plugin** (provides `DATABASE_URL`) and set
@@ -12655,18 +12677,21 @@ marks in confirmations (a tick is not an emoji tell).
 
 ## Gotchas for AI assistants
 
-- **PRODUCTION DEPLOYS FROM `main`, AND THE WORKING BRANCH IS NOT `main`. RUN
-  `./tools/shipcheck.sh` BEFORE TELLING ANYBODY A FIX HAS SHIPPED.** The two are kept in
-  step by **cherry-pick**, never by merging, so a clean 118-probe regression on the working
-  branch says **nothing whatever** about what a member is running. Builds **1846 to 1853**
+- **PRODUCTION DEPLOYS FROM `main`, AND WORK HAPPENS ON `development`. RUN
+  `./tools/shipcheck.sh` BEFORE TELLING ANYBODY A FIX HAS SHIPPED.** A fix reaches members
+  only once that EXACT commit has been promoted development → beta → main by fast-forward
+  (`docs/BRANCHES-AND-RELEASES.md`), so a clean 118-probe regression on development says
+  **nothing whatever** about what a member is running. Builds **1846 to 1853**
   were written, tested green, committed and pushed — and every one of them sat on the branch
   while the founder's phone ran **1845**. They tested, correctly reported the same bugs
   back, and were told the fixes were in. The tell was in their own screenshot: Atwe AI
   answering **"Fetch is aborted"**, which is the string build 1851 deleted. **A shipped fix
   that never reached production is not a shipped fix**, and "pushed" is not the same word as
-  "deployed". The workflow step exists and is written down ("cherry-pick to main, verify the
-  divergence markers, push main") — it was simply skipped eight builds running, because
-  every other signal (green tests, a clean push) said the work was done.
+  "deployed". Back then promotion was a cherry-pick step, written down and simply skipped
+  eight builds running, because every other signal (green tests, a clean push) said the
+  work was done. Since October 2026 it is an exact-commit fast-forward with no cherry-picks
+  at all, and shipcheck compares the commits themselves, so the gap cannot hide behind a
+  matching build number.
 - **A DEAD LIVE STREAM LOOKS EXACTLY LIKE A QUIET ONE, AND NOTHING WAS WATCHING — this is
   what "calls don't work" actually was.** Everything realtime rides one SSE stream, and a
   1:1 call rides it three times over: the ring out, the answer back, the hang-up. That
