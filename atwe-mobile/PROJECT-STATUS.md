@@ -17,6 +17,98 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 > **No branch push builds the phone app any more:** see **"HOW A NEW VERSION REACHES
 > THE FOUNDER'S PHONE"** and `docs/BRANCHES-AND-RELEASES.md`. "STOPPED HERE" says what
 > to do first, in order, and names the two decisions of theirs not to reverse.
+> **There are now TWO iPhone apps (9 Oct 2026):** a TestFlight build is the separate
+> **Atwe Beta** (`com.atwe.app.beta`), installed beside the App Store Atwe and talking
+> to beta.atwe.com, private TestFlight only, never released. Its signing needs a
+> one-time setup before the first `ios-beta.yml` run: see **"TWO iPHONE APPS"** below.
+
+## TWO iPHONE APPS: Atwe and Atwe Beta (9 Oct 2026, code only, nothing built)
+
+Until now a TestFlight build WAS the store app: same bundle id, same App Store Connect
+app. Installing a beta build replaced the founder's real Atwe and pointed it at
+beta.atwe.com. It is now a separate app.
+
+| | Atwe | Atwe Beta |
+|---|---|---|
+| name on the phone | Atwe | Atwe Beta |
+| iOS bundle id | `com.atwe.app` | `com.atwe.app.beta` |
+| Android package | `com.atwe.app` | `com.atwe.app.beta` |
+| link scheme | `atwe://` | `atwe-beta://` |
+| server | https://atwe.com | https://beta.atwe.com |
+| atwe.com links (universal links, Android app links) | yes | none |
+| App Store Connect app (ascAppId) | `6789639912` | `6821134969` |
+| EAS build profile / submit profile | `production` / `production` | `beta` / `beta` |
+| built by | `ios-release.yml`, a `release-ios-*` tag on main | `ios-beta.yml`, by hand |
+| who can get it | everyone, from the App Store | private TestFlight testers only |
+
+**How it works.** `app.json` is untouched and IS the production app. `app.config.js`
+returns it unchanged unless `APP_VARIANT=beta`, which only the `beta` build profile in
+`eas.json` sets; then it renames the app, swaps the bundle id, package, scheme and
+server, and REMOVES the atwe.com link keys (`ios.associatedDomains`,
+`android.intentFilters`). Removed, not emptied: an empty list still writes the
+entitlement. Both apps are the one Expo project (`@yiddiweller/atwe`) and the one
+codebase. Proved with Expo's own resolver: the production result is identical to the
+tree before `app.config.js` existed, and Atwe Beta differs only in those fields (its
+Info.plist registers `atwe-beta` and `com.atwe.app.beta`, its entitlements keep push
+and have no Associated Domains). `test/release-config.test.js` holds all of it.
+
+- **Side by side.** A different bundle id is a different app, so Atwe Beta installs
+  next to the App Store Atwe and never replaces it. Its own sign-in, its own saved data
+  (the keychain is per app), its own notification permission.
+- **Never released.** Atwe Beta is for private TestFlight testing only. Nobody presses
+  Submit for Review on it; it is never put on the App Store.
+- **Its own build numbers.** EAS counts per bundle id: Atwe Beta's first build is
+  `26.8.0 (1)`; Atwe carries on from its own count (last successful build: 41).
+- **Known and accepted:** Atwe Beta claims no atwe.com links, so terms, privacy, help
+  and the two-step sign-in row ("set this up on atwe.com") open the PRODUCTION website,
+  or the production app once its universal links work. Only the real app may own
+  atwe.com links.
+
+### Before the FIRST Atwe Beta build: one-time setup, by a person at a computer
+
+A workflow cannot do this: `com.atwe.app.beta` is new to EAS, and a non-interactive
+build refuses to create a provisioning profile without an Apple login.
+
+1. **Done (founder, 9 Oct 2026):** the Atwe Beta app exists in App Store Connect
+   (`6821134969`) on the bundle id `com.atwe.app.beta`.
+2. App Store Connect → Atwe Beta → TestFlight → **Internal Testing**: add the founder
+   (and anybody else testing) as internal testers.
+3. Signing, once. On a computer, in a clean checkout of the approved beta commit:
+
+   ```bash
+   cd atwe-mobile
+   npx eas-cli@latest login
+   npx eas-cli@latest credentials -p ios
+   ```
+
+   - When asked which build profile: **`beta`**. The screen must name
+     `com.atwe.app.beta`. If it says `com.atwe.app`, stop: that is the real app.
+   - **Build Credentials** → "All: Set up all the required credentials to build your
+     project" → sign in to Apple when asked. Reuse the existing distribution
+     certificate; EAS makes a NEW provisioning profile for `com.atwe.app.beta`.
+   - **Push Notifications** → "Use an existing push key" → the key the real app uses.
+   - **App Store Connect** → "Use an existing API Key for EAS Submit" → the key the real
+     app uses.
+   - Change nothing that belongs to `com.atwe.app` while there.
+
+   (Menu wording is eas-cli 24.12; a newer version may phrase it a little differently.)
+4. Expo dashboard → the `atwe` project → **Environment variables**: make sure none is
+   called `APP_VARIANT`. `eas.json` wins over the dashboard for the beta build, but a
+   dashboard `APP_VARIANT` would leak into PRODUCTION builds.
+5. Then, and only with the founder's go-ahead, run `ios-beta.yml` on the approved beta
+   commit. Expected: **Atwe Beta 26.8.0 (1)** in the Atwe Beta app's TestFlight.
+
+### A separate PRODUCTION follow-up (not part of Atwe Beta, deliberately not done)
+
+Since **5 Oct 2026** (commit `19d44048`, route batch 10) `app.json` asks for the
+Associated Domains entitlement `applinks:atwe.com`. The last build of the real app,
+`26.8.0 (41)` from commit `2007afa` on 25 Sep, did not carry it, and nothing has been
+built since. In July the same request failed signing because the `com.atwe.app`
+profile lacked the capability (see "Universal links are OFF" below). **Before the next
+PRODUCTION iOS build:** developer.apple.com → Identifiers → `com.atwe.app` → tick
+**Associated Domains** → Save; then `eas credentials -p ios` → the `production`
+profile → refresh the provisioning profile. Atwe Beta asks for no Associated Domains,
+so this cannot fail a beta build.
 
 ## Route batch 10 — links from atwe.com open the right screen (code only, not on a device)
 
@@ -734,13 +826,14 @@ npx eas-cli login          # once per machine
 npx eas workflow:run ios-beta.yml
 ```
 
-That workflow builds the **`beta` profile** (it talks to beta.atwe.com) **and
-submits to TestFlight** in one go (`.eas/workflows/ios-beta.yml`). Or the two steps
-by hand:
+That workflow builds **Atwe Beta** (the **`beta` profile**, `com.atwe.app.beta`, it
+talks to beta.atwe.com) **and uploads it to the Atwe Beta app in TestFlight** in one go
+(`.eas/workflows/ios-beta.yml`). The first run needs the one-time signing setup under
+"TWO iPHONE APPS" at the top of this file. Or the two steps by hand:
 
 ```bash
 npx eas build -p ios --profile beta
-npx eas submit -p ios --latest
+npx eas submit -p ios --profile beta --latest   # never without --profile beta
 ```
 
 A store build is different again: a `release-ios-*` tag on an exact commit already
@@ -748,7 +841,8 @@ on `main` starts `ios-release.yml` (the `production` profile, atwe.com). See
 `docs/BRANCHES-AND-RELEASES.md`.
 
 Then: Apple processes the build (usually 5–20 minutes) and it appears in
-TestFlight as **Atwe 0.2.0**.
+TestFlight as **Atwe 0.2.0**. _(0.2.0 note. A build today appears as **Atwe Beta**,
+in its own TestFlight app.)_
 
 ## Three Engine worlds: Events, Services, Businesses
 
@@ -1458,6 +1552,13 @@ bugs makes it fail by name.
 
 ## Universal links are OFF, deliberately — and here is how to put them back
 
+> **Superseded 5 Oct 2026, and still worth reading:** route batch 10 put
+> `"associatedDomains": ["applinks:atwe.com"]` back into `app.json` (atwe.com only,
+> deliberately not www, which redirects). Nothing has been built since, so whether the
+> `com.atwe.app` profile now carries the capability is untested: steps 1 and 2 below
+> are the production follow-up recorded under "TWO iPHONE APPS". Atwe Beta asks for no
+> Associated Domains, so this cannot fail a beta build.
+
 `ios.associatedDomains` (`applinks:atwe.com`, `applinks:www.atwe.com`) is
 **removed from app.json**. It is the one thing that failed the first real 0.2.0
 build, and it is worth knowing exactly why because nothing about it is a code
@@ -1517,9 +1618,11 @@ builds the phone app.**
 2. **Run the TestFlight build BY HAND on that same commit:** Expo dashboard → the
    `atwe` project → Workflows → Run workflow → git ref `beta` → `ios-beta.yml` (or
    `cd atwe-mobile && npx eas workflow:run ios-beta.yml` from a clean checkout of
-   exactly that commit). It builds the `beta` profile, which talks to
-   **beta.atwe.com**, and submits to TestFlight. The founder gets a TestFlight
-   notification about 20 minutes later.
+   exactly that commit). It builds **Atwe Beta** (the `beta` profile, which talks to
+   **beta.atwe.com**) and uploads it to the Atwe Beta app in TestFlight. The founder
+   gets a TestFlight notification about 20 minutes later, and Atwe Beta installs NEXT
+   TO the App Store Atwe, never over it. The first run needs the one-time signing
+   setup under "TWO iPHONE APPS".
 
 `ios-beta.yml` has no trigger at all, on purpose: a build costs a credit and is a
 decision, so no push to any branch can start one.
@@ -1584,7 +1687,7 @@ of a batch.** Do not restore the trigger, however convenient auto-shipping looks
 founder asked for exactly this and the reason is a real, recurring cost.
 
 **Delivery note:** new native code reaches the founder's phone only via a rebuild
-(`ios-beta.yml`, or `eas build -p ios --profile beta` → `eas submit`). Before the next build,
+(`ios-beta.yml`, or `eas build -p ios --profile beta` → `eas submit -p ios --profile beta`). Before the next build,
 **sync the repo `package.json` to the founder's working SDK-54 set + worklets**
 (see the divergence note below) so the repo builds cleanly — ideally set up the
 GitHub → Expo online build so updates don't need the Mac.
@@ -2270,11 +2373,13 @@ rows so the missed / silenced / answered states were each seen rendering.
   issued certificates for otherwise. Two places tracking one fact is how that
   happened; the EAS section is the one that gets touched during real work, so treat
   it as the source of truth and keep this line in step with it.)*
-- **Nothing is blocked on Apple any more.** Certs, provisioning profile and the
-  APNs push key are already created and held on EAS, so rebuilds skip the Apple
-  login and 2FA entirely. The remaining step to get it on the phone is
-  `eas submit -p ios --latest` → TestFlight → install; after that every update is
-  the founder tapping **Update** in TestFlight.
+- **Nothing is blocked on Apple any more** for the real app (`com.atwe.app`). Certs,
+  provisioning profile and the APNs push key are already created and held on EAS, so
+  its rebuilds skip the Apple login and 2FA entirely. **Atwe Beta** (`com.atwe.app.beta`,
+  App Store Connect app `6821134969`) is the exception: it needs its own provisioning
+  profile once, by a person at a computer (see "TWO iPHONE APPS" at the top). After
+  that, every beta update is the founder tapping **Update** in TestFlight, inside the
+  Atwe Beta app.
 
 ## Key decisions (locked)
 - **True native, phase by phase** (not a web wrapper) — matches the premium spec.
@@ -2304,7 +2409,11 @@ rows so the missed / silenced / answered states were each seen rendering.
 - **Bundle id:** `com.atwe.app`. Apple Team: YEHUDA WELLER (Individual, TH3FQ8FMKB).
   Distribution cert + provisioning profile + APNs push key auto-created & stored on
   EAS servers, so rebuilds skip the Apple login/2FA.
-- **Next:** `eas submit -p ios --latest` → TestFlight → install on the real iPhone.
+- **Atwe Beta (9 Oct 2026):** a second bundle id, `com.atwe.app.beta`, in the same EAS
+  project, with its own App Store Connect app (`6821134969`). TestFlight builds go
+  there now. See "TWO iPHONE APPS" at the top.
+- **Next (July note, since done):** `eas submit -p ios --latest` → TestFlight → install
+  on the real iPhone.
 - **Later:** connect the GitHub repo to Expo so builds trigger online (Mac-free);
   upgrade Apple Individual → Organization (ATWE INC) before public App Store launch.
 - ~~Repo/local divergence~~ **RESOLVED:** the committed `package.json` is the
@@ -2910,7 +3019,9 @@ branch (now `development`). **Nothing shipped.**
 > started by hand from `beta` on 25 Sep (build 40 before it came from `ship`). Which
 > build is on their phone now is unconfirmed, so ask; the 0.13 below is the 2 Sep
 > picture. Promotion no longer builds anything: step 2 below is now promote, then run
-> `ios-beta.yml` by hand.
+> `ios-beta.yml` by hand. That build now arrives as the separate **Atwe Beta** app,
+> beside the App Store Atwe, and its first run needs the one-time signing setup in
+> "TWO iPHONE APPS" at the top of this file.
 
 **The app on the founder's phone is 0.13. The tree is 26.8 Beta** (0.19.0 when
 this was written). Builds 0.14

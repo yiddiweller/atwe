@@ -2,8 +2,8 @@
 #
 # -- WHAT THIS IS FOR -------------------------------------------------------
 # The testing half of the phone release. It puts the approved BETA commit on
-# the founder's phone through TestFlight, talking to the BETA server
-# (beta.atwe.com), before anybody else sees it.
+# the founder's phone through TestFlight, as the separate Atwe Beta app,
+# talking to the BETA server (beta.atwe.com), before anybody else sees it.
 #
 #   development  building. Never builds a phone app.
 #   beta         the web build is beta.atwe.com; THIS FILE, run BY HAND on the
@@ -27,14 +27,38 @@
 #   or:  cd atwe-mobile && npx eas workflow:run ios-beta.yml
 # Check the commit it reports matches the approved beta SHA before trusting it.
 #
-# -- WHAT IT BUILDS ---------------------------------------------------------
-# The `beta` build profile in eas.json: a store-signed iOS build (TestFlight
-# only accepts those) whose EXPO_PUBLIC_API_URL is https://beta.atwe.com, with
-# the build number taken from EAS and raised by one (appVersionSource: remote).
-# The upload is the same submit job the earlier working workflow used, with
-# the same `production` SUBMIT profile, so the App Store Connect app and the
-# EAS-managed Apple credentials are exactly what already works. A submit
-# profile is not a build profile: it only says where the upload goes.
+# -- WHAT IT BUILDS: A SEPARATE APP CALLED ATWE BETA -------------------------
+# The `beta` build profile in eas.json sets APP_VARIANT=beta, and app.config.js
+# turns that into a different app from the one on the App Store:
+#
+#                    Atwe (production)         Atwe Beta (this workflow)
+#   bundle id        com.atwe.app              com.atwe.app.beta
+#   scheme           atwe://                   atwe-beta://
+#   server           https://atwe.com          https://beta.atwe.com
+#   atwe.com links   yes (universal links)     none
+#   App Store app    6789639912                6821134969
+#
+# A different bundle id is a different app to the phone, so Atwe Beta installs
+# BESIDE the real Atwe and never replaces it. It is a store-signed build
+# (TestFlight only accepts those) with its own build numbers, kept by EAS per
+# bundle id (appVersionSource: remote).
+#
+# The upload uses the `beta` SUBMIT profile, which points at the Atwe Beta app
+# in App Store Connect (6821134969) and names com.atwe.app.beta. A submit
+# profile is not a build profile: it only says where the upload goes. This file
+# must never use the `production` submit profile: that would aim a beta build at
+# the real Atwe app. test/release-config.test.js fails if it does.
+#
+# -- PRIVATE TESTFLIGHT ONLY, NEVER THE APP STORE ----------------------------
+# Atwe Beta is for internal TestFlight testing. Nobody ever presses Submit for
+# Review on it and it is never released publicly. The App Store release is
+# ios-release.yml, on a release-ios-* tag, as the production app.
+#
+# -- BEFORE THE FIRST RUN -----------------------------------------------------
+# com.atwe.app.beta is new to EAS, so its signing has to be set up once by a
+# person at a computer (a provisioning profile for the new bundle id, the
+# existing push key assigned to it, the App Store Connect API key for uploads).
+# A workflow cannot do that step on its own. See atwe-mobile/PROJECT-STATUS.md.
 #
 # iOS only. Android has no Play account or upload key yet.
 
@@ -42,16 +66,16 @@ name: Atwe iOS beta (TestFlight)
 
 jobs:
   build:
-    name: Build iOS (beta profile, beta.atwe.com)
+    name: Build Atwe Beta for iOS (beta profile, beta.atwe.com)
     type: build
     params:
       platform: ios
       profile: beta
   submit:
-    name: Upload to TestFlight
+    name: Upload to the Atwe Beta app in TestFlight
     needs: [build]
     type: submit
     params:
       platform: ios
-      profile: production
+      profile: beta
       build_id: ${{ needs.build.outputs.build_id }}

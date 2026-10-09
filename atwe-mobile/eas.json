@@ -29,6 +29,7 @@
     "beta": {
       "autoIncrement": true,
       "env": {
+        "APP_VARIANT": "beta",
         "EXPO_PUBLIC_API_URL": "https://beta.atwe.com"
       },
       "android": {
@@ -46,6 +47,12 @@
     }
   },
   "submit": {
+    "beta": {
+      "ios": {
+        "ascAppId": "6821134969",
+        "bundleIdentifier": "com.atwe.app.beta"
+      }
+    },
     "production": {
       "ios": {
         "ascAppId": "6789639912"

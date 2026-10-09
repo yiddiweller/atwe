@@ -6,7 +6,7 @@ FOR, not what happens to be on it today.
 | branch | job | web | phone |
 |---|---|---|---|
 | **development** | building | nowhere | nothing |
-| **beta** | testing | beta.atwe.com | TestFlight, started by hand |
+| **beta** | testing | beta.atwe.com | TestFlight, as the separate Atwe Beta app, started by hand |
 | **main** | production, and the source of truth | atwe.com | App Store, started by a `release-ios-*` tag |
 
 Work moves one way: **development → beta → main.** Nothing skips a step, and
@@ -96,8 +96,9 @@ twice back when builds fired by themselves.
 
 `atwe-mobile/.eas/workflows/ios-beta.yml` has no trigger at all, so it runs only
 when a person starts it. It builds the `beta` profile in `atwe-mobile/eas.json`,
-which talks to **https://beta.atwe.com**, and uploads to TestFlight with the same
-submit settings the earlier working builds used.
+which makes **Atwe Beta** (see "Two iPhone apps" below), talking to
+**https://beta.atwe.com**, and uploads it with the `beta` submit profile to the
+Atwe Beta app in App Store Connect.
 
 - Expo dashboard → the `atwe` project → Workflows → Run workflow → git ref
   `beta` → `ios-beta.yml`. Check that the commit it shows is the approved beta
@@ -111,9 +112,8 @@ submit settings the earlier working builds used.
   cd atwe-mobile && npx eas workflow:run ios-beta.yml
   ```
 
-A TestFlight build has the same app identity as the store app, so on a phone it
-replaces the App Store version. Some links inside the app (terms, privacy, help,
-shared links) always open atwe.com, even in a beta build.
+The very first run needs a one-time signing setup for the new bundle id first
+(below, and in `atwe-mobile/PROJECT-STATUS.md`).
 
 ### Production (App Store): a `release-ios-*` tag on an exact main commit
 
@@ -127,8 +127,9 @@ git tag -a release-ios-26.8.1 -m "Atwe iOS 26.8.1" <sha>
 git push origin release-ios-26.8.1
 ```
 
-That builds the `production` profile (https://atwe.com) and uploads to App Store
-Connect. **A person then presses Submit for Review.** EAS uploads a build; it
+That builds the `production` profile, i.e. **Atwe** (`com.atwe.app`, talking to
+https://atwe.com), and uploads it to the real Atwe app in App Store Connect
+(6789639912). **A person then presses Submit for Review.** EAS uploads a build; it
 does not release one. The upload is mechanical, the release is a decision.
 
 The tag names the platform on purpose: a generic `release-*` would also catch a
@@ -140,14 +141,60 @@ An earlier session found that pushing a tag from Claude's cloud environment was
 refused (HTTP 403) while branch pushes worked. If that still holds, the tag is
 created on GitHub's own web page instead, pointed at the same exact commit.
 
+### Two iPhone apps: Atwe and Atwe Beta
+
+One codebase makes two apps. `atwe-mobile/app.json` IS the production app, and
+`atwe-mobile/app.config.js` turns it into the beta app only when the build profile
+sets `APP_VARIANT=beta`, which only the `beta` profile in `eas.json` does.
+
+| | Atwe | Atwe Beta |
+|---|---|---|
+| name on the phone | Atwe | Atwe Beta |
+| iOS bundle id | `com.atwe.app` | `com.atwe.app.beta` |
+| Android package | `com.atwe.app` | `com.atwe.app.beta` |
+| link scheme | `atwe://` | `atwe-beta://` |
+| server | https://atwe.com | https://beta.atwe.com |
+| atwe.com links (universal links, Android app links) | yes | none |
+| App Store Connect app | 6789639912 | 6821134969 |
+| built by | `ios-release.yml`, on a `release-ios-*` tag | `ios-beta.yml`, by hand |
+| who can get it | everyone, from the App Store | private TestFlight testers only |
+
+- **They live side by side.** A different bundle id is a different app, so Atwe
+  Beta installs next to the App Store Atwe and never replaces it. Each has its own
+  sign-in, its own saved data and its own notification permission.
+- **Atwe Beta is never released.** It exists for private TestFlight testing.
+  Nobody presses Submit for Review on it, and it is never put on the App Store.
+- **It claims no atwe.com links**, on purpose: only the real app may open them.
+  So the few things inside Atwe Beta that point at atwe.com (terms, privacy, help,
+  and the two-step sign-in row that says to finish setup on atwe.com) open the
+  PRODUCTION website, or, once the production app's universal links work, the
+  production app if it is installed.
+- **The two cannot cross.** `test/release-config.test.js` runs `app.config.js`
+  both ways and fails if a beta build could be uploaded to the real Atwe app, a
+  production build to Atwe Beta, or if Atwe Beta ever claims atwe.com links.
+
+**One-time setup before the first Atwe Beta build.** `com.atwe.app.beta` is new to
+EAS: it needs its own provisioning profile, the existing push key assigned to it,
+and the App Store Connect API key EAS Submit uses. That is done once, by a person at
+a computer (a workflow cannot do it), and the steps are in
+`atwe-mobile/PROJECT-STATUS.md` under "TWO iPHONE APPS".
+
+**A separate production follow-up, not part of the beta work:** `app.json` has asked
+for the `applinks:atwe.com` Associated Domains entitlement since 5 Oct 2026, and no
+production build has been made since. Before the next PRODUCTION iOS build, the
+Associated Domains capability has to be on the `com.atwe.app` identifier and the
+production provisioning profile refreshed, or signing fails as it did in July. Also
+in `atwe-mobile/PROJECT-STATUS.md`.
+
 ### Version numbers
 
 The version people see is `expo.version` in `atwe-mobile/app.json` (`26.8.0`,
-shown as `26.8 Beta`). The store build number is not ours to pick: EAS keeps it
-remotely (`appVersionSource: remote`) and raises it on every beta and every
-production build (`autoIncrement`). Both profiles build the same app identity,
-so they should share one counter; the first `ios-beta.yml` build's log will show
-it (41 → 42).
+shown as `26.8 Beta`), the same in both apps. The store build number is not ours
+to pick: EAS keeps it remotely (`appVersionSource: remote`) and raises it on every
+build (`autoIncrement`). EAS keeps that number **per bundle id**, so the two apps
+count separately and never move each other: Atwe carries on from its own count
+(the last successful build was 41), and Atwe Beta starts its own count at 1 with
+its first build.
 
 Android is deliberately not wired up: `eas.json`'s Android submit settings point
 at a `play-service-account.json` that does not exist (and is in `.gitignore`, so
